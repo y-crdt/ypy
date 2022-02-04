@@ -3,8 +3,6 @@ use pyo3::prelude::*;
 use pyo3::types as pytypes;
 use pyo3::types::PyByteArray;
 use pyo3::types::PyDict;
-use pyo3::types::PyList;
-use pyo3::AsPyPointer;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::ops::Deref;
@@ -14,8 +12,6 @@ use yrs::types::Attrs;
 use yrs::types::Change;
 use yrs::types::Delta;
 use yrs::types::EntryChange;
-use yrs::types::Path;
-use yrs::types::PathSegment;
 use yrs::types::{Branch, BranchRef, TypePtr, Value};
 use yrs::{Array, Map, Text, Transaction};
 
@@ -46,30 +42,12 @@ where
     V: ToPython,
 {
     fn into_py(self, py: Python) -> PyObject {
-        let pyDict = PyDict::new(py);
+        let py_dict = PyDict::new(py);
         for (k, v) in self.into_iter() {
-            pyDict.set_item(k, v.into_py(py)).unwrap();
+            py_dict.set_item(k, v.into_py(py)).unwrap();
         }
-        pyDict.into_py(py)
+        py_dict.into_py(py)
     }
-}
-
-/// Converts a Y.rs Path object into a Python object.
-pub fn path_into_py(path: Path) -> PyObject {
-    Python::with_gil(|py| {
-        let result = PyList::empty(py);
-        for segment in path {
-            match segment {
-                PathSegment::Key(key) => {
-                    result.append(key.as_ref()).unwrap();
-                }
-                PathSegment::Index(idx) => {
-                    result.append(idx).unwrap();
-                }
-            }
-        }
-        result.into()
-    })
 }
 
 impl ToPython for Delta {

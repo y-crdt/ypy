@@ -1,54 +1,18 @@
 use pyo3::prelude::*;
-use pyo3::types::PyDict;
+use pyo3::types::{PyDict, PyList};
 use pyo3::PyIterProtocol;
 use std::mem::ManuallyDrop;
 use std::ops::Deref;
 use yrs::types::xml::{Attributes, TreeWalker, XmlEvent, XmlTextEvent};
-use yrs::types::EntryChange;
+use yrs::types::{EntryChange, Path, PathSegment};
 use yrs::Subscription;
 use yrs::Transaction;
 use yrs::Xml;
 use yrs::XmlElement;
 use yrs::XmlText;
 
-use crate::type_conversions::{path_into_py, ToPython};
+use crate::type_conversions::ToPython;
 use crate::y_transaction::YTransaction;
-
-impl ToPython for Xml {
-    fn into_py(self, py: Python) -> PyObject {
-        match self {
-            Xml::Element(v) => YXmlElement(v).into_py(py),
-            Xml::Text(v) => YXmlText(v).into_py(py),
-        }
-    }
-}
-
-impl<'a> ToPython for &EntryChange {
-    fn into_py(self, py: Python) -> PyObject {
-        let result = PyDict::new(py);
-        let action = "action";
-        match self {
-            EntryChange::Inserted(new) => {
-                let new_value = new.clone().into_py(py);
-                result.set_item(action, "add").unwrap();
-                result.set_item("newValue", new_value).unwrap();
-            }
-            EntryChange::Updated(old, new) => {
-                let old_value = old.clone().into_py(py);
-                let new_value = new.clone().into_py(py);
-                result.set_item(action, "update").unwrap();
-                result.set_item("oldValue", old_value).unwrap();
-                result.set_item("newValue", new_value).unwrap();
-            }
-            EntryChange::Removed(old) => {
-                let old_value = old.clone().into_py(py);
-                result.set_item(action, "delete").unwrap();
-                result.set_item("oldValue", old_value).unwrap();
-            }
-        }
-        result.into()
-    }
-}
 
 /// XML element data type. It represents an XML node, which can contain key-value attributes
 /// (interpreted as strings) as well as other nested XML elements or rich text (represented by
@@ -444,9 +408,8 @@ impl YXmlEvent {
 
     /// Returns an array of keys and indexes creating a path from root type down to current instance
     /// of shared type (accessible via `target` getter).
-    /// TODO extract to function
     pub fn path(&self) -> PyObject {
-        path_into_py(self.inner().path(self.txn()))
+        Python::with_gil(|py| self.inner().path(self.txn()).into_py(py))
     }
 
     /// Returns all changes done upon map component of a current shared data type (which can be
@@ -544,7 +507,7 @@ impl YXmlTextEvent {
 
     /// Returns a current shared type instance, that current event changes refer to.
     pub fn path(&self) -> PyObject {
-        path_into_py(self.inner().path(self.txn()))
+        Python::with_gil(|py| self.inner().path(self.txn()).into_py(py))
     }
 
     /// Returns all changes done upon map component of a current shared data type (which can be
@@ -592,5 +555,60 @@ impl YXmlTextEvent {
                 delta
             })
         }
+    }
+}
+
+// XML Type Conversions
+
+impl ToPython for Xml {
+    fn into_py(self, py: Python) -> PyObject {
+        match self {
+            Xml::Element(v) => YXmlElement(v).into_py(py),
+            Xml::Text(v) => YXmlText(v).into_py(py),
+        }
+    }
+}
+
+impl<'a> ToPython for &EntryChange {
+    fn into_py(self, py: Python) -> PyObject {
+        let result = PyDict::new(py);
+        let action = "action";
+        match self {
+            EntryChange::Inserted(new) => {
+                let new_value = new.clone().into_py(py);
+                result.set_item(action, "add").unwrap();
+                result.set_item("newValue", new_value).unwrap();
+            }
+            EntryChange::Updated(old, new) => {
+                let old_value = old.clone().into_py(py);
+                let new_value = new.clone().into_py(py);
+                result.set_item(action, "update").unwrap();
+                result.set_item("oldValue", old_value).unwrap();
+                result.set_item("newValue", new_value).unwrap();
+            }
+            EntryChange::Removed(old) => {
+                let old_value = old.clone().into_py(py);
+                result.set_item(action, "delete").unwrap();
+                result.set_item("oldValue", old_value).unwrap();
+            }
+        }
+        result.into()
+    }
+}
+
+impl ToPython for Path {
+    fn into_py(self, py: Python) -> PyObject {
+        let result = PyList::empty(py);
+        for segment in self {
+            match segment {
+                PathSegment::Key(key) => {
+                    result.append(key.as_ref()).unwrap();
+                }
+                PathSegment::Index(idx) => {
+                    result.append(idx).unwrap();
+                }
+            }
+        }
+        result.into()
     }
 }
