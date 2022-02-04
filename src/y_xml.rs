@@ -99,7 +99,11 @@ impl YXmlElement {
     /// It can be either `YXmlElement`, `YXmlText` or `undefined` if current node is a first child
     /// of parent XML node.
     pub fn prev_sibling(&self, txn: &YTransaction) -> PyObject {
-        Python::with_gil(|py| self.0.prev_sibling(txn).map_or(py.None(), xml_into_py))
+        Python::with_gil(|py| {
+            self.0
+                .prev_sibling(txn)
+                .map_or(py.None(), |xml| xml.into_py(py))
+        })
     }
 
     /// Returns a parent `YXmlElement` node or `undefined` if current node has no parent assigned.
@@ -216,31 +220,31 @@ impl YXmlText {
     /// It can be either `YXmlElement`, `YXmlText` or `undefined` if current node is a last child of
     /// parent XML node.
     pub fn next_sibling(&self, txn: &YTransaction) -> PyObject {
-        if let Some(xml) = self.0.next_sibling(txn) {
-            xml_into_py(xml)
-        } else {
-            Python::with_gil(|py| py.None())
-        }
+        Python::with_gil(|py| {
+            self.0
+                .next_sibling(txn)
+                .map_or(py.None(), |xml| xml.into_py(py))
+        })
     }
 
     /// Returns a previous XML sibling node of this XMl node.
     /// It can be either `YXmlElement`, `YXmlText` or `undefined` if current node is a first child
     /// of parent XML node.
     pub fn prev_sibling(&self, txn: &YTransaction) -> PyObject {
-        if let Some(xml) = self.0.prev_sibling(txn) {
-            xml_into_py(xml)
-        } else {
-            Python::with_gil(|py| py.None())
-        }
+        Python::with_gil(|py| {
+            self.0
+                .prev_sibling(txn)
+                .map_or(py.None(), |xml| xml.into_py(py))
+        })
     }
 
     /// Returns a parent `YXmlElement` node or `undefined` if current node has no parent assigned.
     pub fn parent(&self, txn: &YTransaction) -> PyObject {
-        if let Some(xml) = self.0.parent(txn) {
-            xml_into_py(Xml::Element(xml))
-        } else {
-            Python::with_gil(|py| py.None())
-        }
+        Python::with_gil(|py| {
+            self.0
+                .parent(txn)
+                .map_or(py.None(), |xml| YXmlElement(xml).into_py(py))
+        })
     }
 
     /// Returns an underlying string stored in this `YXmlText` instance.
@@ -327,13 +331,6 @@ impl PyIterProtocol for YXmlAttributes {
     fn __next__(mut slf: PyRefMut<Self>) -> Option<(String, String)> {
         slf.0.next().map(|(attr, val)| (attr.to_string(), val))
     }
-}
-
-fn xml_into_py(v: Xml) -> PyObject {
-    Python::with_gil(|py| match v {
-        Xml::Element(v) => YXmlElement(v).into_py(py),
-        Xml::Text(v) => YXmlText(v).into_py(py),
-    })
 }
 
 #[pyclass(unsendable)]
