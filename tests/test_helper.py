@@ -1,9 +1,9 @@
 import y_py as Y
 
-def transact(self,callback):
+
+def transact(self, callback):
     with self.begin_transaction() as txn:
         return callback(txn)
-
 
 
 def exchange_updates(docs):

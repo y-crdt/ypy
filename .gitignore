@@ -5,3 +5,4 @@ perf.data
 perf.data.old
 .vscode
 Cargo.lock
+.pytest_cache

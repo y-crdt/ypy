@@ -35,9 +35,6 @@ pub struct YDoc(pub Doc);
 
 #[pymethods]
 impl YDoc {
-    /// Doc(id)
-    /// --
-    ///
     /// Creates a new y-py document. If `id` parameter was passed it will be used as this document
     /// globally unique identifier (it's up to caller to ensure that requirement). Otherwise it will
     /// be assigned a randomly generated number.
@@ -79,9 +76,6 @@ impl YDoc {
         self.0.client_id as f64
     }
 
-    /// begin_transaction(/)
-    /// --
-    ///
     /// Returns a new transaction for this document. y-py shared data types execute their
     /// operations in a context of a given transaction. Each document can have only one active
     /// transaction at the time - subsequent attempts will cause exception to be thrown.

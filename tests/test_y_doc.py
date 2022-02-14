@@ -23,5 +23,3 @@ def test_constructor_options():
         YDoc(offset_kind="UTF-0xDEADBEEF")
     with pytest.raises(ValueError):
         YDoc(offset_kind="😬")
-
-    
