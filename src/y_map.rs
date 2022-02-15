@@ -128,9 +128,6 @@ impl YMap {
         }
     }
 
-    /// entries(self, txn)
-    /// --
-    ///
     /// Returns an iterator that can be used to traverse over all entries stored within this
     /// instance of `YMap`. Order of entry is not specified.
     ///
