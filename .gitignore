@@ -6,3 +6,6 @@ perf.data.old
 .vscode
 Cargo.lock
 .pytest_cache
+docs/_*
+
+.DS_Store
