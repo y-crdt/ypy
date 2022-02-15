@@ -7,5 +7,5 @@ perf.data.old
 Cargo.lock
 .pytest_cache
 docs/_*
-
 .DS_Store
+*.pyc
