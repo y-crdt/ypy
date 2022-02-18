@@ -19,8 +19,8 @@ sys.path.insert(0, os.path.abspath(".."))
 # -- Project information -----------------------------------------------------
 
 project = "Y-Py"
-copyright = "2022, John Waidhofer"
-author = "John Waidhofer"
+copyright = "2022, Kevin Jahns, Bartosz Sypytkowski, John Waidhofer"
+author = "Kevin Jahns, Bartosz Sypytkowski, John Waidhofer"
 
 # The full version, including alpha/beta/rc tags
 release = "0.2.2"
@@ -31,7 +31,10 @@ release = "0.2.2"
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
-extensions = ["autoapi.extension"]
+extensions = [
+    "autoapi.extension",
+    "sphinx.ext.napoleon",
+]
 
 autoapi_type = "python"
 autoapi_dirs = [".."]
@@ -45,8 +48,8 @@ templates_path = ["_templates"]
 # directories to ignore when looking for source files.
 # This pattern also affects html_static_path and html_extra_path.
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "tests", "docs"]
-autoapi_ignore = exclude_patterns
 
+autoapi_ignore = exclude_patterns
 
 # -- Options for HTML output -------------------------------------------------
 
