@@ -129,3 +129,59 @@ def test_borrow_mut_edge_case():
         for i in range(2000):
             arr.insert(txn, [1, 2, 3])
             arr.delete(txn, 0, 3)
+
+
+def test_observer():
+    d1 = YDoc()
+
+    x = d1.get_array("test")
+
+    def get_value(x):
+        with d1.begin_transaction() as txn:
+            return x.to_json(txn)
+
+    target = None
+    delta = None
+
+    def callback(e):
+        nonlocal target
+        nonlocal delta
+        target = e.target
+        delta = e.delta
+
+    observer = x.observe(callback)
+
+    # insert initial data to an empty YArray
+    with d1.begin_transaction() as txn:
+        x.insert(txn, 0, [1, 2, 3, 4])
+    assert get_value(target) == get_value(x)
+    assert delta == [{"insert": [1, 2, 3, 4]}]
+
+    target = None
+    delta = None
+
+    # remove 2 items from the middle
+    with d1.begin_transaction() as txn:
+        x.delete(txn, 1, 2)
+    assert get_value(target) == get_value(x)
+    assert delta == [{"retain": 1}, {"delete": 2}]
+
+    target = None
+    delta = None
+
+    # insert  item in the middle
+    with d1.begin_transaction() as txn:
+        x.insert(txn, 1, [5])
+    assert get_value(target) == get_value(x)
+    assert delta == [{"retain": 1}, {"insert": [5]}]
+
+    target = None
+    delta = None
+
+    # free the observer and make sure that callback is no longer called
+    del observer
+    with d1.begin_transaction() as txn:
+        x.insert(txn, 1, [6])
+
+    assert target == None
+    assert delta == None

@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::mem::ManuallyDrop;
 use std::ops::DerefMut;
 use yrs::types::map::{MapEvent, MapIter};
-use yrs::{Map, Transaction};
+use yrs::{Map, Subscription, Transaction};
 
 use crate::shared_types::SharedType;
 use crate::type_conversions::{PyValueWrapper, ToPython};
@@ -161,6 +161,22 @@ impl YMap {
             },
         }
     }
+
+    pub fn observe(&mut self, f: PyObject) -> YMapObserver {
+        match &mut self.0 {
+            SharedType::Integrated(v) => v
+                .observe(move |txn, e| {
+                    Python::with_gil(|py| {
+                        let e = YMapEvent::new(e, txn);
+                        f.call1(py, (e,)).unwrap();
+                    })
+                })
+                .into(),
+            SharedType::Prelim(_) => {
+                panic!("YMap.observe is not supported on preliminary type.")
+            }
+        }
+    }
 }
 
 pub enum SharedYMapIterator {
@@ -265,5 +281,14 @@ impl YMapEvent {
             self.keys = Some(keys.clone());
             keys
         }
+    }
+}
+
+#[pyclass(unsendable)]
+pub struct YMapObserver(Subscription<MapEvent>);
+
+impl From<Subscription<MapEvent>> for YMapObserver {
+    fn from(o: Subscription<MapEvent>) -> Self {
+        YMapObserver(o)
     }
 }

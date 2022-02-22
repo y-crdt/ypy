@@ -10,7 +10,7 @@ use pyo3::exceptions::PyIndexError;
 use pyo3::prelude::*;
 use pyo3::types::PyList;
 use yrs::types::array::{ArrayEvent, ArrayIter};
-use yrs::{Array, Transaction};
+use yrs::{Array, Subscription, Transaction};
 
 /// A collection used to store data in an indexed sequence structure. This type is internally
 /// implemented as a double linked list, which may squash values inserted directly one after another
@@ -173,6 +173,25 @@ impl YArray {
         };
         YArrayIterator(ManuallyDrop::new(inner_iter))
     }
+
+    /// Subscribes to all operations happening over this instance of `YArray`. All changes are
+    /// batched and eventually triggered during transaction commit phase.
+    /// Returns an `YObserver` which, when free'd, will unsubscribe current callback.
+    pub fn observe(&mut self, f: PyObject) -> YArrayObserver {
+        match &mut self.0 {
+            SharedType::Integrated(v) => v
+                .observe(move |txn, e| {
+                    Python::with_gil(|py| {
+                        let event = YArrayEvent::new(e, txn);
+                        f.call1(py, (event,)).unwrap();
+                    })
+                })
+                .into(),
+            SharedType::Prelim(_) => {
+                panic!("YArray.observe is not supported on preliminary type.")
+            }
+        }
+    }
 }
 
 enum InnerYArrayIter {
@@ -278,5 +297,14 @@ impl YArrayEvent {
             self.delta = Some(delta.clone());
             delta
         }
+    }
+}
+
+#[pyclass(unsendable)]
+pub struct YArrayObserver(Subscription<ArrayEvent>);
+
+impl From<Subscription<ArrayEvent>> for YArrayObserver {
+    fn from(o: Subscription<ArrayEvent>) -> Self {
+        YArrayObserver(o)
     }
 }

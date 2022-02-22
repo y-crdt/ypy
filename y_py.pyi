@@ -332,7 +332,7 @@ class YTransaction:
 class YText:
     """
     A shared data type used for collaborative text editing. It enables multiple users to add and
-    remove chunks of text in efficient manner. This type is internally represented as aable
+    remove chunks of text in efficient manner. This type is internally represented as able
     double-linked list of text chunks - an optimization occurs during `YTransaction.commit`, which
     allows to squash multiple consecutively inserted characters together as a single chunk of text
     even between transaction boundaries in order to preserve more efficient memory model.
@@ -378,6 +378,39 @@ class YText:
         Deletes a specified range of of characters, starting at a given `index`.
         Both `index` and `length` are counted in terms of a number of UTF-8 character bytes.
         """
+    def observe(self, f: Callable[[YTextEvent]]) -> YTextObserver:
+        """
+        Assigns a callback function to listen to YText updates.
+
+        Args:
+            f: Callback function that runs when the text object receives an update.
+        Returns:
+            A reference to the callback subscription.
+        """
+
+YTextObserver = Any
+
+class YTextEvent:
+    target: YText
+    delta: List[YTextDelta]  # TODO: take off attributes type
+    def path(self) -> List[Union[int, str]]:
+        """
+        Returns:
+            Array of keys and indexes creating a path from root type down to current instance of shared type (accessible via `target` getter).
+        """
+
+YTextDelta = Union[YTextChangeInsert, YTextChangeDelete, YTextChangeRetain]
+
+class YTextChangeInsert(TypedDict):
+    insert: str
+    attributes: Optional[Any]
+
+class YTextChangeDelete(TypedDict):
+    delete: int
+
+class YTextChangeRetain(TypedDict):
+    retain: int
+    attributes: Optional[Any]
 
 class YArray:
     prelim: bool
@@ -432,6 +465,37 @@ class YArray:
                 print(item)
         ```
         """
+    def observe(self, f: Callable[[YArrayEvent]]) -> YArrayObserver:
+        """
+        Assigns a callback function to listen to YArray updates.
+
+        Args:
+            f: Callback function that runs when the array object receives an update.
+        Returns:
+            A reference to the callback subscription.
+        """
+
+YArrayObserver = Any
+
+class YArrayEvent:
+    target: YArray
+    delta: List[ArrayDelta]
+    def path(self) -> List[Union[int, str]]:
+        """
+        Returns:
+            Array of keys and indexes creating a path from root type down to current instance of shared type (accessible via `target` getter).
+        """
+
+ArrayDelta = Union[ArrayChangeInsert, ArrayChangeDelete, ArrayChangeRetain]
+
+class ArrayChangeInsert(TypedDict):
+    insert: List[Any]
+
+class ArrayChangeDelete:
+    retain: int
+
+class ArrayChangeRetain:
+    delete: int
 
 class YMap:
     prelim: bool
@@ -484,18 +548,39 @@ class YMap:
         ```
         """
 
+YMapObserver = Any
+
+class YMapEvent:
+    target: YMap
+    delta: List[Dict]
+    keys: List[YMapEventKeyChange]
+    def path(self) -> List[Union[int, str]]:
+        """
+        Returns:
+            Array of keys and indexes creating a path from root type down to current instance of shared type (accessible via `target` getter).
+        """
+
+class YMapEventKeyChange(TypedDict):
+    action: Literal["add", "update", "delete"]
+    oldValue: Optional[Any]
+    newValue: Optional[Any]
+
 YXmlAttributes = Iterator[Tuple[str, str]]
 YXmlObserver = Any
+
 YXmlTextObserver = Any
 Xml = Union[YXmlElement, YXmlText]
 YXmlTreeWalker = Iterator[Xml]
 EntryChange = Dict[Literal["action", "newValue", "oldValue"], Any]
 
-class Delta(TypedDict):
-    attributes: Optional[Dict[str, Any]]
-    insert: Any
-    retain: int
-    delete: int
+class YXmlElementEvent:
+    target: YXmlElement
+    keys: Dict[str, EntryChange]
+    delta: List[Dict]
+    def path(self) -> List[Union[int, str]]:
+        """
+        Returns a current shared type instance, that current event changes refer to.
+        """
 
 class YXmlElement:
     """
@@ -594,7 +679,7 @@ class YXmlElement:
         Returns an iterator that enables a deep traversal of this XML node - starting from first
         child over this XML node successors using depth-first strategy.
         """
-    def observe(self, f: Any) -> YXmlObserver:
+    def observe(self, f: Callable[[YXmlElementEvent]]) -> YXmlObserver:
         """
         Subscribes to all operations happening over this instance of `YXmlElement`. All changes are
         batched and eventually triggered during transaction commit phase.
@@ -665,7 +750,7 @@ class YXmlText:
 class YXmlTextEvent:
     target: YXmlText
     keys: List[EntryChange]
-    delta: List[Delta]
+    delta: List[YTextDelta]
     def path(self) -> List[Union[int, str]]:
         """
         Returns a current shared type instance, that current event changes refer to.
