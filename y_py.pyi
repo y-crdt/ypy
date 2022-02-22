@@ -392,7 +392,7 @@ YTextObserver = Any
 
 class YTextEvent:
     target: YText
-    delta: List[YTextDelta]  # TODO: take off attributes type
+    delta: List[YTextDelta]
     def path(self) -> List[Union[int, str]]:
         """
         Returns:
@@ -546,6 +546,15 @@ class YMap:
             for (key, value) in map.entries(txn)):
                 print(key, value)
         ```
+        """
+    def observe(self, f: Callable[[YMapEvent]]) -> YMapObserver:
+        """
+        Assigns a callback function to listen to YMap updates.
+
+        Args:
+            f: Callback function that runs when the map object receives an update.
+        Returns:
+            A reference to the callback subscription. Delete this observer in order to erase the associated callback function.
         """
 
 YMapObserver = Any

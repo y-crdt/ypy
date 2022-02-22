@@ -28,7 +28,6 @@ def test_set_nested():
     d1.transact(lambda txn: nested.set(txn, "b", "B"))
 
     json = d1.transact(lambda txn: x.to_json(txn))
-    # TODO: Make this a deep diff
     assert json == {"key": {"a": "A", "b": "B"}}
 
 
@@ -41,7 +40,6 @@ def test_delete():
     value = d1.transact(lambda txn: x.get(txn, "key"))
     assert len == 1
     assert value == "value1"
-    # TODO: Get length with __len__()
     d1.transact(lambda txn: x.delete(txn, "key"))
     len = d1.transact(lambda txn: x.length(txn))
     value = d1.transact(lambda txn: x.get(txn, "key"))
