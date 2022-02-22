@@ -91,17 +91,9 @@ def test_observer():
 
     # insert item in the middle
     with d1.begin_transaction() as txn:
-        x.insert(txn, 1, "e", {"bold": True})
+        x.insert(txn, 1, "e")
     assert get_value(target) == get_value(x)
-    assert delta == [{"retain": 1}, {"insert": "e", "attributes": {"bold": True}}]
-    target = None
-    delta = None
-
-    # remove formatting
-    with d1.begin_transaction() as txn:
-        x.format(txn, 1, 1, {"bold": None})
-    assert get_value(target) == get_value(x)
-    assert delta == [{"retain": 1}, {"retain": 1, "attributes": {"bold": None}}]
+    assert delta == [{"retain": 1}, {"insert": "e"}]
     target = None
     delta = None
 
