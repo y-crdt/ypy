@@ -21,17 +21,16 @@ class YDoc:
     Document manages so called root types, which are top-level shared types definitions (as opposed
     to recursively nested types).
 
-    A basic workflow sample:
-    ```
-    from y_py import YDoc
+    Example::
 
-    doc = YDoc()
-    with doc.begin_transaction() as txn:
-        text = txn.get_text('name')
-        text.push(txn, 'hello world')
-        output = text.to_string(txn)
-        print(output)
-    ```
+        from y_py import YDoc
+
+        doc = YDoc()
+        with doc.begin_transaction() as txn:
+            text = txn.get_text('name')
+            text.push(txn, 'hello world')
+            output = text.to_string(txn)
+            print(output)
     """
 
     id: float
@@ -48,27 +47,29 @@ class YDoc:
         """
     def begin_transaction(self) -> YTransaction:
         """
-        Returns a new transaction for this document. y-py shared data types execute their
-        operations in a context of a given transaction. Each document can have only one active
-        transaction at the time - subsequent attempts will cause exception to be thrown.
+
+        Returns:
+            A new transaction for this document. y-py shared data types execute their
+            operations in a context of a given transaction. Each document can have only one active
+            transaction at the time - subsequent attempts will cause exception to be thrown.
 
         Transactions started with `doc.begin_transaction` can be released by deleting the transaction object
         method.
 
-        Example:
-        ```
-        from y_py import YDoc
-        doc = YDoc()
-        text = doc.get_text('name')
-        with doc.begin_transaction() as txn:
-            text.insert(txn, 0, 'hello world')
-        ```
+        Example::
+
+            from y_py import YDoc
+            doc = YDoc()
+            text = doc.get_text('name')
+            with doc.begin_transaction() as txn:
+                text.insert(txn, 0, 'hello world')
+
         """
     def transact(self, callback: Callable[[YTransaction]]): ...
     def get_map(self, name: str) -> YMap:
         """
-        Returns a `YMap` shared data type, that's accessible for subsequent accesses using given
-        `name`.
+        Returns:
+            A `YMap` shared data type, that's accessible for subsequent accesses using given `name`.
 
         If there was no instance with this name before, it will be created and then returned.
 
@@ -77,8 +78,8 @@ class YDoc:
         """
     def get_xml_element(self, name: str) -> YXmlElement:
         """
-        Returns a `YXmlElement` shared data type, that's accessible for subsequent accesses using
-        given `name`.
+        Returns:
+            A `YXmlElement` shared data type, that's accessible for subsequent accesses using given `name`.
 
         If there was no instance with this name before, it will be created and then returned.
 
@@ -87,8 +88,8 @@ class YDoc:
         """
     def get_xml_text(self, name: str) -> YXmlText:
         """
-        Returns a `YXmlText` shared data type, that's accessible for subsequent accesses using given
-        `name`.
+        Returns:
+            A `YXmlText` shared data type, that's accessible for subsequent accesses using given `name`.
 
         If there was no instance with this name before, it will be created and then returned.
 
@@ -97,8 +98,8 @@ class YDoc:
         """
     def get_array(self, name: str) -> YArray:
         """
-        Returns a `YArray` shared data type, that's accessible for subsequent accesses using given
-        `name`.
+        Returns:
+            A `YArray` shared data type, that's accessible for subsequent accesses using given `name`.
 
         If there was no instance with this name before, it will be created and then returned.
 
@@ -107,8 +108,12 @@ class YDoc:
         """
     def get_text(self, name: str) -> YText:
         """
-        Returns a `YText` shared data type, that's accessible for subsequent accesses using given
-        `name`.
+
+        Args:
+            name: The identifier for retreiving the text
+        Returns:
+            A `YText` shared data type, that's accessible for subsequent accesses using given `name`.
+
         If there was no instance with this name before, it will be created and then returned.
         If there was an instance with this name, but it was of different type, it will be projected
         onto `YText` instance.
@@ -121,21 +126,20 @@ def encode_state_vector(doc: YDoc) -> List[int]:
     can be used by `encode_state_as_update` on remote peer to generate a delta update payload to
     synchronize changes between peers.
 
-    Example:
+    Example::
 
-    ```
-    from y_py import YDoc, encode_state_vector, encode_state_as_update, apply_update from y_py
+        from y_py import YDoc, encode_state_vector, encode_state_as_update, apply_update from y_py
 
-    # document on machine A
-    local_doc = YDoc()
-    local_sv = encode_state_vector(local_doc)
+        # document on machine A
+        local_doc = YDoc()
+        local_sv = encode_state_vector(local_doc)
 
-    # document on machine B
-    remote_doc = YDoc()
-    remote_delta = encode_state_as_update(remote_doc, local_sv)
+        # document on machine B
+        remote_doc = YDoc()
+        remote_delta = encode_state_as_update(remote_doc, local_sv)
 
-    apply_update(local_doc, remote_delta)
-    ```
+        apply_update(local_doc, remote_delta)
+
     """
 
 def encode_state_as_update(doc: YDoc, vector: Optional[List[int]]) -> List[int]:
@@ -145,21 +149,19 @@ def encode_state_as_update(doc: YDoc, vector: Optional[List[int]]) -> List[int]:
     delta payload will contain all changes of a current y-py document, working effectively as its
     state snapshot.
 
-    Example:
+    Example::
 
-    ```
-    from y_py import YDoc, encode_state_vector, encode_state_as_update, apply_update
+        from y_py import YDoc, encode_state_vector, encode_state_as_update, apply_update
 
-    # document on machine A
-    local_doc = YDoc()
-    local_sv = encode_state_vector(local_doc)
+        # document on machine A
+        local_doc = YDoc()
+        local_sv = encode_state_vector(local_doc)
 
-    # document on machine B
-    remote_doc = YDoc()
-    remote_delta = encode_state_as_update(remote_doc, local_sv)
+        # document on machine B
+        remote_doc = YDoc()
+        remote_delta = encode_state_as_update(remote_doc, local_sv)
 
-    apply_update(local_doc, remote_delta)
-    ```
+        apply_update(local_doc, remote_delta)
     """
 
 def apply_update(doc: YDoc, diff: List[int]):
@@ -167,21 +169,19 @@ def apply_update(doc: YDoc, diff: List[int]):
     Applies delta update generated by the remote document replica to a current document. This
     method assumes that a payload maintains lib0 v1 encoding format.
 
-    Example:
+    Example::
 
-    ```
-    from y_py import YDoc, encode_state_vector, encode_state_as_update, apply_update
+        from y_py import YDoc, encode_state_vector, encode_state_as_update, apply_update
 
-    # document on machine A
-    local_doc = YDoc()
-    local_sv = encode_state_vector(local_doc)
+        # document on machine A
+        local_doc = YDoc()
+        local_sv = encode_state_vector(local_doc)
 
-    # document on machine B
-    remote_doc = YDoc()
-    remote_delta = encode_state_as_update(remote_doc, local_sv)
+        # document on machine B
+        remote_doc = YDoc()
+        remote_delta = encode_state_as_update(remote_doc, local_sv)
 
-    apply_update(local_doc, remote_delta)
-    ```
+        apply_update(local_doc, remote_delta)
     """
 
 class YTransaction:
@@ -193,21 +193,19 @@ class YTransaction:
     Transactions started with `doc.begin_transaction` can be released by deleting the transaction object
     method.
 
-    Example:
+    Example::
 
-    ```
-    from y_py import YDoc
-    doc = YDoc()
-    text = doc.get_text('name')
-    with doc.begin_transaction() as txn:
-        text.insert(txn, 0, 'hello world')
-    ```
+        from y_py import YDoc
+        doc = YDoc()
+        text = doc.get_text('name')
+        with doc.begin_transaction() as txn:
+            text.insert(txn, 0, 'hello world')
     """
 
     def get_text(self, name: str) -> YText:
         """
-        Returns a `YText` shared data type, that's accessible for subsequent accesses using given
-        `name`.
+        Returns:
+            A `YText` shared data type, that's accessible for subsequent accesses using given `name`.
 
         If there was no instance with this name before, it will be created and then returned.
 
@@ -216,8 +214,8 @@ class YTransaction:
         """
     def get_array(self, name: str) -> YArray:
         """
-        Returns a `YArray` shared data type, that's accessible for subsequent accesses using given
-        `name`.
+        Returns:
+            A `YArray` shared data type, that's accessible for subsequent accesses using given `name`.
 
         If there was no instance with this name before, it will be created and then returned.
 
@@ -226,8 +224,8 @@ class YTransaction:
         """
     def get_map(self, name: str) -> YMap:
         """
-        Returns a `YMap` shared data type, that's accessible for subsequent accesses using given
-        `name`.
+        Returns:
+            A `YMap` shared data type, that's accessible for subsequent accesses using given `name`.
 
         If there was no instance with this name before, it will be created and then returned.
 
@@ -247,28 +245,26 @@ class YTransaction:
         document and can be used by `encode_state_as_update` on remote peer to generate a delta
         update payload to synchronize changes between peers.
 
-        Example:
+        Example::
 
-        ```
-        from y_py import YDoc
+            from y_py import YDoc
 
-        # document on machine A
-        local_doc = YDoc()
-        local_txn = local_doc.begin_transaction()
+            # document on machine A
+            local_doc = YDoc()
+            local_txn = local_doc.begin_transaction()
 
-        # document on machine B
-        remote_doc = YDoc()
-        remote_txn = local_doc.begin_transaction()
+            # document on machine B
+            remote_doc = YDoc()
+            remote_txn = local_doc.begin_transaction()
 
-        try:
-            local_sv = local_txn.state_vector_v1()
-            remote_delta = remote_txn.diff_v1(local_sv)
-            local_txn.applyV1(remote_delta)
-        finally:
-            del local_txn
-            del remote_txn
+            try:
+                local_sv = local_txn.state_vector_v1()
+                remote_delta = remote_txn.diff_v1(local_sv)
+                local_txn.applyV1(remote_delta)
+            finally:
+                del local_txn
+                del remote_txn
 
-        ```
         """
     def diff_v1(self, vector: Optional[List[int]]) -> List[int]:
         """
@@ -277,54 +273,50 @@ class YTransaction:
         delta payload will contain all changes of a current y-py document, working effectively as
         its state snapshot.
 
-        Example:
+        Example::
 
-        ```
-        from y_py import YDoc
+            from y_py import YDoc
 
-        # document on machine A
-        local_doc = YDoc()
-        local_txn = local_doc.begin_transaction()
+            # document on machine A
+            local_doc = YDoc()
+            local_txn = local_doc.begin_transaction()
 
-        # document on machine B
-        remote_doc = YDoc()
-        remote_txn = local_doc.begin_transaction()
+            # document on machine B
+            remote_doc = YDoc()
+            remote_txn = local_doc.begin_transaction()
 
-        try:
-            local_sv = local_txn.state_vector_v1()
-            remote_delta = remote_txn.diff_v1(local_sv)
-            local_txn.applyV1(remote_delta)
-        finally:
-            del local_txn
-            del remote_txn
-        ```
+            try:
+                local_sv = local_txn.state_vector_v1()
+                remote_delta = remote_txn.diff_v1(local_sv)
+                local_txn.applyV1(remote_delta)
+            finally:
+                del local_txn
+                del remote_txn
         """
     def apply_v1(self, diff: List[int]):
         """
         Applies delta update generated by the remote document replica to a current transaction's
         document. This method assumes that a payload maintains lib0 v1 encoding format.
 
-        Example:
+        Example::
 
-        ```
-        from y_py import YDoc
+            from y_py import YDoc
 
-        # document on machine A
-        local_doc = YDoc()
-        local_txn = local_doc.begin_transaction()
+            # document on machine A
+            local_doc = YDoc()
+            local_txn = local_doc.begin_transaction()
 
-        # document on machine B
-        remote_doc = YDoc()
-        remote_txn = local_doc.begin_transaction()
+            # document on machine B
+            remote_doc = YDoc()
+            remote_txn = local_doc.begin_transaction()
 
-        try:
-            local_sv = local_txn.state_vector_v1()
-            remote_delta = remote_txn.diff_v1(local_sv)
-            local_txn.applyV1(remote_delta)
-        finally:
-            del local_txn
-            del remote_txn
-        ```
+            try:
+                local_sv = local_txn.state_vector_v1()
+                remote_delta = remote_txn.diff_v1(local_sv)
+                local_txn.applyV1(remote_delta)
+            finally:
+                del local_txn
+                del remote_txn
         """
     def __enter__() -> YTransaction: ...
     def __exit__() -> bool: ...
@@ -359,11 +351,13 @@ class YText:
         """
     def to_string(self, txn: YTransaction) -> str:
         """
-        Returns an underlying shared string stored in this data type.
+        Returns:
+            The underlying shared string stored in this data type.
         """
     def to_json(self, txn: YTransaction) -> str:
         """
-        Returns an underlying shared string stored in this data type.
+        Returns:
+            The underlying shared string stored in this data type.
         """
     def insert(self, txn: YTransaction, index: int, chunk: str):
         """
@@ -443,27 +437,26 @@ class YArray:
         """
     def get(self, txn: YTransaction, index: int) -> Any:
         """
-        Returns an element stored under given `index`.
+        Returns:
+            The element stored under given `index`.
         """
     def values(self, txn: YTransaction) -> Iterator:
         """
-        Returns an iterator that can be used to traverse over the values stored withing this
-        instance of `YArray`.
+        Returns:
+            An iterator that can be used to traverse over the values stored withing this instance of `YArray`.
 
-        Example:
+        Example::
 
-        ```
-        from y_py import YDoc
+            from y_py import YDoc
 
-        # document on machine A
-        doc = YDoc()
-        array = doc.get_array('name')
+            # document on machine A
+            doc = YDoc()
+            array = doc.get_array('name')
 
-        with doc.begin_transaction() as txn:
-            array.push(txn, ['hello', 'world'])
-            for item in array.values(txn)):
-                print(item)
-        ```
+            with doc.begin_transaction() as txn:
+                array.push(txn, ['hello', 'world'])
+                for item in array.values(txn)):
+                    print(item)
         """
     def observe(self, f: Callable[[YArrayEvent]]) -> YArrayObserver:
         """
@@ -524,28 +517,26 @@ class YMap:
         """
     def get(self, txn: YTransaction, key: str) -> Any | None:
         """
-        Returns value of an entry stored under given `key` within this instance of `YMap`,
-        or `None` if no such entry existed.
+        Returns:
+            Value of an entry stored under given `key` within this instance of `YMap`, or `None` if no such entry existed.
         """
     def entries(self, txn: YTransaction) -> Iterator:
         """
-        Returns an iterator that can be used to traverse over all entries stored within this
-        instance of `YMap`. Order of entry is not specified.
+        Returns:
+            An iterator that can be used to traverse over all entries stored within this instance of `YMap`. Order of entry is not specified.
 
-        Example:
+        Example::
 
-        ```
-        from y_py import YDoc
+            from y_py import YDoc
 
-        # document on machine A
-        doc = YDoc()
-        map = doc.get_map('name')
-        with doc.begin_transaction() as txn:
-            map.set(txn, 'key1', 'value1')
-            map.set(txn, 'key2', true)
-            for (key, value) in map.entries(txn)):
-                print(key, value)
-        ```
+            # document on machine A
+            doc = YDoc()
+            map = doc.get_map('name')
+            with doc.begin_transaction() as txn:
+                map.set(txn, 'key1', 'value1')
+                map.set(txn, 'key2', true)
+                for (key, value) in map.entries(txn)):
+                    print(key, value)
         """
     def observe(self, f: Callable[[YMapEvent]]) -> YMapObserver:
         """
