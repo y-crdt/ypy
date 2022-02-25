@@ -173,7 +173,7 @@ impl YXmlElement {
 }
 
 /// A shared data type used for collaborative text editing, that can be used in a context of
-/// `YXmlElement` nodee. It enables multiple users to add and remove chunks of text in efficient
+/// `YXmlElement` node. It enables multiple users to add and remove chunks of text in efficient
 /// manner. This type is internally represented as a mutable double-linked list of text chunks
 /// - an optimization occurs during `YTransaction.commit`, which allows to squash multiple
 /// consecutively inserted characters together as a single chunk of text even between transaction
@@ -520,7 +520,7 @@ impl YXmlTextEvent {
                 let keys = self.inner().keys(self.txn());
                 let result = PyDict::new(py);
                 for (key, value) in keys.iter() {
-                    result.set_item(key.deref(), value.into_py(py));
+                    result.set_item(key.deref(), value.into_py(py)).unwrap();
                 }
                 let keys = PyObject::from(result);
                 self.keys = Some(keys.clone());
