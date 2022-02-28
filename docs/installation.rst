@@ -1,6 +1,6 @@
 Installation
 ============
-You can install Y-Py from PyPI:
+You can install Ypy from PyPI:
 
 .. code-block:: bash
 

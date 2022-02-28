@@ -8,7 +8,7 @@ use yrs::{
     StateVector, Transaction, Update,
 };
 
-/// A transaction that serves as a proxy to document block store. y-py shared data types execute
+/// A transaction that serves as a proxy to document block store. Ypy shared data types execute
 /// their operations in a context of a given transaction. Each document can have only one active
 /// transaction at the time - subsequent attempts will cause exception to be thrown.
 ///
@@ -78,7 +78,7 @@ impl YTransaction {
 
     /// Triggers a post-update series of operations without `free`ing the transaction. This includes
     /// compaction and optimization of internal representation of updates, triggering events etc.
-    /// y-py transactions are auto-committed when they are `free`d.
+    /// Ypy transactions are auto-committed when they are `free`d.
     pub fn commit(&mut self) {
         self.0.commit()
     }
@@ -118,7 +118,7 @@ impl YTransaction {
 
     /// Encodes all updates that have happened since a given version `vector` into a compact delta
     /// representation using lib0 v1 encoding. If `vector` parameter has not been provided, generated
-    /// delta payload will contain all changes of a current y-py document, working effectively as
+    /// delta payload will contain all changes of a current Ypy document, working effectively as
     /// its state snapshot.
     ///
     /// Example:
