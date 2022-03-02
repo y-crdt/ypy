@@ -45,7 +45,7 @@ impl YArray {
     /// initialized to provided parameter.
     ///
     /// Preliminary instances can be nested into other shared data types such as `YArray` and `YMap`.
-    /// Once a preliminary instance has been inserted this way, it becomes integrated into y-py
+    /// Once a preliminary instance has been inserted this way, it becomes integrated into Ypy
     /// document store and cannot be nested again: attempt to do so will result in an exception.
     #[new]
     pub fn new(init: Option<Vec<PyObject>>) -> Self {
@@ -55,7 +55,7 @@ impl YArray {
     /// Returns true if this is a preliminary instance of `YArray`.
     ///
     /// Preliminary instances can be nested into other shared data types such as `YArray` and `YMap`.
-    /// Once a preliminary instance has been inserted this way, it becomes integrated into y-py
+    /// Once a preliminary instance has been inserted this way, it becomes integrated into Ypy
     /// document store and cannot be nested again: attempt to do so will result in an exception.
     #[getter]
     pub fn prelim(&self) -> bool {

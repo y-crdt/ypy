@@ -13,7 +13,7 @@ from typing import (
 
 class YDoc:
     """
-    A y-py document type. Documents are most important units of collaborative resources management.
+    A Ypy document type. Documents are most important units of collaborative resources management.
     All shared collections live within a scope of their corresponding documents. All updates are
     generated on per document basis (rather than individual shared type). All operations on shared
     collections happen via YTransaction, which lifetime is also bound to a document.
@@ -41,7 +41,7 @@ class YDoc:
         skip_gc: Optional[bool],
     ):
         """
-        Creates a new y-py document. If `id` parameter was passed it will be used as this document
+        Creates a new Ypy document. If `id` parameter was passed it will be used as this document
         globally unique identifier (it's up to caller to ensure that requirement). Otherwise it will
         be assigned a randomly generated number.
         """
@@ -49,7 +49,7 @@ class YDoc:
         """
 
         Returns:
-            A new transaction for this document. y-py shared data types execute their
+            A new transaction for this document. Ypy shared data types execute their
             operations in a context of a given transaction. Each document can have only one active
             transaction at the time - subsequent attempts will cause exception to be thrown.
 
@@ -121,7 +121,7 @@ class YDoc:
 
 def encode_state_vector(doc: YDoc) -> List[int]:
     """
-    Encodes a state vector of a given y-py document into its binary representation using lib0 v1
+    Encodes a state vector of a given Ypy document into its binary representation using lib0 v1
     encoding. State vector is a compact representation of updates performed on a given document and
     can be used by `encode_state_as_update` on remote peer to generate a delta update payload to
     synchronize changes between peers.
@@ -146,7 +146,7 @@ def encode_state_as_update(doc: YDoc, vector: Optional[List[int]]) -> List[int]:
     """
     Encodes all updates that have happened since a given version `vector` into a compact delta
     representation using lib0 v1 encoding. If `vector` parameter has not been provided, generated
-    delta payload will contain all changes of a current y-py document, working effectively as its
+    delta payload will contain all changes of a current Ypy document, working effectively as its
     state snapshot.
 
     Example::
@@ -186,7 +186,7 @@ def apply_update(doc: YDoc, diff: List[int]):
 
 class YTransaction:
     """
-    A transaction that serves as a proxy to document block store. y-py shared data types execute
+    A transaction that serves as a proxy to document block store. Ypy shared data types execute
     their operations in a context of a given transaction. Each document can have only one active
     transaction at the time - subsequent attempts will cause exception to be thrown.
 
@@ -236,7 +236,7 @@ class YTransaction:
         """
         Triggers a post-update series of operations without `free`ing the transaction. This includes
         compaction and optimization of internal representation of updates, triggering events etc.
-        y-py transactions are auto-committed when they are `free`d.
+        Ypy transactions are auto-committed when they are `free`d.
         """
     def state_vector_v1(self) -> List[int]:
         """
@@ -270,7 +270,7 @@ class YTransaction:
         """
         Encodes all updates that have happened since a given version `vector` into a compact delta
         representation using lib0 v1 encoding. If `vector` parameter has not been provided, generated
-        delta payload will contain all changes of a current y-py document, working effectively as
+        delta payload will contain all changes of a current Ypy document, working effectively as
         its state snapshot.
 
         Example::
@@ -346,7 +346,7 @@ class YText:
         to provided parameter.
 
         Preliminary instances can be nested into other shared data types such as `YArray` and `YMap`.
-        Once a preliminary instance has been inserted this way, it becomes integrated into y-py
+        Once a preliminary instance has been inserted this way, it becomes integrated into Ypy
         document store and cannot be nested again: attempt to do so will result in an exception.
         """
     def to_string(self, txn: YTransaction) -> str:
@@ -415,7 +415,7 @@ class YArray:
         initialized to provided parameter.
 
         Preliminary instances can be nested into other shared data types such as `YArray` and `YMap`.
-        Once a preliminary instance has been inserted this way, it becomes integrated into y-py
+        Once a preliminary instance has been inserted this way, it becomes integrated into Ypy
         document store and cannot be nested again: attempt to do so will result in an exception.
         """
     def to_json(self, txn: YTransaction) -> List[Any]:
@@ -499,7 +499,7 @@ class YMap:
         initialized to provided parameter.
 
         Preliminary instances can be nested into other shared data types such as `YArray` and `YMap`.
-        Once a preliminary instance has been inserted this way, it becomes integrated into y-py
+        Once a preliminary instance has been inserted this way, it becomes integrated into Ypy
         document store and cannot be nested again: attempt to do so will result in an exception.
         """
     def to_json(self, txn: YTransaction) -> dict:

@@ -10,7 +10,7 @@ env:
 
 jobs:
   test:
-    name: Build wheels on ${{ matrix.os }}
+    name: Run Python tests on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
 
     strategy:
@@ -27,13 +27,13 @@ jobs:
         with:
           auto-update-conda: true
           python-version: "3.7"
-      - name: Install Rust Nightly
+      - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly
+          toolchain: stable
           profile: minimal
           default: true
-      - name: Build Y-Py
+      - name: Build Ypy
         run: |
           pip install maturin
           maturin develop

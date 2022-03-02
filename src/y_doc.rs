@@ -10,7 +10,7 @@ use crate::y_text::YText;
 use crate::y_transaction::YTransaction;
 use crate::y_xml::YXmlElement;
 use crate::y_xml::YXmlText;
-/// A y-py document type. Documents are most important units of collaborative resources management.
+/// A Ypy document type. Documents are most important units of collaborative resources management.
 /// All shared collections live within a scope of their corresponding documents. All updates are
 /// generated on per document basis (rather than individual shared type). All operations on shared
 /// collections happen via [YTransaction], which lifetime is also bound to a document.
@@ -35,7 +35,7 @@ pub struct YDoc(pub Doc);
 
 #[pymethods]
 impl YDoc {
-    /// Creates a new y-py document. If `id` parameter was passed it will be used as this document
+    /// Creates a new Ypy document. If `id` parameter was passed it will be used as this document
     /// globally unique identifier (it's up to caller to ensure that requirement). Otherwise it will
     /// be assigned a randomly generated number.
     #[new]
@@ -76,7 +76,7 @@ impl YDoc {
         self.0.client_id as f64
     }
 
-    /// Returns a new transaction for this document. y-py shared data types execute their
+    /// Returns a new transaction for this document. Ypy shared data types execute their
     /// operations in a context of a given transaction. Each document can have only one active
     /// transaction at the time - subsequent attempts will cause exception to be thrown.
     ///
@@ -160,7 +160,7 @@ impl YDoc {
     }
 }
 
-/// Encodes a state vector of a given y-py document into its binary representation using lib0 v1
+/// Encodes a state vector of a given Ypy document into its binary representation using lib0 v1
 /// encoding. State vector is a compact representation of updates performed on a given document and
 /// can be used by `encode_state_as_update` on remote peer to generate a delta update payload to
 /// synchronize changes between peers.
@@ -187,7 +187,7 @@ pub fn encode_state_vector(doc: &mut YDoc) -> Vec<u8> {
 
 /// Encodes all updates that have happened since a given version `vector` into a compact delta
 /// representation using lib0 v1 encoding. If `vector` parameter has not been provided, generated
-/// delta payload will contain all changes of a current y-py document, working effectively as its
+/// delta payload will contain all changes of a current Ypy document, working effectively as its
 /// state snapshot.
 ///
 /// Example:

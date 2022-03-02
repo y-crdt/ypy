@@ -1,7 +1,7 @@
 Tutorial
 ========
 
-Each user working with Y-Py data can read and update information through a shared document instance. Anything added to the document will be tracked and synchronized across all document instances. These documents can hold common data types, including numbers, booleans, strings, lists, dictionaries, and XML trees. Modifying the document state is done inside a transaction for robustness and thread safety. With these building blocks, you can safely share data between users. Here is a basic hello world example:
+Each user working with Ypy data can read and update information through a shared document instance. Anything added to the document will be tracked and synchronized across all document instances. These documents can hold common data types, including numbers, booleans, strings, lists, dictionaries, and XML trees. Modifying the document state is done inside a transaction for robustness and thread safety. With these building blocks, you can safely share data between users. Here is a basic hello world example:
 
 .. code-block:: python
 
