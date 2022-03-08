@@ -165,7 +165,9 @@ impl YXmlElement {
             .observe(move |txn, e| {
                 Python::with_gil(|py| {
                     let event = YXmlEvent::new(e, txn);
-                    f.call1(py, (event,)).unwrap();
+                    if let Err(err) = f.call1(py, (event,)) {
+                        err.restore(py)
+                    }
                 })
             })
             .into()
@@ -289,7 +291,9 @@ impl YXmlText {
             .observe(move |txn, e| {
                 Python::with_gil(|py| {
                     let e = YXmlTextEvent::new(e, txn);
-                    f.call1(py, (e,)).unwrap();
+                    if let Err(err) = f.call1(py, (e,)) {
+                        err.restore(py)
+                    }
                 })
             })
             .into()
