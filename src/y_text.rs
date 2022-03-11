@@ -1,3 +1,4 @@
+use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
 use pyo3::types::PyList;
 use yrs::types::text::TextEvent;
@@ -108,19 +109,21 @@ impl YText {
         }
     }
 
-    pub fn observe(&mut self, f: PyObject) -> YTextObserver {
+    pub fn observe(&mut self, f: PyObject) -> PyResult<YTextObserver> {
         match &mut self.0 {
-            SharedType::Integrated(v) => v
+            SharedType::Integrated(v) => Ok(v
                 .observe(move |txn, e| {
                     Python::with_gil(|py| {
                         let e = YTextEvent::new(e, txn);
-                        f.call1(py, (e,)).unwrap();
+                        if let Err(err) = f.call1(py, (e,)) {
+                            err.restore(py)
+                        }
                     });
                 })
-                .into(),
-            SharedType::Prelim(_) => {
-                panic!("YText.observe is not supported on preliminary type.")
-            }
+                .into()),
+            SharedType::Prelim(_) => Err(PyTypeError::new_err(
+                "Cannot observe a preliminary type. Must be added to a YDoc first",
+            )),
         }
     }
 }

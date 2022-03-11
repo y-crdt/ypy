@@ -6,7 +6,7 @@ use crate::y_transaction::YTransaction;
 
 use super::shared_types::SharedType;
 use crate::type_conversions::ToPython;
-use pyo3::exceptions::PyIndexError;
+use pyo3::exceptions::{PyIndexError, PyTypeError};
 use pyo3::prelude::*;
 use pyo3::types::PyList;
 use yrs::types::array::{ArrayEvent, ArrayIter};
@@ -177,19 +177,21 @@ impl YArray {
     /// Subscribes to all operations happening over this instance of `YArray`. All changes are
     /// batched and eventually triggered during transaction commit phase.
     /// Returns an `YObserver` which, when free'd, will unsubscribe current callback.
-    pub fn observe(&mut self, f: PyObject) -> YArrayObserver {
+    pub fn observe(&mut self, f: PyObject) -> PyResult<YArrayObserver> {
         match &mut self.0 {
-            SharedType::Integrated(v) => v
+            SharedType::Integrated(v) => Ok(v
                 .observe(move |txn, e| {
                     Python::with_gil(|py| {
                         let event = YArrayEvent::new(e, txn);
-                        f.call1(py, (event,)).unwrap();
+                        if let Err(err) = f.call1(py, (event,)) {
+                            err.restore(py)
+                        }
                     })
                 })
-                .into(),
-            SharedType::Prelim(_) => {
-                panic!("YArray.observe is not supported on preliminary type.")
-            }
+                .into()),
+            SharedType::Prelim(_) => Err(PyTypeError::new_err(
+                "Cannot observe a preliminary type. Must be added to a YDoc first",
+            )),
         }
     }
 }
