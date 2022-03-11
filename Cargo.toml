@@ -1,6 +1,6 @@
 [package]
 name = "y-py"
-version = "0.2.2"
+version = "0.2.3"
 authors = ["John Waidhofer <waidhoferj@gmail.com>", "Kevin Jahns <kevin.jahns@protonmail.com>", "Pierre-Olivier Simonard <pierre.olivier.simonard@gmail.com>"]
 edition = "2018"
 homepage = "https://github.com/y-crdt/ypy"
