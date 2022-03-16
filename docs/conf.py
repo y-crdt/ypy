@@ -18,7 +18,7 @@ sys.path.insert(0, os.path.abspath(".."))
 
 # -- Project information -----------------------------------------------------
 
-project = "YPy"
+project = "Ypy"
 copyright = "2022, Kevin Jahns, Bartosz Sypytkowski, John Waidhofer"
 author = "Kevin Jahns, Bartosz Sypytkowski, John Waidhofer"
 
