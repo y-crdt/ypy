@@ -1,3 +1,4 @@
+use std::convert::TryInto;
 use std::mem::ManuallyDrop;
 use std::ops::DerefMut;
 
@@ -229,11 +230,11 @@ impl YArray {
         }
     }
 
-    // Creates a new YArray from a range of values specified in a PySlice
+    /// Creates a new YArray from a range of values specified in a PySlice
     fn get_range(&self, slice: &PySlice) -> PyResult<PyObject> {
         let PySliceIndices {
             start, stop, step, ..
-        } = slice.indices(self.__len__() as i64).unwrap();
+        } = slice.indices(self.__len__().try_into().unwrap()).unwrap();
         println!("RANGE ( start: {}, stop: {}, step {} )", start, stop, step);
         match &self.0 {
             SharedType::Integrated(arr) => Python::with_gil(|py| {
