@@ -1,18 +1,11 @@
 use lib0::any::Any;
 use pyo3::prelude::*;
 use pyo3::types as pytypes;
-use pyo3::types::PyByteArray;
-use pyo3::types::PyDict;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::ops::Deref;
-use yrs;
 use yrs::block::{ItemContent, Prelim};
-use yrs::types::Attrs;
-use yrs::types::Change;
-use yrs::types::Delta;
-use yrs::types::EntryChange;
-use yrs::types::{Branch, BranchRef, TypePtr, Value};
+use yrs::types::{Attrs, Branch, BranchPtr, Change, Delta, EntryChange, Value};
 use yrs::{Array, Map, Text, Transaction};
 
 use crate::shared_types::{Shared, SharedType};
@@ -42,7 +35,7 @@ where
     V: ToPython,
 {
     fn into_py(self, py: Python) -> PyObject {
-        let py_dict = PyDict::new(py);
+        let py_dict = pytypes::PyDict::new(py);
         for (k, v) in self.into_iter() {
             py_dict.set_item(k, v.into_py(py)).unwrap();
         }
@@ -52,7 +45,7 @@ where
 
 impl ToPython for Delta {
     fn into_py(self, py: Python) -> PyObject {
-        let result = PyDict::new(py);
+        let result = pytypes::PyDict::new(py);
         match self {
             Delta::Inserted(value, attrs) => {
                 let value = value.clone().into_py(py);
@@ -81,7 +74,7 @@ impl ToPython for Delta {
 
 fn attrs_into_py(attrs: &Attrs) -> PyObject {
     Python::with_gil(|py| {
-        let o = PyDict::new(py);
+        let o = pytypes::PyDict::new(py);
         for (key, value) in attrs.iter() {
             let key = key.as_ref();
             let value = Value::Any(value.clone()).into_py(py);
@@ -93,7 +86,7 @@ fn attrs_into_py(attrs: &Attrs) -> PyObject {
 
 impl ToPython for &Change {
     fn into_py(self, py: Python) -> PyObject {
-        let result = PyDict::new(py);
+        let result = pytypes::PyDict::new(py);
         match self {
             Change::Added(values) => {
                 let values: Vec<PyObject> =
@@ -115,7 +108,7 @@ struct EntryChangeWrapper<'a>(&'a EntryChange);
 
 impl<'a> IntoPy<PyObject> for EntryChangeWrapper<'a> {
     fn into_py(self, py: Python) -> PyObject {
-        let result = PyDict::new(py);
+        let result = pytypes::PyDict::new(py);
         let action = "action";
         match self.0 {
             EntryChange::Inserted(new) => {
@@ -143,14 +136,14 @@ impl<'a> IntoPy<PyObject> for EntryChangeWrapper<'a> {
 struct PyObjectWrapper(PyObject);
 
 impl Prelim for PyObjectWrapper {
-    fn into_content(self, _txn: &mut Transaction, ptr: TypePtr) -> (ItemContent, Option<Self>) {
+    fn into_content(self, _txn: &mut Transaction) -> (ItemContent, Option<Self>) {
         let guard = Python::acquire_gil();
         let py = guard.python();
         let content = if let Some(any) = py_into_any(self.0.clone()) {
             ItemContent::Any(vec![any])
         } else if let Ok(shared) = Shared::extract(self.0.as_ref(py)) {
             if shared.is_prelim() {
-                let branch = BranchRef::new(Branch::new(ptr, shared.type_ref(), None));
+                let branch = Branch::new(shared.type_ref(), None);
                 ItemContent::Type(branch)
             } else {
                 panic!("Cannot integrate this type")
@@ -168,7 +161,7 @@ impl Prelim for PyObjectWrapper {
         (content, this)
     }
 
-    fn integrate(self, txn: &mut Transaction, inner_ref: BranchRef) {
+    fn integrate(self, txn: &mut Transaction, inner_ref: BranchPtr) {
         let guard = Python::acquire_gil();
         let py = guard.python();
         let obj_ref = self.0.as_ref(py);
@@ -247,7 +240,7 @@ fn py_into_any(v: PyObject) -> Option<Any> {
         } else if let Ok(l) = v.downcast::<pytypes::PyLong>() {
             let i: f64 = l.extract().unwrap();
             Some(Any::BigInt(i as i64))
-        } else if v == py.None().as_ref(py) {
+        } else if v.is_none() {
             Some(Any::Null)
         } else if let Ok(f) = v.downcast::<pytypes::PyFloat>() {
             Some(Any::Number(f.extract().unwrap()))
@@ -290,7 +283,7 @@ impl ToPython for Any {
             Any::BigInt(v) => v.into_py(py),
             Any::String(v) => v.into_py(py),
             Any::Buffer(v) => {
-                let byte_array = PyByteArray::new(py, v.as_ref());
+                let byte_array = pytypes::PyByteArray::new(py, v.as_ref());
                 byte_array.into()
             }
             Any::Array(v) => {
@@ -329,12 +322,12 @@ impl ToPython for Value {
 pub struct PyValueWrapper(pub PyObject);
 
 impl Prelim for PyValueWrapper {
-    fn into_content(self, _txn: &mut Transaction, ptr: TypePtr) -> (ItemContent, Option<Self>) {
+    fn into_content(self, _txn: &mut Transaction) -> (ItemContent, Option<Self>) {
         let content = if let Some(any) = py_into_any(self.0.clone()) {
             ItemContent::Any(vec![any])
         } else if let Ok(shared) = Shared::try_from(self.0.clone()) {
             if shared.is_prelim() {
-                let branch = BranchRef::new(Branch::new(ptr, shared.type_ref(), None));
+                let branch = Branch::new(shared.type_ref(), None);
                 ItemContent::Type(branch)
             } else {
                 panic!("Cannot integrate this type")
@@ -352,7 +345,7 @@ impl Prelim for PyValueWrapper {
         (content, this)
     }
 
-    fn integrate(self, txn: &mut Transaction, inner_ref: BranchRef) {
+    fn integrate(self, txn: &mut Transaction, inner_ref: BranchPtr) {
         if let Ok(shared) = Shared::try_from(self.0) {
             if shared.is_prelim() {
                 Python::with_gil(|py| match shared {
