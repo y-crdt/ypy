@@ -88,7 +88,7 @@ def test_observer():
         target = e.target
         entries = e.keys
 
-    observer = x.observe(callback)  # TODO: Fix typing
+    observer = x.observe(callback)
 
     # insert initial data to an empty YMap
     with d1.begin_transaction() as txn:
