@@ -35,9 +35,9 @@ pub struct YDoc(pub Doc);
 
 #[pymethods]
 impl YDoc {
-    /// Creates a new Ypy document. If `id` parameter was passed it will be used as this document
-    /// globally unique identifier (it's up to caller to ensure that requirement). Otherwise it will
-    /// be assigned a randomly generated number.
+    /// Creates a new Ypy document. If `client_id` parameter was passed it will be used as this
+    /// document globally unique identifier (it's up to caller to ensure that requirement).
+    /// Otherwise it will be assigned a randomly generated number.
     #[new]
     pub fn new(
         client_id: Option<u64>,
@@ -72,8 +72,8 @@ impl YDoc {
 
     /// Gets globally unique identifier of this `YDoc` instance.
     #[getter]
-    pub fn id(&self) -> f64 {
-        self.0.client_id as f64
+    pub fn client_id(&self) -> u64 {
+        self.0.client_id as u64
     }
 
     /// Returns a new transaction for this document. Ypy shared data types execute their

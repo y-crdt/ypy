@@ -53,7 +53,7 @@ def test_inserts_nested():
 
 def test_delete():
     d1 = YDoc(1)
-    assert d1.id == 1
+    assert d1.client_id == 1
     x = d1.get_array("test")
 
     d1.transact(lambda txn: x.insert(txn, 0, [1, 2, ["hello", "world"], True]))
