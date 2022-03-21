@@ -33,7 +33,7 @@ class YDoc:
             print(output)
     """
 
-    id: float
+    client_id: int
     def __init__(
         self,
         client_id: Optional[int],
@@ -41,9 +41,9 @@ class YDoc:
         skip_gc: Optional[bool],
     ):
         """
-        Creates a new Ypy document. If `id` parameter was passed it will be used as this document
-        globally unique identifier (it's up to caller to ensure that requirement). Otherwise it will
-        be assigned a randomly generated number.
+        Creates a new Ypy document. If `client_id` parameter was passed it will be used as this
+        document globally unique identifier (it's up to caller to ensure that requirement).
+        Otherwise it will be assigned a randomly generated number.
         """
     def begin_transaction(self) -> YTransaction:
         """

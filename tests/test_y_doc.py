@@ -6,7 +6,7 @@ def test_constructor_options():
     # Ensure that valid versions can be called without error
     YDoc()
     with_id = YDoc(1)
-    assert with_id.id == 1
+    assert with_id.client_id == 1
     YDoc(1, "utf-8", True)
     YDoc(client_id=2, offset_kind="utf-8", skip_gc=True)
     YDoc(client_id=3)
