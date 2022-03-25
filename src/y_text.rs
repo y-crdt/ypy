@@ -2,6 +2,7 @@ use std::mem::ManuallyDrop;
 use std::ops::DerefMut;
 use std::str::Chars;
 
+use lib0::any::Any;
 use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
 use pyo3::types::PyList;
@@ -108,7 +109,9 @@ impl YText {
 
     /// Returns an underlying shared string stored in this data type.
     pub fn to_json(&self) -> String {
-        self.__str__()
+        let mut json_string = String::new();
+        Any::String(self.__str__().into_boxed_str()).to_json(&mut json_string);
+        json_string
     }
 
     /// Inserts a given `chunk` of text into this `YText` instance, starting at a given `index`.

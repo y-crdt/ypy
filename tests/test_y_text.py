@@ -1,13 +1,11 @@
-import pytest
 from test_helper import exchange_updates
-
 import y_py as Y
-
 from y_py import YText
 
 
 def test_to_string():
     expected = "Hello World!"
+    expected_json = '"Hello World!"'
     d = Y.YDoc()
     prelim = YText(expected)
     integrated = d.get_text("test")
@@ -15,6 +13,7 @@ def test_to_string():
         integrated.push(txn, expected)
     for test in [prelim, integrated]:
         assert str(test) == expected
+        assert test.to_json() == expected_json
         assert test.__repr__() == f"YText({expected})"
 
 
