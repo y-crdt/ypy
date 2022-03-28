@@ -1,7 +1,3 @@
-use std::mem::ManuallyDrop;
-use std::ops::DerefMut;
-use std::str::Chars;
-
 use lib0::any::Any;
 use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
@@ -82,31 +78,6 @@ impl YText {
         }
     }
 
-    pub fn __iter__(&self) -> YTextIterator {
-        // Unsafe iterator references possible because blocks holding pointer results aren't ever deallocated.
-        let iterator = match &self.0 {
-            SharedType::Integrated(text) => unsafe {
-                let text_str = text.to_string();
-                let str_ptr: *const String = &text_str;
-                InnerYTextIter::Integrated((text_str, (*str_ptr).chars()))
-            },
-            SharedType::Prelim(string) => unsafe {
-                let str_ptr: *const String = string;
-                let iter: Chars<'static> = (*str_ptr).chars();
-                InnerYTextIter::Prelim(iter)
-            },
-        };
-
-        YTextIterator(ManuallyDrop::new(iterator))
-    }
-
-    pub fn __contains__(&self, pattern: String) -> bool {
-        match &self.0 {
-            SharedType::Integrated(_) => self.__str__().contains(&pattern),
-            SharedType::Prelim(string) => string.contains(&pattern),
-        }
-    }
-
     /// Returns an underlying shared string stored in this data type.
     pub fn to_json(&self) -> String {
         let mut json_string = String::new();
@@ -157,42 +128,6 @@ impl YText {
                 "Cannot observe a preliminary type. Must be added to a YDoc first",
             )),
         }
-    }
-}
-
-enum InnerYTextIter {
-    Integrated((String, Chars<'static>)),
-    Prelim(Chars<'static>),
-}
-
-#[pyclass(unsendable)]
-pub struct YTextIterator(ManuallyDrop<InnerYTextIter>);
-
-impl Drop for YTextIterator {
-    fn drop(&mut self) {
-        unsafe { ManuallyDrop::drop(&mut self.0) }
-    }
-}
-
-impl Iterator for YTextIterator {
-    type Item = char;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        match self.0.deref_mut() {
-            InnerYTextIter::Integrated((_, iter)) => iter.next(),
-            InnerYTextIter::Prelim(iter) => iter.next(),
-        }
-    }
-}
-
-#[pymethods]
-impl YTextIterator {
-    pub fn __iter__(slf: PyRef<Self>) -> PyRef<Self> {
-        slf
-    }
-
-    pub fn __next__(mut slf: PyRefMut<Self>) -> Option<char> {
-        slf.next()
     }
 }
 
