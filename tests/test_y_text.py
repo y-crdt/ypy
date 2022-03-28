@@ -17,19 +17,6 @@ def test_to_string():
         assert test.__repr__() == f"YText({expected})"
 
 
-def test_iteration():
-    expected = "Hello World!"
-    d = Y.YDoc()
-    prelim = YText(expected)
-    integrated = d.get_text("test")
-    with d.begin_transaction() as txn:
-        integrated.push(txn, expected)
-    for text in [integrated, prelim]:
-        assert "lo" in text
-        for actual, ex in zip(text, expected):
-            assert actual == ex
-
-
 def test_inserts():
     d1 = Y.YDoc()
     x = d1.get_text("test")
