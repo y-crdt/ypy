@@ -235,24 +235,30 @@ impl YArray {
         let PySliceIndices {
             start, stop, step, ..
         } = slice.indices(self.__len__().try_into().unwrap()).unwrap();
-        println!("RANGE ( start: {}, stop: {}, step {} )", start, stop, step);
         match &self.0 {
             SharedType::Integrated(arr) => Python::with_gil(|py| {
                 if step < 0 {
                     let step = step.abs() as usize;
-                    let (start, stop) = ((stop + 1) as u32, (start + 1) as u32);
-                    let values: Vec<PyObject> = (start..stop)
-                        .rev()
+                    let (start, stop) = ((stop + 1) as usize, (start + 1) as usize);
+                    let values: Vec<PyObject> = arr
+                        .iter()
+                        .enumerate()
+                        .skip(start)
                         .step_by(step)
-                        .map(|i| arr.get(i).unwrap())
-                        .map(|v| v.into_py(py))
+                        .take_while(|(i, _)| i < &stop)
+                        .map(|(_, el)| el.into_py(py))
                         .collect();
+                    let values: Vec<PyObject> = values.into_iter().rev().collect();
                     Ok(values.into_py(py))
                 } else {
-                    let values: Vec<PyObject> = ((start as u32)..(stop as u32))
-                        .step_by(step as usize)
-                        .map(|i| arr.get(i).unwrap())
-                        .map(|v| v.into_py(py))
+                    let (start, stop, step) = (start as usize, stop as usize, step as usize);
+                    let values: Vec<PyObject> = arr
+                        .iter()
+                        .enumerate()
+                        .skip(start)
+                        .step_by(step)
+                        .take_while(|(i, _)| i < &stop)
+                        .map(|(_, el)| el.into_py(py))
                         .collect();
                     Ok(values.into_py(py))
                 }
