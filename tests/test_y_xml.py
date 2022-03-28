@@ -58,10 +58,9 @@ def test_siblings():
         assert s == "world"
         assert second.next_sibling == None
 
-    with d1.begin_transaction() as txn:
-        actual = str(second.prev_sibling(txn))
-        expected = str(first)
-        assert actual == expected
+    actual = str(second.prev_sibling)
+    expected = str(first)
+    assert actual == expected
 
 
 def test_tree_walker():
@@ -77,15 +76,15 @@ def test_tree_walker():
     with d1.begin_transaction() as txn:
         actual = []
         for child in root.tree_walker():
-            actual.push(str(child))
+            actual.append(str(child))
 
         expected = ["<p>hello</p>", "hello", "world"]
         assert actual == expected
 
     with d1.begin_transaction() as txn:
         actual = []
-        for child in root.tree_walker(txn):
-            actual.push(str(child))
+        for child in root.tree_walker():
+            actual.append(str(child))
 
         expected = ["<p>hello</p>", "hello", "world"]
         assert actual == expected

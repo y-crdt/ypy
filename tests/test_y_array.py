@@ -142,7 +142,7 @@ def test_borrow_mut_edge_case():
     with doc.begin_transaction() as txn:
         # Ensure that multiple mutable borrow functions can be called in a tight loop
         for i in range(2000):
-            arr.insert(txn, [1, 2, 3])
+            arr.insert(txn, 2, [1, 2, 3])
             arr.delete(txn, 0, 3)
 
 

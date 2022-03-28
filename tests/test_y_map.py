@@ -67,6 +67,8 @@ def test_iterator():
             v = expected[key]
             assert val == v
             del expected[key]
+
+        expected = {"a": 1, "b": 2, "c": 3}
         for key in x:
             assert key in expected
             assert key in x
@@ -80,7 +82,7 @@ def test_observer():
 
     def get_value(x):
         with d1.begin_transaction() as txn:
-            return x.to_json(txn)
+            return x.to_json()
 
     def callback(e):
         nonlocal target
