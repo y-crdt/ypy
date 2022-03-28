@@ -1,3 +1,4 @@
+use lib0::any::Any;
 use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
 use pyo3::types::PyList;
@@ -56,30 +57,32 @@ impl YText {
         }
     }
 
+    /// Returns an underlying shared string stored in this data type.
+    pub fn __str__(&self) -> String {
+        match &self.0 {
+            SharedType::Integrated(v) => v.to_string(),
+            SharedType::Prelim(v) => v.clone(),
+        }
+    }
+
+    pub fn __repr__(&self) -> String {
+        format!("YText({})", self.__str__())
+    }
+
     /// Returns length of an underlying string stored in this `YText` instance,
     /// understood as a number of UTF-8 encoded bytes.
-    #[getter]
-    pub fn length(&self) -> u32 {
+    pub fn __len__(&self) -> usize {
         match &self.0 {
-            SharedType::Integrated(v) => v.len(),
-            SharedType::Prelim(v) => v.len() as u32,
+            SharedType::Integrated(v) => v.len() as usize,
+            SharedType::Prelim(v) => v.len(),
         }
     }
 
     /// Returns an underlying shared string stored in this data type.
-    pub fn to_string(&self, txn: &YTransaction) -> String {
-        match &self.0 {
-            SharedType::Integrated(v) => v.to_string(txn),
-            SharedType::Prelim(v) => v.clone(),
-        }
-    }
-
-    /// Returns an underlying shared string stored in this data type.
-    pub fn to_json(&self, txn: &YTransaction) -> String {
-        match &self.0 {
-            SharedType::Integrated(v) => v.to_string(txn),
-            SharedType::Prelim(v) => v.clone(),
-        }
+    pub fn to_json(&self) -> String {
+        let mut json_string = String::new();
+        Any::String(self.__str__().into_boxed_str()).to_json(&mut json_string);
+        json_string
     }
 
     /// Inserts a given `chunk` of text into this `YText` instance, starting at a given `index`.
@@ -176,7 +179,7 @@ impl YTextEvent {
     /// Returns an array of keys and indexes creating a path from root type down to current instance
     /// of shared type (accessible via `target` getter).
     pub fn path(&self) -> PyObject {
-        Python::with_gil(|py| self.inner().path(self.txn()).into_py(py))
+        Python::with_gil(|py| self.inner().path().into_py(py))
     }
 
     /// Returns a list of text changes made over corresponding `YText` collection within

@@ -16,16 +16,23 @@ def test_inserts():
 
     expected = [1, 2.5, "hello", ["world"], True, {"key": "value"}]
 
-    value = d1.transact(lambda txn: x.to_json(txn))
-    assert value == expected  # TODO: Make this an arr cmp
+    value = x.to_json()
+    assert value == expected
 
     d2 = YDoc(2)
     x = d2.get_array("test")
 
     exchange_updates([d1, d2])
 
-    value = d2.transact(lambda txn: x.to_json(txn))
+    value = x.to_json()
     assert value == expected
+
+
+def test_to_string():
+    arr = YArray([7, "awesome", True, ["nested"], {"testing": "dicts"}])
+    expected_str = "[7, 'awesome', True, ['nested'], {'testing': 'dicts'}]"
+    assert str(arr) == expected_str
+    assert arr.__repr__() == f"YArray({expected_str})"
 
 
 def test_inserts_nested():
@@ -39,7 +46,7 @@ def test_inserts_nested():
 
     expected = [1, 2, ["hello", "world"], 3, 4]
 
-    value = d1.transact(lambda txn: x.to_json(txn))
+    value = d1.transact(lambda txn: x.to_json())
     assert value == expected
 
     d2 = YDoc()
@@ -47,7 +54,7 @@ def test_inserts_nested():
 
     exchange_updates([d1, d2])
 
-    value = d2.transact(lambda txn: x.to_json(txn))
+    value = x.to_json()
     assert value == expected
 
 
@@ -61,7 +68,7 @@ def test_delete():
 
     expected = [1, True]
 
-    value = d1.transact(lambda txn: x.to_json(txn))
+    value = x.to_json()
     assert value == expected
 
     d2 = YDoc(2)
@@ -69,49 +76,57 @@ def test_delete():
 
     exchange_updates([d1, d2])
 
-    value = d2.transact(lambda txn: x.to_json(txn))
+    value = x.to_json()
     assert value == expected
 
 
 def test_get():
     d1 = YDoc()
-    x = d1.get_array("test")
+    integrated = d1.get_array("test")
+    prelim = YArray()
 
-    d1.transact(lambda txn: x.insert(txn, 0, [1, 2, True]))
-    d1.transact(lambda txn: x.insert(txn, 1, ["hello", "world"]))
+    d1.transact(lambda txn: integrated.insert(txn, 0, [1, 2, True]))
+    d1.transact(lambda txn: integrated.insert(txn, 1, ["hello", "world"]))
 
-    zeroed = d1.transact(lambda txn: x.get(txn, 0))
-    first = d1.transact(lambda txn: x.get(txn, 1))
-    second = d1.transact(lambda txn: x.get(txn, 2))
-    third = d1.transact(lambda txn: x.get(txn, 3))
-    fourth = d1.transact(lambda txn: x.get(txn, 4))
+    expected = [1, "hello", "world", 2, True]
+    prelim = YArray(expected)
 
-    assert zeroed == 1
+    for arr in [integrated, prelim]:
+        # Forward indexing
+        for i, expected_value in enumerate(expected):
+            assert arr[i] == expected_value
 
-    assert first == "hello"
+        with pytest.raises(IndexError):
+            arr[5]
 
-    assert second == "world"
+        # Negative indexing
+        for i, expected_value in enumerate(reversed(expected)):
+            index = -(i + 1)
+            assert arr[index] == expected_value
 
-    assert third == 2
+        with pytest.raises(IndexError):
+            arr[-6]
 
-    assert fourth == True
-
-    with pytest.raises(IndexError):
-        x = d1.transact(lambda txn: x.get(txn, 20))
+        # Slices
+        assert arr[0:] == expected
+        assert arr[4:1:-1] == expected[4:1:-1]
+        assert arr[::-1] == expected[::-1]
 
 
 def test_iterator():
     d1 = YDoc()
     x = d1.get_array("test")
 
-    d1.transact(lambda txn: x.insert(txn, 0, [1, 2, 3]))
-    assert x.length == 3
-
     with d1.begin_transaction() as txn:
-        i = 1
-        for v in x.values(txn):
-            assert v == i
-            i += 1
+        x.insert(txn, 0, [1, 2, 3])
+    assert len(x) == 3
+    i = 1
+    # Test iteration
+    for v in x:
+        assert v == i
+        i += 1
+    # Test contains
+    assert 2 in x
 
 
 def test_borrow_mut_edge_case():
@@ -127,7 +142,7 @@ def test_borrow_mut_edge_case():
     with doc.begin_transaction() as txn:
         # Ensure that multiple mutable borrow functions can be called in a tight loop
         for i in range(2000):
-            arr.insert(txn, [1, 2, 3])
+            arr.insert(txn, 2, [1, 2, 3])
             arr.delete(txn, 0, 3)
 
 
@@ -135,10 +150,6 @@ def test_observer():
     d1 = YDoc()
 
     x = d1.get_array("test")
-
-    def get_value(x):
-        with d1.begin_transaction() as txn:
-            return x.to_json(txn)
 
     target = None
     delta = None
@@ -154,7 +165,7 @@ def test_observer():
     # insert initial data to an empty YArray
     with d1.begin_transaction() as txn:
         x.insert(txn, 0, [1, 2, 3, 4])
-    assert get_value(target) == get_value(x)
+    assert target.to_json() == x.to_json()
     assert delta == [{"insert": [1, 2, 3, 4]}]
 
     target = None
@@ -163,7 +174,7 @@ def test_observer():
     # remove 2 items from the middle
     with d1.begin_transaction() as txn:
         x.delete(txn, 1, 2)
-    assert get_value(target) == get_value(x)
+    assert target.to_json() == x.to_json()
     assert delta == [{"retain": 1}, {"delete": 2}]
 
     target = None
@@ -172,7 +183,7 @@ def test_observer():
     # insert  item in the middle
     with d1.begin_transaction() as txn:
         x.insert(txn, 1, [5])
-    assert get_value(target) == get_value(x)
+    assert target.to_json() == x.to_json()
     assert delta == [{"retain": 1}, {"insert": [5]}]
 
     target = None

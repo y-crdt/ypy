@@ -216,12 +216,12 @@ impl YTransaction {
     /// ```
     fn __exit__<'p>(
         &'p mut self,
-        _exc_type: Option<&'p PyAny>,
-        _exc_value: Option<&'p PyAny>,
+        exception_type: Option<&'p PyAny>,
+        _exception_value: Option<&'p PyAny>,
         _traceback: Option<&'p PyAny>,
     ) -> PyResult<bool> {
         self.commit();
         drop(self);
-        return Ok(true);
+        Ok(exception_type.map_or(true, |_| false))
     }
 }

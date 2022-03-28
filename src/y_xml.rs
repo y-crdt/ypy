@@ -1,6 +1,5 @@
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
-use pyo3::PyIterProtocol;
 use std::mem::ManuallyDrop;
 use std::ops::Deref;
 use yrs::types::xml::{Attributes, TreeWalker, XmlEvent, XmlTextEvent};
@@ -39,8 +38,8 @@ impl YXmlElement {
     }
 
     /// Returns a number of child XML nodes stored within this `YXMlElement` instance.
-    pub fn length(&self, txn: &YTransaction) -> u32 {
-        self.0.len(txn)
+    pub fn __len__(&self) -> usize {
+        self.0.len() as usize
     }
 
     /// Inserts a new instance of `YXmlElement` as a child of this XML node and returns it.
@@ -76,10 +75,11 @@ impl YXmlElement {
 
     /// Returns a first child of this XML node.
     /// It can be either `YXmlElement`, `YXmlText` or `undefined` if current node has not children.
-    pub fn first_child(&self, txn: &YTransaction) -> PyObject {
+    #[getter]
+    pub fn first_child(&self) -> PyObject {
         Python::with_gil(|py| {
             self.0
-                .first_child(txn)
+                .first_child()
                 .map_or(py.None(), |xml| xml.into_py(py))
         })
     }
@@ -87,10 +87,11 @@ impl YXmlElement {
     /// Returns a next XML sibling node of this XMl node.
     /// It can be either `YXmlElement`, `YXmlText` or `undefined` if current node is a last child of
     /// parent XML node.
-    pub fn next_sibling(&self, txn: &YTransaction) -> PyObject {
+    #[getter]
+    pub fn next_sibling(&self) -> PyObject {
         Python::with_gil(|py| {
             self.0
-                .next_sibling(txn)
+                .next_sibling()
                 .map_or(py.None(), |xml| xml.into_py(py))
         })
     }
@@ -98,22 +99,28 @@ impl YXmlElement {
     /// Returns a previous XML sibling node of this XMl node.
     /// It can be either `YXmlElement`, `YXmlText` or `undefined` if current node is a first child
     /// of parent XML node.
-    pub fn prev_sibling(&self, txn: &YTransaction) -> PyObject {
+    #[getter]
+    pub fn prev_sibling(&self) -> PyObject {
         Python::with_gil(|py| {
             self.0
-                .prev_sibling(txn)
+                .prev_sibling()
                 .map_or(py.None(), |xml| xml.into_py(py))
         })
     }
 
     /// Returns a parent `YXmlElement` node or `undefined` if current node has no parent assigned.
-    pub fn parent(&self, txn: &YTransaction) -> Option<YXmlElement> {
-        self.0.parent(txn).map(YXmlElement)
+    #[getter]
+    pub fn parent(&self) -> Option<YXmlElement> {
+        self.0.parent().map(YXmlElement)
     }
 
     /// Returns a string representation of this XML node.
-    pub fn to_string(&self, txn: &YTransaction) -> String {
-        self.0.to_string(txn)
+    pub fn __str__(&self) -> String {
+        self.0.to_string()
+    }
+
+    pub fn __repr__(&self) -> String {
+        format!("YXmlElement({})", self.__str__())
     }
 
     /// Sets a `name` and `value` as new attribute for this XML node. If an attribute with the same
@@ -124,8 +131,8 @@ impl YXmlElement {
 
     /// Returns a value of an attribute given its `name`. If no attribute with such name existed,
     /// `null` will be returned.
-    pub fn get_attribute(&self, txn: &YTransaction, name: &str) -> Option<String> {
-        self.0.get_attribute(txn, name)
+    pub fn get_attribute(&self, name: &str) -> Option<String> {
+        self.0.get_attribute(name)
     }
 
     /// Removes an attribute from this XML node, given its `name`.
@@ -135,24 +142,22 @@ impl YXmlElement {
 
     /// Returns an iterator that enables to traverse over all attributes of this XML node in
     /// unspecified order.
-    pub fn attributes(&self, txn: &YTransaction) -> YXmlAttributes {
+    pub fn attributes(&self) -> YXmlAttributes {
         unsafe {
             let this: *const XmlElement = &self.0;
-            let tx: *const Transaction = txn.deref() as *const _;
             let static_iter: ManuallyDrop<Attributes<'static>> =
-                ManuallyDrop::new((*this).attributes(tx.as_ref().unwrap()));
+                ManuallyDrop::new((*this).attributes());
             YXmlAttributes(static_iter)
         }
     }
 
     /// Returns an iterator that enables a deep traversal of this XML node - starting from first
     /// child over this XML node successors using depth-first strategy.
-    pub fn tree_walker(&self, txn: &YTransaction) -> YXmlTreeWalker {
+    pub fn tree_walker(&self) -> YXmlTreeWalker {
         unsafe {
             let this: *const XmlElement = &self.0;
-            let tx: *const Transaction = txn.deref() as *const _;
             let static_iter: ManuallyDrop<TreeWalker<'static>> =
-                ManuallyDrop::new((*this).successors(tx.as_ref().unwrap()));
+                ManuallyDrop::new((*this).successors());
             YXmlTreeWalker(static_iter)
         }
     }
@@ -197,9 +202,8 @@ pub struct YXmlText(pub XmlText);
 impl YXmlText {
     /// Returns length of an underlying string stored in this `YXmlText` instance,
     /// understood as a number of UTF-8 encoded bytes.
-    #[getter]
-    pub fn length(&self) -> u32 {
-        self.0.len()
+    pub fn __len__(&self) -> usize {
+        self.0.len() as usize
     }
 
     /// Inserts a given `chunk` of text into this `YXmlText` instance, starting at a given `index`.
@@ -221,10 +225,11 @@ impl YXmlText {
     /// Returns a next XML sibling node of this XMl node.
     /// It can be either `YXmlElement`, `YXmlText` or `undefined` if current node is a last child of
     /// parent XML node.
-    pub fn next_sibling(&self, txn: &YTransaction) -> PyObject {
+    #[getter]
+    pub fn next_sibling(&self) -> PyObject {
         Python::with_gil(|py| {
             self.0
-                .next_sibling(txn)
+                .next_sibling()
                 .map_or(py.None(), |xml| xml.into_py(py))
         })
     }
@@ -232,26 +237,32 @@ impl YXmlText {
     /// Returns a previous XML sibling node of this XMl node.
     /// It can be either `YXmlElement`, `YXmlText` or `undefined` if current node is a first child
     /// of parent XML node.
-    pub fn prev_sibling(&self, txn: &YTransaction) -> PyObject {
+    #[getter]
+    pub fn prev_sibling(&self) -> PyObject {
         Python::with_gil(|py| {
             self.0
-                .prev_sibling(txn)
+                .prev_sibling()
                 .map_or(py.None(), |xml| xml.into_py(py))
         })
     }
 
     /// Returns a parent `YXmlElement` node or `undefined` if current node has no parent assigned.
-    pub fn parent(&self, txn: &YTransaction) -> PyObject {
+    #[getter]
+    pub fn parent(&self) -> PyObject {
         Python::with_gil(|py| {
             self.0
-                .parent(txn)
+                .parent()
                 .map_or(py.None(), |xml| YXmlElement(xml).into_py(py))
         })
     }
 
     /// Returns an underlying string stored in this `YXmlText` instance.
-    pub fn to_string(&self, txn: &YTransaction) -> String {
-        self.0.to_string(txn)
+    pub fn __str__(&self) -> String {
+        self.0.to_string()
+    }
+
+    pub fn __repr__(&self) -> String {
+        format!("YXmlText({})", self.__str__())
     }
 
     /// Sets a `name` and `value` as new attribute for this XML node. If an attribute with the same
@@ -262,8 +273,8 @@ impl YXmlText {
 
     /// Returns a value of an attribute given its `name`. If no attribute with such name existed,
     /// `null` will be returned.
-    pub fn get_attribute(&self, txn: &YTransaction, name: &str) -> Option<String> {
-        self.0.get_attribute(txn, name)
+    pub fn get_attribute(&self, name: &str) -> Option<String> {
+        self.0.get_attribute(name)
     }
 
     /// Removes an attribute from this XML node, given its `name`.
@@ -273,12 +284,11 @@ impl YXmlText {
 
     /// Returns an iterator that enables to traverse over all attributes of this XML node in
     /// unspecified order.
-    pub fn attributes(&self, txn: &YTransaction) -> YXmlAttributes {
+    pub fn attributes(&self) -> YXmlAttributes {
         unsafe {
             let this: *const XmlText = &self.0;
-            let tx: *const Transaction = txn.deref() as *const _;
             let static_iter: ManuallyDrop<Attributes<'static>> =
-                ManuallyDrop::new((*this).attributes(tx.as_ref().unwrap()));
+                ManuallyDrop::new((*this).attributes());
             YXmlAttributes(static_iter)
         }
     }
@@ -327,8 +337,8 @@ impl Drop for YXmlAttributes {
     }
 }
 
-#[pyproto]
-impl PyIterProtocol for YXmlAttributes {
+#[pymethods]
+impl YXmlAttributes {
     fn __iter__(slf: PyRef<Self>) -> PyRef<Self> {
         slf
     }
@@ -410,7 +420,7 @@ impl YXmlEvent {
     /// Returns an array of keys and indexes creating a path from root type down to current instance
     /// of shared type (accessible via `target` getter).
     pub fn path(&self) -> PyObject {
-        Python::with_gil(|py| self.inner().path(self.txn()).into_py(py))
+        Python::with_gil(|py| self.inner().path().into_py(py))
     }
 
     /// Returns all changes done upon map component of a current shared data type (which can be
@@ -508,7 +518,7 @@ impl YXmlTextEvent {
 
     /// Returns a current shared type instance, that current event changes refer to.
     pub fn path(&self) -> PyObject {
-        Python::with_gil(|py| self.inner().path(self.txn()).into_py(py))
+        Python::with_gil(|py| self.inner().path().into_py(py))
     }
 
     /// Returns all changes done upon map component of a current shared data type (which can be

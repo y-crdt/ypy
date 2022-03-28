@@ -1,7 +1,20 @@
-import pytest
 from test_helper import exchange_updates
-
 import y_py as Y
+from y_py import YText
+
+
+def test_to_string():
+    expected = "Hello World!"
+    expected_json = '"Hello World!"'
+    d = Y.YDoc()
+    prelim = YText(expected)
+    integrated = d.get_text("test")
+    with d.begin_transaction() as txn:
+        integrated.push(txn, expected)
+    for test in [prelim, integrated]:
+        assert str(test) == expected
+        assert test.to_json() == expected_json
+        assert test.__repr__() == f"YText({expected})"
 
 
 def test_inserts():
@@ -10,16 +23,14 @@ def test_inserts():
     with d1.begin_transaction() as txn:
         x.push(txn, "hello ")
         x.push(txn, "world!")
-        value = x.to_string(txn)
+    value = str(x)
     expected = "hello world!"
     assert value == expected
 
     d2 = Y.YDoc(2)
     x = d2.get_text("test")
-
     exchange_updates([d1, d2])
-    with d2.begin_transaction() as txn:
-        value = x.to_string(txn)
+    value = str(x)
 
     assert value == expected
 
@@ -30,15 +41,15 @@ def test_deletes():
 
     d1.transact(lambda txn: x.push(txn, "hello world!"))
 
-    assert x.length == 12
+    assert len(x) == 12
     d1.transact(lambda txn: x.delete(txn, 5, 6))
-    assert x.length == 6
+    assert len(x) == 6
     d1.transact(lambda txn: x.insert(txn, 5, " Yrs"))
-    assert x.length == 10
+    assert len(x) == 10
 
     expected = "hello Yrs!"
 
-    value = d1.transact(lambda txn: x.to_string(txn))
+    value = str(x)
     assert value == expected
 
     d2 = Y.YDoc(2)
@@ -46,16 +57,12 @@ def test_deletes():
 
     exchange_updates([d1, d2])
 
-    value = d2.transact(lambda txn: x.to_string(txn))
+    value = str(x)
     assert value == expected
 
 
 def test_observer():
     d1 = Y.YDoc()
-
-    def get_value(x):
-        with d1.begin_transaction() as txn:
-            return x.to_string(txn)
 
     target = None
     delta = None
@@ -74,7 +81,7 @@ def test_observer():
     with d1.begin_transaction() as txn:
         x.insert(txn, 0, "abcd")
 
-    assert get_value(target) == get_value(x)
+    assert str(target) == str(x)
     assert delta == [{"insert": "abcd"}]
 
     target = None
@@ -84,7 +91,7 @@ def test_observer():
     with d1.begin_transaction() as txn:
         x.delete(txn, 1, 2)
 
-    assert get_value(target) == get_value(x)
+    assert str(target) == str(x)
     assert delta == [{"retain": 1}, {"delete": 2}]
     target = None
     delta = None
@@ -92,7 +99,7 @@ def test_observer():
     # insert item in the middle
     with d1.begin_transaction() as txn:
         x.insert(txn, 1, "e")
-    assert get_value(target) == get_value(x)
+    assert str(target) == str(x)
     assert delta == [{"retain": 1}, {"insert": "e"}]
     target = None
     delta = None

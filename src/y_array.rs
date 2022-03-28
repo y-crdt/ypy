@@ -1,5 +1,6 @@
+use std::convert::TryInto;
 use std::mem::ManuallyDrop;
-use std::ops::{Deref, DerefMut};
+use std::ops::DerefMut;
 
 use crate::type_conversions::insert_at;
 use crate::y_transaction::YTransaction;
@@ -8,7 +9,7 @@ use super::shared_types::SharedType;
 use crate::type_conversions::ToPython;
 use pyo3::exceptions::{PyIndexError, PyTypeError};
 use pyo3::prelude::*;
-use pyo3::types::PyList;
+use pyo3::types::{PyList, PySlice, PySliceIndices};
 use yrs::types::array::{ArrayEvent, ArrayIter};
 use yrs::{Array, Subscription, Transaction};
 
@@ -48,8 +49,28 @@ impl YArray {
     /// Once a preliminary instance has been inserted this way, it becomes integrated into Ypy
     /// document store and cannot be nested again: attempt to do so will result in an exception.
     #[new]
-    pub fn new(init: Option<Vec<PyObject>>) -> Self {
-        YArray(SharedType::prelim(init.unwrap_or_default()))
+    pub fn new(init: Option<PyObject>) -> PyResult<Self> {
+        let elements = if let Some(iterable) = init {
+            Python::with_gil(|py| {
+                iterable.as_ref(py).iter().map(|iterable| {
+                    iterable
+                        .map(|element| match element {
+                            Ok(value) => {
+                                let obj: PyObject = value.into();
+                                obj
+                            }
+                            Err(py_err) => {
+                                py_err.restore(py);
+                                py.None()
+                            }
+                        })
+                        .collect()
+                })
+            })
+        } else {
+            Ok(vec![])
+        };
+        elements.map(|el_array| YArray(SharedType::prelim(el_array)))
     }
 
     /// Returns true if this is a preliminary instance of `YArray`.
@@ -66,18 +87,25 @@ impl YArray {
     }
 
     /// Returns a number of elements stored within this instance of `YArray`.
-    #[getter]
-    pub fn length(&self) -> u32 {
+    pub fn __len__(&self) -> usize {
         match &self.0 {
-            SharedType::Integrated(v) => v.len(),
-            SharedType::Prelim(v) => v.len() as u32,
+            SharedType::Integrated(v) => v.len() as usize,
+            SharedType::Prelim(v) => v.len() as usize,
         }
     }
 
+    pub fn __str__(&self) -> String {
+        return self.to_json().to_string();
+    }
+
+    pub fn __repr__(&self) -> String {
+        format!("YArray({})", self.__str__())
+    }
+
     /// Converts an underlying contents of this `YArray` instance into their JSON representation.
-    pub fn to_json(&self, txn: &YTransaction) -> PyObject {
+    pub fn to_json(&self) -> PyObject {
         Python::with_gil(|py| match &self.0 {
-            SharedType::Integrated(v) => v.to_json(txn).into_py(py),
+            SharedType::Integrated(v) => v.to_json().into_py(py),
             SharedType::Prelim(v) => {
                 let py_ptrs: Vec<PyObject> = v.iter().cloned().collect();
                 py_ptrs.into_py(py)
@@ -103,7 +131,7 @@ impl YArray {
 
     /// Appends a range of `items` at the end of this `YArray` instance.
     pub fn push(&mut self, txn: &mut YTransaction, items: Vec<PyObject>) {
-        let index = self.length();
+        let index = self.__len__() as u32; // length guaranteed to be non negative
         self.insert(txn, index, items);
     }
 
@@ -118,27 +146,11 @@ impl YArray {
         }
     }
 
-    /// Returns an element stored under given `index`.
-    pub fn get(&self, txn: &YTransaction, index: u32) -> PyResult<PyObject> {
-        match &self.0 {
-            SharedType::Integrated(v) => {
-                if let Some(value) = v.get(txn, index) {
-                    Ok(Python::with_gil(|py| value.into_py(py)))
-                } else {
-                    Err(PyIndexError::new_err(
-                        "Index outside the bounds of an YArray",
-                    ))
-                }
-            }
-            SharedType::Prelim(v) => {
-                if let Some(value) = v.get(index as usize) {
-                    Ok(value.clone())
-                } else {
-                    Err(PyIndexError::new_err(
-                        "Index outside the bounds of an YArray",
-                    ))
-                }
-            }
+    pub fn __getitem__(&self, index: Index) -> PyResult<PyObject> {
+        // Apply index to the Array type
+        match index {
+            Index::Int(index) => self.get_element(self.normalize_index(index)),
+            Index::Slice(slice) => self.get_range(slice),
         }
     }
 
@@ -153,18 +165,15 @@ impl YArray {
     /// # document on machine A
     /// doc = YDoc()
     /// array = doc.get_array('name')
-    ///
-    /// with doc.begin_transaction() as txn:
-    ///     array.push(txn, ['hello', 'world'])
-    ///     for item in array.values(txn)):
+    /// for item in array.values()):
     ///         print(item)
+    ///     
     /// ```
-    pub fn values(&self, txn: &YTransaction) -> YArrayIterator {
+    pub fn __iter__(&self) -> YArrayIterator {
         let inner_iter = match &self.0 {
             SharedType::Integrated(v) => unsafe {
                 let this: *const Array = v;
-                let tx: *const Transaction = txn.deref() as *const _;
-                InnerYArrayIter::Integrated((*this).iter(tx.as_ref().unwrap()))
+                InnerYArrayIter::Integrated((*this).iter())
             },
             SharedType::Prelim(v) => unsafe {
                 let this: *const Vec<PyObject> = v;
@@ -196,6 +205,95 @@ impl YArray {
     }
 }
 
+impl YArray {
+    /// Gets a single element from a YArray.
+    fn get_element(&self, index: u32) -> PyResult<PyObject> {
+        match &self.0 {
+            SharedType::Integrated(v) => {
+                if let Some(value) = v.get(index as u32) {
+                    Ok(Python::with_gil(|py| value.into_py(py)))
+                } else {
+                    Err(PyIndexError::new_err(
+                        "Index outside the bounds of an YArray",
+                    ))
+                }
+            }
+            SharedType::Prelim(v) => {
+                if let Some(value) = v.get(index as usize) {
+                    Ok(value.clone())
+                } else {
+                    Err(PyIndexError::new_err(
+                        "Index outside the bounds of an YArray",
+                    ))
+                }
+            }
+        }
+    }
+
+    /// Creates a new YArray from a range of values specified in a PySlice
+    fn get_range(&self, slice: &PySlice) -> PyResult<PyObject> {
+        let PySliceIndices {
+            start, stop, step, ..
+        } = slice.indices(self.__len__().try_into().unwrap()).unwrap();
+        match &self.0 {
+            SharedType::Integrated(arr) => Python::with_gil(|py| {
+                if step < 0 {
+                    let step = step.abs() as usize;
+                    let (start, stop) = ((stop + 1) as usize, (start + 1) as usize);
+                    let values: Vec<PyObject> = arr
+                        .iter()
+                        .enumerate()
+                        .skip(start)
+                        .step_by(step)
+                        .take_while(|(i, _)| i < &stop)
+                        .map(|(_, el)| el.into_py(py))
+                        .collect();
+                    let values: Vec<PyObject> = values.into_iter().rev().collect();
+                    Ok(values.into_py(py))
+                } else {
+                    let (start, stop, step) = (start as usize, stop as usize, step as usize);
+                    let values: Vec<PyObject> = arr
+                        .iter()
+                        .enumerate()
+                        .skip(start)
+                        .step_by(step)
+                        .take_while(|(i, _)| i < &stop)
+                        .map(|(_, el)| el.into_py(py))
+                        .collect();
+                    Ok(values.into_py(py))
+                }
+            }),
+            SharedType::Prelim(arr) => Python::with_gil(|py| {
+                if step < 0 {
+                    let step = step.abs() as usize;
+                    let (start, stop) = ((stop + 1) as usize, (start + 1) as usize);
+                    let list =
+                        PyList::new(py, arr[start..stop].iter().rev().step_by(step).cloned());
+                    Ok(list.into())
+                } else {
+                    let step = step as usize;
+                    let (start, stop) = (start as usize, stop as usize);
+                    let list = PyList::new(py, arr[start..stop].iter().step_by(step).cloned());
+                    Ok(list.into())
+                }
+            }),
+        }
+    }
+
+    fn normalize_index(&self, index: isize) -> u32 {
+        if index < 0 {
+            (self.__len__() as isize + index) as u32
+        } else {
+            index as u32
+        }
+    }
+}
+#[derive(FromPyObject)]
+pub enum Index<'a> {
+    Int(isize),
+    Slice(&'a PySlice),
+}
+
 enum InnerYArrayIter {
     Integrated(ArrayIter<'static>),
     Prelim(std::slice::Iter<'static, PyObject>),
@@ -210,6 +308,19 @@ impl Drop for YArrayIterator {
     }
 }
 
+impl Iterator for YArrayIterator {
+    type Item = PyObject;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.0.deref_mut() {
+            InnerYArrayIter::Integrated(iter) => {
+                Python::with_gil(|py| iter.next().map(|v| v.into_py(py)))
+            }
+            InnerYArrayIter::Prelim(iter) => iter.next().cloned(),
+        }
+    }
+}
+
 #[pymethods]
 impl YArrayIterator {
     pub fn __iter__(slf: PyRef<Self>) -> PyRef<Self> {
@@ -217,12 +328,7 @@ impl YArrayIterator {
     }
 
     pub fn __next__(mut slf: PyRefMut<Self>) -> Option<PyObject> {
-        match slf.0.deref_mut() {
-            InnerYArrayIter::Integrated(iter) => {
-                Python::with_gil(|py| iter.next().map(|v| v.into_py(py)))
-            }
-            InnerYArrayIter::Prelim(iter) => iter.next().cloned(),
-        }
+        slf.next()
     }
 }
 
@@ -274,7 +380,7 @@ impl YArrayEvent {
     /// Returns an array of keys and indexes creating a path from root type down to current instance
     /// of shared type (accessible via `target` getter).
     pub fn path(&self) -> PyObject {
-        Python::with_gil(|py| self.inner().path(self.txn()).into_py(py))
+        Python::with_gil(|py| self.inner().path().into_py(py))
     }
 
     /// Returns a list of text changes made over corresponding `YArray` collection within

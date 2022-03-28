@@ -1,19 +1,20 @@
 import y_py as Y
+from y_py import YMap
 
 
 def test_set():
     d1 = Y.YDoc()
     x = d1.get_map("test")
 
-    value = d1.transact(lambda txn: x.get(txn, "key"))
+    value = x["key"]
     assert value == None
 
     d1.transact(lambda txn: x.set(txn, "key", "value1"))
-    value = d1.transact(lambda txn: x.get(txn, "key"))
+    value = x["key"]
     assert value == "value1"
 
     d1.transact(lambda txn: x.set(txn, "key", "value2"))
-    value = d1.transact(lambda txn: x.get(txn, "key"))
+    value = x["key"]
     assert value == "value2"
 
 
@@ -27,7 +28,7 @@ def test_set_nested():
     d1.transact(lambda txn: x.set(txn, "key", nested))
     d1.transact(lambda txn: nested.set(txn, "b", "B"))
 
-    json = d1.transact(lambda txn: x.to_json(txn))
+    json = x.to_json()
     assert json == {"key": {"a": "A", "b": "B"}}
 
 
@@ -36,38 +37,41 @@ def test_delete():
     x = d1.get_map("test")
 
     d1.transact(lambda txn: x.set(txn, "key", "value1"))
-    len = d1.transact(lambda txn: x.length(txn))
-    value = d1.transact(lambda txn: x.get(txn, "key"))
-    assert len == 1
+    length = len(x)
+    value = x["key"]
+    assert length == 1
     assert value == "value1"
     d1.transact(lambda txn: x.delete(txn, "key"))
-    len = d1.transact(lambda txn: x.length(txn))
-    value = d1.transact(lambda txn: x.get(txn, "key"))
-    assert len == 0
+    length = len(x)
+    value = x["key"]
+    assert length == 0
     assert value == None
 
     d1.transact(lambda txn: x.set(txn, "key", "value2"))
-    len = d1.transact(lambda txn: x.length(txn))
-    value = d1.transact(lambda txn: x.get(txn, "key"))
-    assert len == 1
+    length = len(x)
+    value = x["key"]
+    assert length == 1
     assert value == "value2"
 
 
 def test_iterator():
-    d1 = Y.YDoc()
-    x = d1.get_map("test")
+    d = Y.YDoc()
+    x = d.get_map("test")
 
-    def test(txn):
+    with d.begin_transaction() as txn:
         x.set(txn, "a", 1)
         x.set(txn, "b", 2)
         x.set(txn, "c", 3)
         expected = {"a": 1, "b": 2, "c": 3}
-        for (key, val) in x.entries(txn):
+        for (key, val) in x.items():
             v = expected[key]
             assert val == v
             del expected[key]
 
-    d1.transact(test)
+        expected = {"a": 1, "b": 2, "c": 3}
+        for key in x:
+            assert key in expected
+            assert key in x
 
 
 def test_observer():
@@ -78,7 +82,7 @@ def test_observer():
 
     def get_value(x):
         with d1.begin_transaction() as txn:
-            return x.to_json(txn)
+            return x.to_json()
 
     def callback(e):
         nonlocal target
@@ -86,7 +90,7 @@ def test_observer():
         target = e.target
         entries = e.keys
 
-    observer = x.observe(callback)  # TODO: Fix typing
+    observer = x.observe(callback)
 
     # insert initial data to an empty YMap
     with d1.begin_transaction() as txn:

@@ -3,6 +3,7 @@ from typing import (
     Callable,
     Iterator,
     List,
+    Iterable,
     Literal,
     Optional,
     Tuple,
@@ -339,7 +340,6 @@ class YText:
     """
 
     prelim: bool
-    length: int
     def __init__(self, init: Optional[str]):
         """
         Creates a new preliminary instance of a `YText` shared data type, with its state initialized
@@ -349,12 +349,32 @@ class YText:
         Once a preliminary instance has been inserted this way, it becomes integrated into Ypy
         document store and cannot be nested again: attempt to do so will result in an exception.
         """
-    def to_string(self, txn: YTransaction) -> str:
+    def __str__(self) -> str:
         """
         Returns:
             The underlying shared string stored in this data type.
         """
-    def to_json(self, txn: YTransaction) -> str:
+    def __repr__(self) -> str:
+        """
+        Returns:
+            The string representation wrapped in 'YText()'
+        """
+    def __len__(self) -> int:
+        """
+        Returns:
+            The length of an underlying string stored in this `YText` instance, understood as a number of UTF-8 encoded bytes.
+        """
+    def __iter__(self) -> Iterator[str]:
+        """
+        Returns:
+            Iterator over the characters in the `YText` string.
+        """
+    def __contains__(self, pattern: str) -> bool:
+        """
+        Returns:
+            Whether the string specified in pattern exists in `YText`.
+        """
+    def to_json(self) -> str:
         """
         Returns:
             The underlying shared string stored in this data type.
@@ -408,8 +428,7 @@ class YTextChangeRetain(TypedDict):
 
 class YArray:
     prelim: bool
-    length: int
-    def __init__(init: Optional[List[Any]]):
+    def __init__(init: Optional[Iterable[Any]]):
         """
         Creates a new preliminary instance of a `YArray` shared data type, with its state
         initialized to provided parameter.
@@ -418,7 +437,22 @@ class YArray:
         Once a preliminary instance has been inserted this way, it becomes integrated into Ypy
         document store and cannot be nested again: attempt to do so will result in an exception.
         """
-    def to_json(self, txn: YTransaction) -> List[Any]:
+    def __len__(self) -> int:
+        """
+        Returns:
+            Number of elements in the `YArray`
+        """
+    def __str__(self) -> str:
+        """
+        Returns:
+            The string representation of YArray
+        """
+    def __repr__(self) -> str:
+        """
+        Returns:
+            The string representation of YArray wrapped in `YArray()`
+        """
+    def to_json(self) -> List[Any]:
         """
         Converts an underlying contents of this `YArray` instance into their JSON representation.
         """
@@ -435,12 +469,12 @@ class YArray:
         Deletes a range of items of given `length` from current `YArray` instance,
         starting from given `index`.
         """
-    def get(self, txn: YTransaction, index: int) -> Any:
+    def __getitem__(self, index: Union[int, slice]) -> Any:
         """
         Returns:
-            The element stored under given `index`.
+            The element stored under given `index` or a new list of elements from the slice range.
         """
-    def values(self, txn: YTransaction) -> Iterator:
+    def __iter__(self) -> Iterator:
         """
         Returns:
             An iterator that can be used to traverse over the values stored withing this instance of `YArray`.
@@ -453,10 +487,8 @@ class YArray:
             doc = YDoc()
             array = doc.get_array('name')
 
-            with doc.begin_transaction() as txn:
-                array.push(txn, ['hello', 'world'])
-                for item in array.values(txn)):
-                    print(item)
+            for item in array:
+                print(item)
         """
     def observe(self, f: Callable[[YArrayEvent]]) -> YArrayObserver:
         """
@@ -492,7 +524,6 @@ class ArrayChangeRetain:
 
 class YMap:
     prelim: bool
-    length: int
     def __init__(dict: dict):
         """
         Creates a new preliminary instance of a `YMap` shared data type, with its state
@@ -502,7 +533,22 @@ class YMap:
         Once a preliminary instance has been inserted this way, it becomes integrated into Ypy
         document store and cannot be nested again: attempt to do so will result in an exception.
         """
-    def to_json(self, txn: YTransaction) -> dict:
+    def __len__(self) -> int:
+        """
+        Returns:
+            The number of entries stored within this instance of `YMap`.
+        """
+    def __str__(self) -> str:
+        """
+        Returns:
+            The string representation of the `YMap`.
+        """
+    def __repr__(self) -> str:
+        """
+        Returns:
+            The string representation of the `YMap` wrapped in 'YMap()'
+        """
+    def to_json(self) -> dict:
         """
         Converts contents of this `YMap` instance into a JSON representation.
         """
@@ -515,12 +561,17 @@ class YMap:
         """
         Removes an entry identified by a given `key` from this instance of `YMap`, if such exists.
         """
-    def get(self, txn: YTransaction, key: str) -> Any | None:
+    def __getitem__(self, key: str) -> Any | None:
         """
         Returns:
             Value of an entry stored under given `key` within this instance of `YMap`, or `None` if no such entry existed.
         """
-    def entries(self, txn: YTransaction) -> Iterator:
+    def __iter__(self) -> Iterator[str]:
+        """
+        Returns:
+            An iterator that traverses all keys of the `YMap` in an unspecified order.
+        """
+    def items(self) -> Iterator[Tuple[str, Any]]:
         """
         Returns:
             An iterator that can be used to traverse over all entries stored within this instance of `YMap`. Order of entry is not specified.
@@ -535,8 +586,8 @@ class YMap:
             with doc.begin_transaction() as txn:
                 map.set(txn, 'key1', 'value1')
                 map.set(txn, 'key2', true)
-                for (key, value) in map.entries(txn)):
-                    print(key, value)
+            for (key, value) in map.items()):
+                print(key, value)
         """
     def observe(self, f: Callable[[YMapEvent]]) -> YMapObserver:
         """
@@ -600,7 +651,11 @@ class YXmlElement:
     """
 
     name: str
-    def length(self, txn: YTransaction) -> int:
+    first_child: Optional[Xml]
+    next_sibling: Optional[Xml]
+    prev_sibling: Optional[Xml]
+    parent: Optional[YXmlElement]
+    def __len__(self) -> int:
         """
         Returns a number of child XML nodes stored within this `YXMlElement` instance.
         """
@@ -630,37 +685,22 @@ class YXmlElement:
         """
         Appends a new instance of `YXmlText` as the last child of this XML node and returns it.
         """
-    def first_child(self, txn: YTransaction) -> Optional[Xml]:
+    def __str__(self) -> str:
         """
-        Returns a first child of this XML node.
-        It can be either `YXmlElement`, `YXmlText` or `None` if current node has not children.
+        Returns:
+            A string representation of this XML node.
         """
-    def next_sibling(self, txn: YTransaction) -> Optional[Xml]:
+    def __repr__(self) -> str:
         """
-        Returns a next XML sibling node of this XMl node.
-        It can be either `YXmlElement`, `YXmlText` or `None` if current node is a last child of
-        parent XML node.
-        """
-    def prev_sibling(self, txn: YTransaction) -> Optional[Xml]:
-        """
-        Returns a previous XML sibling node of this XMl node.
-        It can be either `YXmlElement`, `YXmlText` or `None` if current node is a first child
-        of parent XML node.
-        """
-    def parent(self, txn: YTransaction) -> Optional[YXmlElement]:
-        """
-        Returns a parent `YXmlElement` node or `None` if current node has no parent assigned.
-        """
-    def to_string(self, txn: YTransaction) -> str:
-        """
-        Returns a string representation of this XML node.
+        Returns:
+            A string representation wrapped in YXmlElement
         """
     def set_attribute(self, txn: YTransaction, name: str, value: str):
         """
         Sets a `name` and `value` as new attribute for this XML node. If an attribute with the same
         `name` already existed on that node, its value with be overridden with a provided one.
         """
-    def get_attribute(self, txn: YTransaction, name: str) -> Optional[str]:
+    def get_attribute(self, name: str) -> Optional[str]:
         """
         Returns a value of an attribute given its `name`. If no attribute with such name existed,
         `null` will be returned.
@@ -669,12 +709,12 @@ class YXmlElement:
         """
         Removes an attribute from this XML node, given its `name`.
         """
-    def attributes(self, txn: YTransaction) -> YXmlAttributes:
+    def attributes(self) -> YXmlAttributes:
         """
         Returns an iterator that enables to traverse over all attributes of this XML node in
         unspecified order.
         """
-    def tree_walker(self, txn: YTransaction) -> YXmlTreeWalker:
+    def tree_walker(self) -> YXmlTreeWalker:
         """
         Returns an iterator that enables a deep traversal of this XML node - starting from first
         child over this XML node successors using depth-first strategy.
@@ -687,7 +727,14 @@ class YXmlElement:
         """
 
 class YXmlText:
-    length: int
+    next_sibling: Optional[Xml]
+    prev_sibling: Optional[Xml]
+    parent: Optional[YXmlElement]
+    def __len__():
+        """
+        Returns:
+            The length of an underlying string stored in this `YXmlText` instance, understood as a number of UTF-8 encoded bytes.
+        """
     def insert(self, txn: YTransaction, index: int, chunk: str):
         """
         Inserts a given `chunk` of text into this `YXmlText` instance, starting at a given `index`.
@@ -701,43 +748,35 @@ class YXmlText:
         Deletes a specified range of of characters, starting at a given `index`.
         Both `index` and `length` are counted in terms of a number of UTF-8 character bytes.
         """
-    def next_sibling(self, txn: YTransaction) -> Optional[Xml]:
+    def __str__(self) -> str:
         """
-        Returns a next XML sibling node of this XMl node.
-        It can be either `YXmlElement`, `YXmlText` or `None` if current node is a last child of
-        parent XML node.
+        Returns:
+            The underlying string stored in this `YXmlText` instance.
         """
-    def prev_sibling(self, txn: YTransaction) -> Optional[Xml]:
+    def __repr__(self) -> str:
         """
-        Returns a previous XML sibling node of this XMl node.
-        It can be either `YXmlElement`, `YXmlText` or `None` if current node is a first child
-        of parent XML node.
-        """
-    def parent(self, txn: YTransaction) -> Optional[YXmlElement]:
-        """
-        Returns a parent `YXmlElement` node or `None` if current node has no parent assigned.
-        """
-    def to_string(self, txn: YTransaction) -> str:
-        """
-        Returns an underlying string stored in this `YXmlText` instance.
+        Returns:
+            The string representation wrapped in 'YXmlText()'
         """
     def set_attribute(self, txn: YTransaction, name: str, value: str):
         """
         Sets a `name` and `value` as new attribute for this XML node. If an attribute with the same
         `name` already existed on that node, its value with be overridden with a provided one.
         """
-    def get_attribute(self, txn: YTransaction, name: str) -> Optional[str]:
+    def get_attribute(self, name: str) -> Optional[str]:
         """
-        Returns a value of an attribute given its `name`. If no attribute with such name existed,
+        Returns:
+            A value of an attribute given its `name`. If no attribute with such name existed,
         `None` will be returned.
         """
     def remove_attribute(self, txn: YTransaction, name: str):
         """
         Removes an attribute from this XML node, given its `name`.
         """
-    def attributes(self, txn: YTransaction) -> YXmlAttributes:
+    def attributes(self) -> YXmlAttributes:
         """
-        Returns an iterator that enables to traverse over all attributes of this XML node in
+        Returns:
+            An iterator that enables to traverse over all attributes of this XML node in
         unspecified order.
         """
     def observe(self, f: Callable[[YXmlTextEvent]]) -> YXmlTextObserver:
