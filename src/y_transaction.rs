@@ -222,6 +222,6 @@ impl YTransaction {
     ) -> PyResult<bool> {
         self.commit();
         drop(self);
-        Ok(exception_type.map_or_else(|| true, |_| false))
+        Ok(exception_type.map_or(true, |_| false))
     }
 }
