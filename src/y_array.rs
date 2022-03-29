@@ -11,7 +11,7 @@ use pyo3::exceptions::{PyIndexError, PyTypeError};
 use pyo3::prelude::*;
 use pyo3::types::{PyList, PySlice, PySliceIndices};
 use yrs::types::array::{ArrayEvent, ArrayIter};
-use yrs::{Array, Subscription, Transaction};
+use yrs::{Array, SubscriptionId, Transaction};
 
 /// A collection used to store data in an indexed sequence structure. This type is internally
 /// implemented as a double linked list, which may squash values inserted directly one after another
@@ -185,21 +185,35 @@ impl YArray {
 
     /// Subscribes to all operations happening over this instance of `YArray`. All changes are
     /// batched and eventually triggered during transaction commit phase.
-    /// Returns an `YObserver` which, when free'd, will unsubscribe current callback.
-    pub fn observe(&mut self, f: PyObject) -> PyResult<YArrayObserver> {
+    /// Returns a `SubscriptionId` which can be used to cancel the callback with `unobserve`.
+    pub fn observe(&mut self, f: PyObject) -> PyResult<SubscriptionId> {
         match &mut self.0 {
-            SharedType::Integrated(v) => Ok(v
-                .observe(move |txn, e| {
+            SharedType::Integrated(array) => {
+                let subscription = array.observe(move |txn, e| {
                     Python::with_gil(|py| {
                         let event = YArrayEvent::new(e, txn);
                         if let Err(err) = f.call1(py, (event,)) {
                             err.restore(py)
                         }
                     })
-                })
-                .into()),
+                });
+                Ok(subscription.into())
+            }
             SharedType::Prelim(_) => Err(PyTypeError::new_err(
                 "Cannot observe a preliminary type. Must be added to a YDoc first",
+            )),
+        }
+    }
+
+    /// Cancels the callback of an observer using the Subscription ID returned from the `observe` method.
+    pub fn unobserve(&mut self, subscription_id: SubscriptionId) -> PyResult<()> {
+        match &mut self.0 {
+            SharedType::Integrated(v) => {
+                v.unobserve(subscription_id);
+                Ok(())
+            }
+            SharedType::Prelim(_) => Err(PyTypeError::new_err(
+                "Cannot call unobserve on a preliminary type. Must be added to a YDoc first",
             )),
         }
     }
@@ -405,14 +419,5 @@ impl YArrayEvent {
             self.delta = Some(delta.clone());
             delta
         }
-    }
-}
-
-#[pyclass(unsendable)]
-pub struct YArrayObserver(Subscription<ArrayEvent>);
-
-impl From<Subscription<ArrayEvent>> for YArrayObserver {
-    fn from(o: Subscription<ArrayEvent>) -> Self {
-        YArrayObserver(o)
     }
 }

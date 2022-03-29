@@ -90,7 +90,7 @@ def test_observer():
         target = e.target
         entries = e.keys
 
-    observer = x.observe(callback)
+    subscription_id = x.observe(callback)
 
     # insert initial data to an empty YMap
     with d1.begin_transaction() as txn:
@@ -121,7 +121,7 @@ def test_observer():
     entries = None
 
     # free the observer and make sure that callback is no longer called
-    del observer
+    x.unobserve(subscription_id)
     with d1.begin_transaction() as txn:
         x.set(txn, "key1", [6])
     assert target == None

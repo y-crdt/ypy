@@ -12,6 +12,8 @@ from typing import (
     Dict,
 )
 
+SubscriptionId = int
+
 class YDoc:
     """
     A Ypy document type. Documents are most important units of collaborative resources management.
@@ -364,16 +366,6 @@ class YText:
         Returns:
             The length of an underlying string stored in this `YText` instance, understood as a number of UTF-8 encoded bytes.
         """
-    def __iter__(self) -> Iterator[str]:
-        """
-        Returns:
-            Iterator over the characters in the `YText` string.
-        """
-    def __contains__(self, pattern: str) -> bool:
-        """
-        Returns:
-            Whether the string specified in pattern exists in `YText`.
-        """
     def to_json(self) -> str:
         """
         Returns:
@@ -392,7 +384,7 @@ class YText:
         Deletes a specified range of of characters, starting at a given `index`.
         Both `index` and `length` are counted in terms of a number of UTF-8 character bytes.
         """
-    def observe(self, f: Callable[[YTextEvent]]) -> YTextObserver:
+    def observe(self, f: Callable[[YTextEvent]]) -> SubscriptionId:
         """
         Assigns a callback function to listen to YText updates.
 
@@ -401,8 +393,13 @@ class YText:
         Returns:
             A reference to the callback subscription.
         """
+    def unobserve(self, subscription_id: SubscriptionId):
+        """
+        Cancels the observer callback associated with the `subscripton_id`.
 
-YTextObserver = Any
+        Args:
+            subscription_id: reference to a subscription provided by the `observe` method.
+        """
 
 class YTextEvent:
     target: YText
@@ -490,14 +487,21 @@ class YArray:
             for item in array:
                 print(item)
         """
-    def observe(self, f: Callable[[YArrayEvent]]) -> YArrayObserver:
+    def observe(self, f: Callable[[YArrayEvent]]) -> SubscriptionId:
         """
         Assigns a callback function to listen to YArray updates.
 
         Args:
             f: Callback function that runs when the array object receives an update.
         Returns:
-            A reference to the callback subscription.
+            An identifier associated with the callback subscription.
+        """
+    def unobserve(self, subscription_id: SubscriptionId):
+        """
+        Cancels the observer callback associated with the `subscripton_id`.
+
+        Args:
+            subscription_id: reference to a subscription provided by the `observe` method.
         """
 
 YArrayObserver = Any
@@ -589,7 +593,7 @@ class YMap:
             for (key, value) in map.items()):
                 print(key, value)
         """
-    def observe(self, f: Callable[[YMapEvent]]) -> YMapObserver:
+    def observe(self, f: Callable[[YMapEvent]]) -> SubscriptionId:
         """
         Assigns a callback function to listen to YMap updates.
 
@@ -598,8 +602,13 @@ class YMap:
         Returns:
             A reference to the callback subscription. Delete this observer in order to erase the associated callback function.
         """
+    def unobserve(self, subscription_id: SubscriptionId):
+        """
+        Cancels the observer callback associated with the `subscripton_id`.
 
-YMapObserver = Any
+        Args:
+            subscription_id: reference to a subscription provided by the `observe` method.
+        """
 
 class YMapEvent:
     target: YMap
@@ -617,9 +626,7 @@ class YMapEventKeyChange(TypedDict):
     newValue: Optional[Any]
 
 YXmlAttributes = Iterator[Tuple[str, str]]
-YXmlObserver = Any
 
-YXmlTextObserver = Any
 Xml = Union[YXmlElement, YXmlText]
 YXmlTreeWalker = Iterator[Xml]
 EntryChange = Dict[Literal["action", "newValue", "oldValue"], Any]
@@ -719,11 +726,22 @@ class YXmlElement:
         Returns an iterator that enables a deep traversal of this XML node - starting from first
         child over this XML node successors using depth-first strategy.
         """
-    def observe(self, f: Callable[[YXmlElementEvent]]) -> YXmlObserver:
+    def observe(self, f: Callable[[YXmlElementEvent]]) -> SubscriptionId:
         """
         Subscribes to all operations happening over this instance of `YXmlElement`. All changes are
         batched and eventually triggered during transaction commit phase.
-        Returns an `YXmlObserver` which, when free'd, will unsubscribe current callback.
+
+        Args:
+            f: A callback function that receives update events.
+        Returns:
+            A `SubscriptionId` that can be used to cancel the observer callback.
+        """
+    def unobserve(self, subscription_id: SubscriptionId):
+        """
+        Cancels the observer callback associated with the `subscripton_id`.
+
+        Args:
+            subscription_id: reference to a subscription provided by the `observe` method.
         """
 
 class YXmlText:
@@ -779,11 +797,21 @@ class YXmlText:
             An iterator that enables to traverse over all attributes of this XML node in
         unspecified order.
         """
-    def observe(self, f: Callable[[YXmlTextEvent]]) -> YXmlTextObserver:
+    def observe(self, f: Callable[[YXmlTextEvent]]) -> SubscriptionId:
         """
         Subscribes to all operations happening over this instance of `YXmlText`. All changes are
         batched and eventually triggered during transaction commit phase.
-        Returns an `YXmlObserver` which, when free'd, will unsubscribe current callback.
+        Args:
+            f: A callback function that receives update events.
+        Returns:
+            A `SubscriptionId` that can be used to cancel the observer callback.
+        """
+    def unobserve(self, subscription_id: SubscriptionId):
+        """
+        Cancels the observer callback associated with the `subscripton_id`.
+
+        Args:
+            subscription_id: reference to a subscription provided by the `observe` method.
         """
 
 class YXmlTextEvent:

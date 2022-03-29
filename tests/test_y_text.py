@@ -75,7 +75,7 @@ def test_observer():
 
     x = d1.get_text("test")
 
-    observer = x.observe(callback)
+    subscription_id = x.observe(callback)
 
     # insert initial data to an empty YText
     with d1.begin_transaction() as txn:
@@ -105,7 +105,7 @@ def test_observer():
     delta = None
 
     # free the observer and make sure that callback is no longer called
-    del observer
+    x.unobserve(subscription_id)
     with d1.begin_transaction() as txn:
         x.insert(txn, 1, "fgh")
     assert target == None

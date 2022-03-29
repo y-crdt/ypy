@@ -3,7 +3,7 @@ use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
 use pyo3::types::PyList;
 use yrs::types::text::TextEvent;
-use yrs::{Subscription, Text, Transaction};
+use yrs::{SubscriptionId, Text, Transaction};
 
 use crate::shared_types::SharedType;
 use crate::type_conversions::ToPython;
@@ -112,7 +112,7 @@ impl YText {
         }
     }
 
-    pub fn observe(&mut self, f: PyObject) -> PyResult<YTextObserver> {
+    pub fn observe(&mut self, f: PyObject) -> PyResult<SubscriptionId> {
         match &mut self.0 {
             SharedType::Integrated(v) => Ok(v
                 .observe(move |txn, e| {
@@ -126,6 +126,18 @@ impl YText {
                 .into()),
             SharedType::Prelim(_) => Err(PyTypeError::new_err(
                 "Cannot observe a preliminary type. Must be added to a YDoc first",
+            )),
+        }
+    }
+    /// Cancels the observer callback associated with the `subscripton_id`.
+    pub fn unobserve(&mut self, subscription_id: SubscriptionId) -> PyResult<()> {
+        match &mut self.0 {
+            SharedType::Integrated(text) => {
+                text.unobserve(subscription_id);
+                Ok(())
+            }
+            SharedType::Prelim(_) => Err(PyTypeError::new_err(
+                "Cannot unobserve a preliminary type. Must be added to a YDoc first",
             )),
         }
     }
@@ -205,14 +217,5 @@ impl YTextEvent {
             self.delta = Some(delta.clone());
             delta
         }
-    }
-}
-
-#[pyclass(unsendable)]
-pub struct YTextObserver(Subscription<TextEvent>);
-
-impl From<Subscription<TextEvent>> for YTextObserver {
-    fn from(o: Subscription<TextEvent>) -> Self {
-        YTextObserver(o)
     }
 }
