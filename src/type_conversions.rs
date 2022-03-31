@@ -234,18 +234,17 @@ fn py_into_any(v: PyObject) -> Option<Any> {
     Python::with_gil(|py| -> Option<Any> {
         let v = v.as_ref(py);
 
-        if let Ok(s) = v.downcast::<pytypes::PyString>() {
-            let string: String = s.extract().unwrap();
-            Some(Any::String(string.into_boxed_str()))
+        if let Ok(b) = v.downcast::<pytypes::PyBool>() {
+            Some(Any::Bool(b.extract().unwrap()))
         } else if let Ok(l) = v.downcast::<pytypes::PyLong>() {
-            let i: f64 = l.extract().unwrap();
-            Some(Any::BigInt(i as i64))
+            Some(Any::BigInt(l.extract().unwrap()))
         } else if v.is_none() {
             Some(Any::Null)
         } else if let Ok(f) = v.downcast::<pytypes::PyFloat>() {
             Some(Any::Number(f.extract().unwrap()))
-        } else if let Ok(b) = v.downcast::<pytypes::PyBool>() {
-            Some(Any::Bool(b.extract().unwrap()))
+        } else if let Ok(s) = v.downcast::<pytypes::PyString>() {
+            let string: String = s.extract().unwrap();
+            Some(Any::String(string.into_boxed_str()))
         } else if let Ok(list) = v.downcast::<pytypes::PyList>() {
             let mut result = Vec::with_capacity(list.len());
             for value in list.iter() {
