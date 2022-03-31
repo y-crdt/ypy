@@ -32,8 +32,7 @@ state_vector = Y.encode_state_vector(d2)
 diff = Y.encode_state_as_update(d1, state_vector)
 Y.apply_update(d2, diff)
 
-with d2.begin_transaction() as txn:
-    value = d2.get_text('test').to_string(txn)
+value = str(d2.get_text('test'))
 
 assert value == "hello world!"
 ```
