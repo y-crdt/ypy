@@ -4,7 +4,7 @@ use std::mem::ManuallyDrop;
 use std::ops::Deref;
 use yrs::types::xml::{Attributes, TreeWalker, XmlEvent, XmlTextEvent};
 use yrs::types::{EntryChange, Path, PathSegment};
-use yrs::Subscription;
+use yrs::SubscriptionId;
 use yrs::Transaction;
 use yrs::Xml;
 use yrs::XmlElement;
@@ -164,8 +164,8 @@ impl YXmlElement {
 
     /// Subscribes to all operations happening over this instance of `YXmlElement`. All changes are
     /// batched and eventually triggered during transaction commit phase.
-    /// Returns an `YXmlObserver` which, when free'd, will unsubscribe current callback.
-    pub fn observe(&mut self, f: PyObject) -> YXmlObserver {
+    /// Returns an `SubscriptionId` which, can be used to unsubscribe the observer.
+    pub fn observe(&mut self, f: PyObject) -> SubscriptionId {
         self.0
             .observe(move |txn, e| {
                 Python::with_gil(|py| {
@@ -176,6 +176,10 @@ impl YXmlElement {
                 })
             })
             .into()
+    }
+    /// Cancels the observer callback associated with the `subscripton_id`.
+    pub fn unobserve(&mut self, subscription_id: SubscriptionId) {
+        self.0.unobserve(subscription_id);
     }
 }
 
@@ -295,8 +299,8 @@ impl YXmlText {
 
     /// Subscribes to all operations happening over this instance of `YXmlText`. All changes are
     /// batched and eventually triggered during transaction commit phase.
-    /// Returns an `YXmlObserver` which, when free'd, will unsubscribe current callback.
-    pub fn observe(&mut self, f: PyObject) -> YXmlTextObserver {
+    /// Returns an `SubscriptionId` which, which can be used to unsubscribe the callback function.
+    pub fn observe(&mut self, f: PyObject) -> SubscriptionId {
         self.0
             .observe(move |txn, e| {
                 Python::with_gil(|py| {
@@ -308,23 +312,10 @@ impl YXmlText {
             })
             .into()
     }
-}
 
-#[pyclass(unsendable)]
-pub struct YXmlObserver(Subscription<XmlEvent>);
-
-impl From<Subscription<XmlEvent>> for YXmlObserver {
-    fn from(o: Subscription<XmlEvent>) -> Self {
-        YXmlObserver(o)
-    }
-}
-
-#[pyclass(unsendable)]
-pub struct YXmlTextObserver(Subscription<XmlTextEvent>);
-
-impl From<Subscription<XmlTextEvent>> for YXmlTextObserver {
-    fn from(o: Subscription<XmlTextEvent>) -> Self {
-        YXmlTextObserver(o)
+    /// Cancels the observer callback associated with the `subscripton_id`.
+    pub fn unobserve(&mut self, subscription_id: SubscriptionId) {
+        self.0.unobserve(subscription_id);
     }
 }
 

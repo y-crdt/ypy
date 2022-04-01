@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::mem::ManuallyDrop;
 use std::ops::DerefMut;
 use yrs::types::map::{MapEvent, MapIter};
-use yrs::{Map, Subscription, Transaction};
+use yrs::{Map, SubscriptionId, Transaction};
 
 use crate::shared_types::SharedType;
 use crate::type_conversions::{PyValueWrapper, ToPython};
@@ -172,7 +172,7 @@ impl YMap {
         YMapKeyIterator(self.items())
     }
 
-    pub fn observe(&mut self, f: PyObject) -> PyResult<YMapObserver> {
+    pub fn observe(&mut self, f: PyObject) -> PyResult<SubscriptionId> {
         match &mut self.0 {
             SharedType::Integrated(v) => Ok(v
                 .observe(move |txn, e| {
@@ -186,6 +186,18 @@ impl YMap {
                 .into()),
             SharedType::Prelim(_) => Err(PyTypeError::new_err(
                 "Cannot observe a preliminary type. Must be added to a YDoc first",
+            )),
+        }
+    }
+    /// Cancels the observer callback associated with the `subscripton_id`.
+    pub fn unobserve(&mut self, subscription_id: SubscriptionId) -> PyResult<()> {
+        match &mut self.0 {
+            SharedType::Integrated(map) => {
+                map.unobserve(subscription_id);
+                Ok(())
+            }
+            SharedType::Prelim(_) => Err(PyTypeError::new_err(
+                "Cannot unobserve a preliminary type. Must be added to a YDoc first",
             )),
         }
     }
@@ -314,14 +326,5 @@ impl YMapEvent {
             self.keys = Some(keys.clone());
             keys
         }
-    }
-}
-
-#[pyclass(unsendable)]
-pub struct YMapObserver(Subscription<MapEvent>);
-
-impl From<Subscription<MapEvent>> for YMapObserver {
-    fn from(o: Subscription<MapEvent>) -> Self {
-        YMapObserver(o)
     }
 }
