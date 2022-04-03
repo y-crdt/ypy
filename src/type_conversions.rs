@@ -231,7 +231,7 @@ pub fn insert_at(dst: &Array, txn: &mut Transaction, index: u32, src: Vec<PyObje
 }
 
 const MAX_JS_NUMBER: i64 = 2_i64.pow(53) - 1;
-fn py_into_any(v: PyObject) -> Option<Any> {
+pub fn py_into_any(v: PyObject) -> Option<Any> {
     Python::with_gil(|py| -> Option<Any> {
         let v = v.as_ref(py);
 

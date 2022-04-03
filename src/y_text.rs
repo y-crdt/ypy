@@ -1,11 +1,15 @@
+use std::collections::HashMap;
+
 use lib0::any::Any;
 use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
 use pyo3::types::PyList;
 use yrs::types::text::TextEvent;
+use yrs::types::Attrs;
 use yrs::{SubscriptionId, Text, Transaction};
 
 use crate::shared_types::SharedType;
+use crate::type_conversions::py_into_any;
 use crate::type_conversions::ToPython;
 use crate::y_transaction::YTransaction;
 
@@ -86,10 +90,86 @@ impl YText {
     }
 
     /// Inserts a given `chunk` of text into this `YText` instance, starting at a given `index`.
-    pub fn insert(&mut self, txn: &mut YTransaction, index: u32, chunk: &str) {
+    pub fn insert(
+        &mut self,
+        txn: &mut YTransaction,
+        index: u32,
+        chunk: &str,
+        attributes: Option<HashMap<String, PyObject>>,
+    ) -> PyResult<()> {
+        let attributes: Option<PyResult<Attrs>> = attributes.map(Self::parse_attrs);
+
+        if let Some(Ok(attributes)) = attributes {
+            match &mut self.0 {
+                SharedType::Integrated(text) => {
+                    text.insert_with_attributes(txn, index, chunk, attributes);
+                    Ok(())
+                }
+                SharedType::Prelim(_) => Err(PyTypeError::new_err("OOf")),
+            }
+        } else if let Some(Err(error)) = attributes {
+            Err(error)
+        } else {
+            match &mut self.0 {
+                SharedType::Integrated(text) => text.insert(txn, index, chunk),
+                SharedType::Prelim(prelim_string) => {
+                    prelim_string.insert_str(index as usize, chunk)
+                }
+            }
+            Ok(())
+        }
+    }
+
+    /// Inserts a given `embed` object into this `YText` instance, starting at a given `index`.
+    ///
+    /// Optional object with defined `attributes` will be used to wrap provided `embed`
+    /// with a formatting blocks.`attributes` are only supported for a `YText` instance which
+    /// already has been integrated into document store.
+    pub fn insert_embed(
+        &mut self,
+        txn: &mut YTransaction,
+        index: u32,
+        embed: PyObject,
+        attributes: Option<HashMap<String, PyObject>>,
+    ) -> PyResult<()> {
         match &mut self.0 {
-            SharedType::Integrated(v) => v.insert(txn, index, chunk),
-            SharedType::Prelim(v) => v.insert_str(index as usize, chunk),
+            SharedType::Integrated(text) => {
+                let content = py_into_any(embed)
+                    .ok_or(PyTypeError::new_err("Content could not be embedded"))?;
+                if let Some(Ok(attrs)) = attributes.map(Self::parse_attrs) {
+                    text.insert_embed_with_attributes(txn, index, content, attrs)
+                } else {
+                    text.insert_embed(txn, index, content)
+                }
+                Ok(())
+            }
+            SharedType::Prelim(_) => Err(PyTypeError::new_err(
+                "Insert embeds requires YText instance to be integrated first.",
+            )),
+        }
+    }
+
+    /// Wraps an existing piece of text within a range described by `index`-`length` parameters with
+    /// formatting blocks containing provided `attributes` metadata. This method only works for
+    /// `YText` instances that already have been integrated into document store.
+    pub fn format(
+        &mut self,
+        txn: &mut YTransaction,
+        index: u32,
+        length: u32,
+        attributes: HashMap<String, PyObject>,
+    ) -> PyResult<()> {
+        match Self::parse_attrs(attributes) {
+            Ok(attrs) => match &mut self.0 {
+                SharedType::Integrated(text) => {
+                    text.format(txn, index, length, attrs);
+                    Ok(())
+                }
+                SharedType::Prelim(_) => Err(PyTypeError::new_err(
+                    "Insert embeds requires YText instance to be integrated first.",
+                )),
+            },
+            Err(err) => Err(err),
         }
     }
 
@@ -140,6 +220,25 @@ impl YText {
                 "Cannot unobserve a preliminary type. Must be added to a YDoc first",
             )),
         }
+    }
+}
+
+impl YText {
+    fn parse_attrs(attrs: HashMap<String, PyObject>) -> PyResult<Attrs> {
+        attrs
+            .into_iter()
+            .map(|(k, v)| {
+                let key = k.into_boxed_str();
+                let value = py_into_any(v);
+                if let Some(value) = value {
+                    Ok((key, value))
+                } else {
+                    Err(PyTypeError::new_err(
+                        "Cannot convert attributes into a standard type".to_string(),
+                    ))
+                }
+            })
+            .collect()
     }
 }
 
@@ -217,5 +316,16 @@ impl YTextEvent {
             self.delta = Some(delta.clone());
             delta
         }
+    }
+
+    fn __str__(&self) -> String {
+        format!(
+            "YTextEvent(target={:?}, delta={:?})",
+            self.target, self.delta
+        )
+    }
+
+    fn __repr__(&self) -> String {
+        self.__str__()
     }
 }
