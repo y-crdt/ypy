@@ -73,21 +73,9 @@ def test_tree_walker():
         aa.push(txn, "hello")
         b.push(txn, "world")
 
-    with d1.begin_transaction() as txn:
-        actual = []
-        for child in root.tree_walker():
-            actual.append(str(child))
-
-        expected = ["<p>hello</p>", "hello", "world"]
-        assert actual == expected
-
-    with d1.begin_transaction() as txn:
-        actual = []
-        for child in root.tree_walker():
-            actual.append(str(child))
-
-        expected = ["<p>hello</p>", "hello", "world"]
-        assert actual == expected
+    actual = [str(child) for child in root.tree_walker()]
+    expected = ["<p>hello</p>", "hello", "world"]
+    assert actual == expected
 
 
 def test_xml_text_observer():
