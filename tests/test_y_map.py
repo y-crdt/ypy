@@ -81,8 +81,7 @@ def test_observer():
     entries = None
 
     def get_value(x):
-        with d1.begin_transaction() as txn:
-            return x.to_json()
+        return x.to_json()
 
     def callback(e):
         nonlocal target
