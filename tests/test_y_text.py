@@ -110,3 +110,29 @@ def test_observer():
         x.insert(txn, 1, "fgh")
     assert target == None
     assert delta == None
+
+
+def test_drop_sub_id():
+    d = Y.YDoc()
+    target = None
+    delta = None
+
+    def callback(e):
+        nonlocal target
+        nonlocal delta
+        target = e.target
+        delta = e.delta
+
+    x = d.get_text("test")
+
+    def register_callback(x, callback):
+        # The subscription_id `i` is dropped here
+        i = x.observe(callback)
+
+    register_callback(x, callback)
+
+    with d.begin_transaction() as txn:
+        x.insert(txn, 0, "abcd")
+
+    assert str(target) == str(x)
+    assert delta == [{"insert": "abcd"}]
