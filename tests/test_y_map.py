@@ -1,3 +1,4 @@
+import pytest
 import y_py as Y
 from y_py import YMap
 
@@ -16,6 +17,34 @@ def test_set():
     d1.transact(lambda txn: x.set(txn, "key", "value2"))
     value = x["key"]
     assert value == "value2"
+
+
+def test_update():
+    doc = Y.YDoc()
+    ymap = doc.get_map("dict")
+    dict_vals = {"user_id": 1, "username": "Josh", "is_active": True}
+    tuple_vals = ((k, v) for k, v in dict_vals.items())
+
+    # Test updating with a dictionary
+    with doc.begin_transaction() as txn:
+        ymap.update(txn, dict_vals)
+    assert ymap.to_json() == dict_vals
+
+    # Test updating with an iterator
+    ymap = doc.get_map("tuples")
+    with doc.begin_transaction() as txn:
+        ymap.update(txn, tuple_vals)
+    assert ymap.to_json() == dict_vals
+
+    # Test non-string key error
+    with pytest.raises(Exception) as e:
+        with doc.begin_transaction() as txn:
+            ymap.update(txn, [(1, 2)])
+
+    # Test non-kv-tuple error
+    with pytest.raises(Exception) as e:
+        with doc.begin_transaction() as txn:
+            ymap.update(txn, [1])
 
 
 def test_set_nested():
