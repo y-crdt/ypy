@@ -182,6 +182,8 @@ def test_formatting():
 
     with d1.begin_transaction() as txn:
         text.insert(txn, 0, "stylish")
+
+    with d1.begin_transaction() as txn:
         text.format(txn, 0, 4, {"bold": True})
 
     expected = [
