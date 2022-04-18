@@ -72,6 +72,10 @@ impl YMap {
         return self.to_json().unwrap().to_string();
     }
 
+    pub fn __dict__(&self) -> PyResult<PyObject> {
+        self.to_json()
+    }
+
     pub fn __repr__(&self) -> String {
         format!("YMap({})", self.__str__())
     }
@@ -101,6 +105,35 @@ impl YMap {
                 v.insert(key.to_string(), value);
             }
         }
+    }
+    /// Updates `YMap` with the key value pairs in the `items` object.
+    pub fn update(&mut self, txn: &mut YTransaction, items: PyObject) -> PyResult<()> {
+        Python::with_gil(|py| {
+            // Handle collection types
+            if let Ok(dict) = items.extract::<HashMap<String, PyObject>>(py) {
+                dict.into_iter().for_each(|(k, v)| self.set(txn, &k, v));
+                return Ok(());
+            }
+            // Handle iterable of tuples
+            match items.as_ref(py).iter() {
+                Ok(iterable) => {
+                    for value in iterable {
+                        match value {
+                            Ok(kv_pair) => {
+                                if let Ok((key, value)) = kv_pair.extract::<(String, PyObject)>() {
+                                    self.set(txn, &key, value);
+                                } else {
+                                    return Err(PyTypeError::new_err(format!("Update items should be formatted as (str, value) tuples, found: {}", kv_pair)));
+                                }
+                            }
+                            Err(err) => return Err(err),
+                        }
+                    }
+                    Ok(())
+                }
+                Err(err) => Err(err),
+            }
+        })
     }
 
     /// Removes an entry identified by a given `key` from this instance of `YMap`, if such exists.
