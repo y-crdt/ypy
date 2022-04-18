@@ -565,7 +565,9 @@ class YMap:
         Sets a given `key`-`value` entry within this instance of `YMap`. If another entry was
         already stored under given `key`, it will be overridden with new `value`.
         """
-    def update(self, txn: YTransaction, items: Iterable[Tuple[str, Any]]):
+    def update(
+        self, txn: YTransaction, items: Union[Iterable[Tuple[str, Any]], Dict[str, Any]]
+    ):
         """
         Updates `YMap` with the contents of items.
         Args:
