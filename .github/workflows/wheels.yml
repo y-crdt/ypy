@@ -10,16 +10,18 @@ concurrency:
 
 env:
   PACKAGE_NAME: y_py
-  PYTHON_VERSION: "3.8"
 
 jobs:
   macos:
     runs-on: macos-latest
+    strategy:
+      matrix:
+        python-version: [3.7, ""] # Empty string will trigger a build with the latest python version
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
+          python-version: ${{ matrix.python-version }}
           architecture: x64
       - name: Install Rust toolchain
         uses: actions-rs/toolchain@v1
@@ -47,11 +49,12 @@ jobs:
     strategy:
       matrix:
         target: [x64, x86]
+        python-version: [3.7, ""] # Empty string will trigger a build with the latest python version
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
+          python-version: ${{ matrix.python-version }}
           architecture: ${{ matrix.target }}
       - name: Install Rust toolchain
         uses: actions-rs/toolchain@v1
@@ -75,11 +78,12 @@ jobs:
     strategy:
       matrix:
         target: [x86_64, i686]
+        python-version: [3.7, ""] # Empty string will trigger a build with the latest python version
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
+          python-version: ${{ matrix.python-version }}
           architecture: x64
       - name: Build wheels
         uses: messense/maturin-action@v1
