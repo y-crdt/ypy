@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "ws": "^8.5.0",
+    "y-websocket": "^1.4.1"
+  }
+}

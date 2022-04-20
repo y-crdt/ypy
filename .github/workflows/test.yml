@@ -22,22 +22,19 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v2
-      - name: Install Python
+      - name: Install Miniconda
         uses: conda-incubator/setup-miniconda@v2
         with:
-          auto-update-conda: true
+          mamba-version: "*"
+          channels: conda-forge
           python-version: "3.7"
-      - name: Install Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          profile: minimal
-          default: true
+      - name: Install dependencies
+        run: |
+          mamba install rust python=${{ matrix.python-version }} maturin pip pytest pytest-asyncio websockets nodejs
+          npm --prefix tests/ypy_yjs i
       - name: Build Ypy
         run: |
-          pip install maturin
           maturin develop
       - name: Run Tests
         run: |
-          pip install pytest
           pytest
