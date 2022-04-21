@@ -30,7 +30,7 @@ use crate::y_xml::YXmlText;
 ///     output = text.to_string(txn)
 ///     print(output)
 /// ```
-#[pyclass(unsendable)]
+#[pyclass(unsendable, subclass)]
 pub struct YDoc(pub Doc);
 
 #[pymethods]
