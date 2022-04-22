@@ -570,6 +570,7 @@ class YMap:
     ):
         """
         Updates `YMap` with the contents of items.
+
         Args:
             txn: A transaction to perform the insertion updates.
             items: An iterable object that produces key value tuples to insert into the YMap
@@ -814,6 +815,7 @@ class YXmlText:
         """
         Subscribes to all operations happening over this instance of `YXmlText`. All changes are
         batched and eventually triggered during transaction commit phase.
+
         Args:
             f: A callback function that receives update events.
         Returns:
