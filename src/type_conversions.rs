@@ -230,14 +230,20 @@ pub fn insert_at(dst: &Array, txn: &mut Transaction, index: u32, src: Vec<PyObje
     }
 }
 
+const MAX_JS_NUMBER: i64 = 2_i64.pow(53) - 1;
 fn py_into_any(v: PyObject) -> Option<Any> {
     Python::with_gil(|py| -> Option<Any> {
         let v = v.as_ref(py);
 
         if let Ok(b) = v.downcast::<pytypes::PyBool>() {
             Some(Any::Bool(b.extract().unwrap()))
-        } else if let Ok(l) = v.downcast::<pytypes::PyLong>() {
-            Some(Any::BigInt(l.extract().unwrap()))
+        } else if let Ok(l) = v.downcast::<pytypes::PyInt>() {
+            let num: i64 = l.extract().unwrap();
+            if num > MAX_JS_NUMBER {
+                Some(Any::BigInt(num))
+            } else {
+                Some(Any::Number(num as f64))
+            }
         } else if v.is_none() {
             Some(Any::Null)
         } else if let Ok(f) = v.downcast::<pytypes::PyFloat>() {
