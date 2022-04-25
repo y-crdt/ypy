@@ -13,8 +13,8 @@ name = "y_py"
 crate-type = ["cdylib"]
 
 [dependencies]
-lib0 = "0.6.2"
-yrs = "0.6.2"
+lib0 = "0.7.0"
+yrs = "0.7.0"
 
 
 [dependencies.pyo3]
