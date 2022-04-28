@@ -1,4 +1,5 @@
 use lib0::any::Any;
+use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
 use pyo3::types as pytypes;
 use std::collections::HashMap;
@@ -137,28 +138,38 @@ struct PyObjectWrapper(PyObject);
 
 impl Prelim for PyObjectWrapper {
     fn into_content(self, _txn: &mut Transaction) -> (ItemContent, Option<Self>) {
-        let guard = Python::acquire_gil();
-        let py = guard.python();
-        let content = if let Some(any) = py_into_any(self.0.clone()) {
-            ItemContent::Any(vec![any])
-        } else if let Ok(shared) = Shared::extract(self.0.as_ref(py)) {
-            if shared.is_prelim() {
-                let branch = Branch::new(shared.type_ref(), None);
-                ItemContent::Type(branch)
+        Python::with_gil(|py| {
+            let content = if let Some(any) = py_into_any(self.0.clone()) {
+                ItemContent::Any(vec![any])
+            } else if let Ok(shared) = Shared::extract(self.0.as_ref(py)) {
+                if shared.is_prelim() {
+                    let branch = Branch::new(shared.type_ref(), None);
+                    ItemContent::Type(branch)
+                } else {
+                    let error_message = format!(
+                        "Cannot integrate data that is already a part of another YDoc: {shared}"
+                    );
+                    let type_error = PyTypeError::new_err(error_message);
+                    type_error.restore(py);
+                    panic!();
+                }
             } else {
-                panic!("Cannot integrate this type")
-            }
-        } else {
-            panic!("Cannot integrate this type")
-        };
+                let unknown_type = self.0;
+                let error_message =
+                    format!("Cannot integrate this Python type into a YDoc: {unknown_type}");
+                let type_error = PyTypeError::new_err(error_message);
+                type_error.restore(py);
+                panic!();
+            };
 
-        let this = if let ItemContent::Type(_) = &content {
-            Some(self)
-        } else {
-            None
-        };
+            let this = if let ItemContent::Type(_) = &content {
+                Some(self)
+            } else {
+                None
+            };
 
-        (content, this)
+            (content, this)
+        })
     }
 
     fn integrate(self, txn: &mut Transaction, inner_ref: BranchPtr) {
@@ -167,7 +178,8 @@ impl Prelim for PyObjectWrapper {
         let obj_ref = self.0.as_ref(py);
         if let Ok(shared) = Shared::extract(obj_ref) {
             if shared.is_prelim() {
-                Python::with_gil(|py| match shared {
+                Python::with_gil(|py| {
+                    match shared {
                     Shared::Text(v) => {
                         let text = Text::from(inner_ref);
                         let mut y_text = v.borrow_mut(py);
@@ -196,7 +208,8 @@ impl Prelim for PyObjectWrapper {
                         }
                         y_map.0 = SharedType::Integrated(map.clone());
                     }
-                    _ => panic!("Cannot integrate this type"),
+                    Shared::XmlElement(_) | Shared::XmlText(_) => unreachable!("As defined in Shared::is_prelim(), neither XML type can ever exist outside a YDoc"),
+                }
                 })
             }
         }
@@ -335,10 +348,20 @@ impl Prelim for PyValueWrapper {
                 let branch = Branch::new(shared.type_ref(), None);
                 ItemContent::Type(branch)
             } else {
-                panic!("Cannot integrate this type")
+                let error_message = format!(
+                    "Cannot integrate data that is already a part of another YDoc: {shared}"
+                );
+                let type_error = PyTypeError::new_err(error_message);
+                Python::with_gil(|py| type_error.restore(py));
+                ItemContent::Any(Vec::new())
             }
         } else {
-            panic!("Cannot integrate this type")
+            let unknown_type = self.0;
+            let error_message =
+                format!("Cannot integrate this Python type into a YDoc: {unknown_type}");
+            let type_error = PyTypeError::new_err(error_message);
+            Python::with_gil(|py| type_error.restore(py));
+            panic!();
         };
 
         let this = if let ItemContent::Type(_) = &content {
@@ -353,7 +376,8 @@ impl Prelim for PyValueWrapper {
     fn integrate(self, txn: &mut Transaction, inner_ref: BranchPtr) {
         if let Ok(shared) = Shared::try_from(self.0) {
             if shared.is_prelim() {
-                Python::with_gil(|py| match shared {
+                Python::with_gil(|py| {
+                    match shared {
                     Shared::Text(v) => {
                         let text = Text::from(inner_ref);
                         let mut y_text = v.borrow_mut(py);
@@ -383,7 +407,8 @@ impl Prelim for PyValueWrapper {
                         }
                         y_map.0 = SharedType::Integrated(map.clone());
                     }
-                    _ => panic!("Cannot integrate this type"),
+                    Shared::XmlElement(_) | Shared::XmlText(_) => unreachable!("As defined in Shared::is_prelim(), neither XML type can ever exist outside a YDoc"),
+                }
                 })
             }
         }

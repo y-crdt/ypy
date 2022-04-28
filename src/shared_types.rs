@@ -5,7 +5,7 @@ use crate::{
     y_xml::{YXmlElement, YXmlText},
 };
 use pyo3::prelude::*;
-use std::convert::TryFrom;
+use std::{convert::TryFrom, fmt::Display};
 use yrs::types::TYPE_REFS_XML_ELEMENT;
 use yrs::types::TYPE_REFS_XML_TEXT;
 use yrs::types::{TypeRefs, TYPE_REFS_ARRAY, TYPE_REFS_MAP, TYPE_REFS_TEXT};
@@ -35,6 +35,19 @@ pub enum Shared {
     Map(Py<YMap>),
     XmlElement(Py<YXmlElement>),
     XmlText(Py<YXmlText>),
+}
+
+impl Display for Shared {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let str_repr = Python::with_gil(|py| match &self {
+            Shared::Text(text) => text.borrow(py).__str__(),
+            Shared::Array(arr) => arr.borrow(py).__str__(),
+            Shared::Map(map) => map.borrow(py).__str__(),
+            Shared::XmlElement(xml_el) => xml_el.borrow(py).__str__(),
+            Shared::XmlText(xml_text) => xml_text.borrow(py).__str__(),
+        });
+        write!(f, "{}", str_repr)
+    }
 }
 
 impl Shared {
