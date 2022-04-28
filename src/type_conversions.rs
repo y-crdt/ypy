@@ -1,7 +1,10 @@
 use lib0::any::Any;
+use pyo3::create_exception;
+use pyo3::exceptions::PyException;
 use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
 use pyo3::types as pytypes;
+
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::ops::Deref;
@@ -14,6 +17,8 @@ use crate::y_array::YArray;
 use crate::y_map::YMap;
 use crate::y_text::YText;
 use crate::y_xml::{YXmlElement, YXmlText};
+
+create_exception!(y_py, MultipleIntegrationError, PyException);
 
 pub trait ToPython {
     fn into_py(self, py: Python) -> PyObject;
@@ -149,7 +154,7 @@ impl Prelim for PyObjectWrapper {
                     let error_message = format!(
                         "Cannot integrate data that is already a part of another YDoc: {shared}"
                     );
-                    let type_error = PyTypeError::new_err(error_message);
+                    let type_error = MultipleIntegrationError::new_err(error_message);
                     type_error.restore(py);
                     panic!();
                 }
@@ -351,7 +356,7 @@ impl Prelim for PyValueWrapper {
                 let error_message = format!(
                     "Cannot integrate data that is already a part of another YDoc: {shared}"
                 );
-                let type_error = PyTypeError::new_err(error_message);
+                let type_error = MultipleIntegrationError::new_err(error_message);
                 Python::with_gil(|py| type_error.restore(py));
                 ItemContent::Any(Vec::new())
             }
