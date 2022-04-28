@@ -165,7 +165,6 @@ def test_delta_embed_attributes():
     text.unobserve(sub)
 
 
-# TODO: Fix final test
 def test_formatting():
     d1 = Y.YDoc()
     text = d1.get_text("test")
