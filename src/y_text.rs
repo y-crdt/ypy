@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::rc::Rc;
 
 use lib0::any::Any;
 use pyo3::exceptions::PyTypeError;
@@ -228,7 +229,7 @@ impl YText {
         attrs
             .into_iter()
             .map(|(k, v)| {
-                let key = k.into_boxed_str();
+                let key = Rc::from(k);
                 let value = py_into_any(v);
                 if let Some(value) = value {
                     Ok((key, value))

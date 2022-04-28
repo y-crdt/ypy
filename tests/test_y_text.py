@@ -165,6 +165,7 @@ def test_delta_embed_attributes():
     text.unobserve(sub)
 
 
+# TODO: Fix final test
 def test_formatting():
     d1 = Y.YDoc()
     text = d1.get_text("test")
@@ -182,14 +183,16 @@ def test_formatting():
 
     with d1.begin_transaction() as txn:
         text.insert(txn, 0, "stylish")
-
-    with d1.begin_transaction() as txn:
         text.format(txn, 0, 4, {"bold": True})
 
-    expected = [
+    assert delta == [
         {"insert": "styl", "attributes": {"bold": True}},
         {"insert": "ish"},
     ]
-    assert delta == expected
+
+    with d1.begin_transaction() as txn:
+        text.format(txn, 4, 7, {"bold": True})
+
+    assert delta == [{"retain": 4}, {"retain": 3, "attributes": {"bold": True}}]
 
     text.unobserve(sub)
