@@ -154,3 +154,26 @@ def test_observer():
         x.set(txn, "key1", [6])
     assert target == None
     assert entries == None
+
+
+def test_deep_observe():
+    """
+    Ensure that changes to elements inside the array trigger a callback.
+    """
+    doc = Y.YDoc()
+    container = doc.get_map("container")
+    inner_map = Y.YMap({"key": "initial"})
+    with doc.begin_transaction() as txn:
+        container.set(txn, "inner", inner_map)
+
+    events = None
+
+    def callback(e: list):
+        nonlocal events
+        events = e
+
+    container.observe(callback, deep=True)
+    with doc.begin_transaction() as txn:
+        container["inner"].set(txn, "addition", 1)
+
+    assert events != None

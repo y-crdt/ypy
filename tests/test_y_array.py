@@ -180,7 +180,7 @@ def test_observer():
     target = None
     delta = None
 
-    # insert  item in the middle
+    # insert item in the middle
     with d1.begin_transaction() as txn:
         x.insert(txn, 1, [5])
     assert target.to_json() == x.to_json()
@@ -197,3 +197,34 @@ def test_observer():
 
     assert target == None
     assert delta == None
+
+
+def test_deep_observe():
+    """
+    Ensure that changes to elements inside the array trigger a callback.
+    """
+    ydoc = YDoc()
+    container = ydoc.get_array("container")
+    yarray = YArray([1, 2])
+    with ydoc.begin_transaction() as txn:
+        container.push(txn, [yarray])
+
+    events = None
+
+    def callback(e: list):
+        nonlocal events
+        events = e
+
+    sub = container.observe(callback, deep=True)
+    with ydoc.begin_transaction() as txn:
+        container[0].push(txn, [3])
+
+    assert events != None
+
+    # Ensure that observer unsubscribes
+    # events = None
+    # container.unobserve(sub)
+    # with ydoc.begin_transaction() as txn:
+    #     container[0].push(txn, [4])
+
+    # assert events == None

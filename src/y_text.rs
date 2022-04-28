@@ -1,18 +1,17 @@
-use std::collections::HashMap;
-use std::rc::Rc;
-
+use crate::shared_types::SharedType;
+use crate::type_conversions::py_into_any;
+use crate::type_conversions::{events_into_py, ToPython};
+use crate::y_transaction::YTransaction;
 use lib0::any::Any;
 use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
 use pyo3::types::PyList;
+use std::collections::HashMap;
+use std::rc::Rc;
 use yrs::types::text::TextEvent;
 use yrs::types::Attrs;
+use yrs::types::DeepObservable;
 use yrs::{SubscriptionId, Text, Transaction};
-
-use crate::shared_types::SharedType;
-use crate::type_conversions::py_into_any;
-use crate::type_conversions::ToPython;
-use crate::y_transaction::YTransaction;
 
 /// A shared data type used for collaborative text editing. It enables multiple users to add and
 /// remove chunks of text in efficient manner. This type is internally represented as a mutable
@@ -193,8 +192,20 @@ impl YText {
         }
     }
 
-    pub fn observe(&mut self, f: PyObject) -> PyResult<SubscriptionId> {
+    pub fn observe(&mut self, f: PyObject, deep: Option<bool>) -> PyResult<SubscriptionId> {
+        let deep = deep.unwrap_or(false);
         match &mut self.0 {
+            SharedType::Integrated(text) if deep => {
+                let sub = text.observe_deep(move |txn, events| {
+                    Python::with_gil(|py| {
+                        let events = events_into_py(txn, events);
+                        if let Err(err) = f.call1(py, (events,)) {
+                            err.restore(py)
+                        }
+                    })
+                });
+                Ok(sub.into())
+            }
             SharedType::Integrated(v) => Ok(v
                 .observe(move |txn, e| {
                     Python::with_gil(|py| {
@@ -253,7 +264,7 @@ pub struct YTextEvent {
 }
 
 impl YTextEvent {
-    fn new(event: &TextEvent, txn: &Transaction) -> Self {
+    pub fn new(event: &TextEvent, txn: &Transaction) -> Self {
         let inner = event as *const TextEvent;
         let txn = txn as *const Transaction;
         YTextEvent {

@@ -5,10 +5,11 @@ use std::collections::HashMap;
 use std::mem::ManuallyDrop;
 use std::ops::DerefMut;
 use yrs::types::map::{MapEvent, MapIter};
+use yrs::types::DeepObservable;
 use yrs::{Map, SubscriptionId, Transaction};
 
 use crate::shared_types::SharedType;
-use crate::type_conversions::{PyValueWrapper, ToPython};
+use crate::type_conversions::{events_into_py, PyValueWrapper, ToPython};
 use crate::y_transaction::YTransaction;
 
 /// Collection used to store key-value entries in an unordered manner. Keys are always represented
@@ -205,8 +206,20 @@ impl YMap {
         YMapKeyIterator(self.items())
     }
 
-    pub fn observe(&mut self, f: PyObject) -> PyResult<SubscriptionId> {
+    pub fn observe(&mut self, f: PyObject, deep: Option<bool>) -> PyResult<SubscriptionId> {
+        let deep = deep.unwrap_or(false);
         match &mut self.0 {
+            SharedType::Integrated(map) if deep => {
+                let sub = map.observe_deep(move |txn, events| {
+                    Python::with_gil(|py| {
+                        let events = events_into_py(txn, events);
+                        if let Err(err) = f.call1(py, (events,)) {
+                            err.restore(py)
+                        }
+                    })
+                });
+                Ok(sub.into())
+            }
             SharedType::Integrated(v) => Ok(v
                 .observe(move |txn, e| {
                     Python::with_gil(|py| {
@@ -296,7 +309,7 @@ pub struct YMapEvent {
 }
 
 impl YMapEvent {
-    fn new(event: &MapEvent, txn: &Transaction) -> Self {
+    pub fn new(event: &MapEvent, txn: &Transaction) -> Self {
         let inner = event as *const MapEvent;
         let txn = txn as *const Transaction;
         YMapEvent {

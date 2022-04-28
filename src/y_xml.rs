@@ -3,14 +3,14 @@ use pyo3::types::{PyDict, PyList};
 use std::mem::ManuallyDrop;
 use std::ops::Deref;
 use yrs::types::xml::{Attributes, TreeWalker, XmlEvent, XmlTextEvent};
-use yrs::types::{EntryChange, Path, PathSegment};
+use yrs::types::{DeepObservable, EntryChange, Path, PathSegment};
 use yrs::SubscriptionId;
 use yrs::Transaction;
 use yrs::Xml;
 use yrs::XmlElement;
 use yrs::XmlText;
 
-use crate::type_conversions::ToPython;
+use crate::type_conversions::{events_into_py, ToPython};
 use crate::y_transaction::YTransaction;
 
 /// XML element data type. It represents an XML node, which can contain key-value attributes
@@ -165,17 +165,31 @@ impl YXmlElement {
     /// Subscribes to all operations happening over this instance of `YXmlElement`. All changes are
     /// batched and eventually triggered during transaction commit phase.
     /// Returns an `SubscriptionId` which, can be used to unsubscribe the observer.
-    pub fn observe(&mut self, f: PyObject) -> SubscriptionId {
-        self.0
-            .observe(move |txn, e| {
-                Python::with_gil(|py| {
-                    let event = YXmlEvent::new(e, txn);
-                    if let Err(err) = f.call1(py, (event,)) {
-                        err.restore(py)
-                    }
+    pub fn observe(&mut self, f: PyObject, deep: Option<bool>) -> SubscriptionId {
+        let deep = deep.unwrap_or(false);
+        if deep {
+            self.0
+                .observe_deep(move |txn, events| {
+                    Python::with_gil(|py| {
+                        let events = events_into_py(txn, events);
+                        if let Err(err) = f.call1(py, (events,)) {
+                            err.restore(py)
+                        }
+                    })
                 })
-            })
-            .into()
+                .into()
+        } else {
+            self.0
+                .observe(move |txn, e| {
+                    Python::with_gil(|py| {
+                        let event = YXmlEvent::new(e, txn);
+                        if let Err(err) = f.call1(py, (event,)) {
+                            err.restore(py)
+                        }
+                    })
+                })
+                .into()
+        }
     }
     /// Cancels the observer callback associated with the `subscripton_id`.
     pub fn unobserve(&mut self, subscription_id: SubscriptionId) {
@@ -300,17 +314,31 @@ impl YXmlText {
     /// Subscribes to all operations happening over this instance of `YXmlText`. All changes are
     /// batched and eventually triggered during transaction commit phase.
     /// Returns an `SubscriptionId` which, which can be used to unsubscribe the callback function.
-    pub fn observe(&mut self, f: PyObject) -> SubscriptionId {
-        self.0
-            .observe(move |txn, e| {
-                Python::with_gil(|py| {
-                    let e = YXmlTextEvent::new(e, txn);
-                    if let Err(err) = f.call1(py, (e,)) {
-                        err.restore(py)
-                    }
+    pub fn observe(&mut self, f: PyObject, deep: Option<bool>) -> SubscriptionId {
+        let deep = deep.unwrap_or(false);
+        if deep {
+            self.0
+                .observe_deep(move |txn, events| {
+                    Python::with_gil(|py| {
+                        let e = events_into_py(txn, events);
+                        if let Err(err) = f.call1(py, (e,)) {
+                            err.restore(py)
+                        }
+                    })
                 })
-            })
-            .into()
+                .into()
+        } else {
+            self.0
+                .observe(move |txn, e| {
+                    Python::with_gil(|py| {
+                        let e = YXmlTextEvent::new(e, txn);
+                        if let Err(err) = f.call1(py, (e,)) {
+                            err.restore(py)
+                        }
+                    })
+                })
+                .into()
+        }
     }
 
     /// Cancels the observer callback associated with the `subscripton_id`.
@@ -371,7 +399,7 @@ pub struct YXmlEvent {
     keys: Option<PyObject>,
 }
 impl YXmlEvent {
-    fn new(event: &XmlEvent, txn: &Transaction) -> Self {
+    pub fn new(event: &XmlEvent, txn: &Transaction) -> Self {
         let inner = event as *const XmlEvent;
         let txn = txn as *const Transaction;
         YXmlEvent {
@@ -470,7 +498,7 @@ pub struct YXmlTextEvent {
 }
 
 impl YXmlTextEvent {
-    fn new(event: &XmlTextEvent, txn: &Transaction) -> Self {
+    pub fn new(event: &XmlTextEvent, txn: &Transaction) -> Self {
         let inner = event as *const XmlTextEvent;
         let txn = txn as *const Transaction;
         YXmlTextEvent {

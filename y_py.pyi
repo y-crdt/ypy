@@ -14,6 +14,8 @@ from typing import (
 
 SubscriptionId = int
 
+Event = Union[YTextEvent, YArrayEvent, YMapEvent, YXmlTextEvent, YXmlElementEvent]
+
 class YDoc:
     """
     A Ypy document type. Documents are most important units of collaborative resources management.
@@ -415,12 +417,15 @@ class YText:
         Deletes a specified range of of characters, starting at a given `index`.
         Both `index` and `length` are counted in terms of a number of UTF-8 character bytes.
         """
-    def observe(self, f: Callable[[YTextEvent]]) -> SubscriptionId:
+    def observe(
+        self, f: Callable[[Union[YTextEvent, List[Event]]]], deep: bool = False
+    ) -> SubscriptionId:
         """
         Assigns a callback function to listen to YText updates.
 
         Args:
             f: Callback function that runs when the text object receives an update.
+            deep: Determines whether the callback is triggered when embedded elements are changed.
         Returns:
             A reference to the callback subscription.
         """
@@ -518,12 +523,15 @@ class YArray:
             for item in array:
                 print(item)
         """
-    def observe(self, f: Callable[[YArrayEvent]]) -> SubscriptionId:
+    def observe(
+        self, f: Callable[[Union[YArrayEvent, List[Event]]]], deep: bool = False
+    ) -> SubscriptionId:
         """
         Assigns a callback function to listen to YArray updates.
 
         Args:
             f: Callback function that runs when the array object receives an update.
+            deep: Determines whether observer is triggered by changes to elements in the YArray.
         Returns:
             An identifier associated with the callback subscription.
         """
@@ -634,12 +642,15 @@ class YMap:
             for (key, value) in map.items()):
                 print(key, value)
         """
-    def observe(self, f: Callable[[YMapEvent]]) -> SubscriptionId:
+    def observe(
+        self, f: Callable[[Union[YMapEvent, List[Event]]]], deep: bool = False
+    ) -> SubscriptionId:
         """
         Assigns a callback function to listen to YMap updates.
 
         Args:
             f: Callback function that runs when the map object receives an update.
+            deep: Determines whether observer is triggered by changes to elements in the YMap.
         Returns:
             A reference to the callback subscription. Delete this observer in order to erase the associated callback function.
         """
@@ -767,13 +778,16 @@ class YXmlElement:
         Returns an iterator that enables a deep traversal of this XML node - starting from first
         child over this XML node successors using depth-first strategy.
         """
-    def observe(self, f: Callable[[YXmlElementEvent]]) -> SubscriptionId:
+    def observe(
+        self, f: Callable[[Union[YXmlElementEvent, List[Event]]]], deep: bool = False
+    ) -> SubscriptionId:
         """
         Subscribes to all operations happening over this instance of `YXmlElement`. All changes are
         batched and eventually triggered during transaction commit phase.
 
         Args:
             f: A callback function that receives update events.
+            deep: Determines whether observer is triggered by changes to elements in the YXmlElement.
         Returns:
             A `SubscriptionId` that can be used to cancel the observer callback.
         """
@@ -838,13 +852,16 @@ class YXmlText:
             An iterator that enables to traverse over all attributes of this XML node in
         unspecified order.
         """
-    def observe(self, f: Callable[[YXmlTextEvent]]) -> SubscriptionId:
+    def observe(
+        self, f: Callable[[Union[YXmlTextEvent, List[Event]]]], deep: bool = False
+    ) -> SubscriptionId:
         """
         Subscribes to all operations happening over this instance of `YXmlText`. All changes are
         batched and eventually triggered during transaction commit phase.
 
         Args:
             f: A callback function that receives update events.
+            deep: Determines whether observer is triggered by changes to elements in the YXmlText.
         Returns:
             A `SubscriptionId` that can be used to cancel the observer callback.
         """

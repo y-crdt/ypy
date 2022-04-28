@@ -1,17 +1,24 @@
 use lib0::any::Any;
 use pyo3::prelude::*;
 use pyo3::types as pytypes;
+use pyo3::types::PyList;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::ops::Deref;
 use yrs::block::{ItemContent, Prelim};
+use yrs::types::Events;
 use yrs::types::{Attrs, Branch, BranchPtr, Change, Delta, EntryChange, Value};
 use yrs::{Array, Map, Text, Transaction};
 
 use crate::shared_types::{Shared, SharedType};
 use crate::y_array::YArray;
+use crate::y_array::YArrayEvent;
 use crate::y_map::YMap;
+use crate::y_map::YMapEvent;
 use crate::y_text::YText;
+use crate::y_text::YTextEvent;
+use crate::y_xml::YXmlEvent;
+use crate::y_xml::YXmlTextEvent;
 use crate::y_xml::{YXmlElement, YXmlText};
 
 pub trait ToPython {
@@ -322,6 +329,19 @@ impl ToPython for Value {
             Value::YXmlText(v) => YXmlText(v).into_py(py),
         }
     }
+}
+
+pub(crate) fn events_into_py(txn: &Transaction, events: &Events) -> PyObject {
+    Python::with_gil(|py| {
+        let py_events = events.iter().map(|event| match event {
+            yrs::types::Event::Text(e_txt) => YTextEvent::new(e_txt, txn).into_py(py),
+            yrs::types::Event::Array(e_arr) => YArrayEvent::new(e_arr, txn).into_py(py),
+            yrs::types::Event::Map(e_map) => YMapEvent::new(e_map, txn).into_py(py),
+            yrs::types::Event::XmlElement(e_xml) => YXmlEvent::new(e_xml, txn).into_py(py),
+            yrs::types::Event::XmlText(e_xml) => YXmlTextEvent::new(e_xml, txn).into_py(py),
+        });
+        PyList::new(py, py_events).into()
+    })
 }
 
 pub struct PyValueWrapper(pub PyObject);
