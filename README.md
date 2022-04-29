@@ -39,7 +39,7 @@ assert value == "hello world!"
 
 ## Development Setup
 
-0. Install Rust Nightly and Python
+0. Install Rust and Python
 1. Install `maturin` in order to build Ypy
 
 ```

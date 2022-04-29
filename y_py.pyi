@@ -127,10 +127,40 @@ class YDoc:
         If there was an instance with this name, but it was of different type, it will be projected
         onto `YText` instance.
         """
+    def after_transaction_cleanup(
+        self, callback: Callable[[AfterTransactionEvent]]
+    ) -> SubscriptionId:
+        """
+        Subscribe callback function to updates on the YDoc. The callback will receive encoded state updates and
+        deletions when a document transaction is committed.
 
-StateVector = List[int]
+        Args:
+            callback: A function that receives YDoc state information affected by the transaction.
 
-def encode_state_vector(doc: YDoc) -> StateVector:
+        Returns:
+            A subscription identifier that can be used to cancel the callback.
+        """
+    def unobserve(subscription: SubscriptionId):
+        """
+        Cancels subscriptions associated with a part of the YDoc lifecycle.
+
+        Args:
+            subscription: Subscription identifier for the callback to be cancelled.
+        """
+
+EncodedStateVector = List[int]
+EncodedDeleteSet = List[int]
+
+class AfterTransactionEvent:
+    """
+    Holds transaction update information from a commit after state vectors have been compressed.
+    """
+
+    before_state: EncodedStateVector
+    after_state: EncodedStateVector
+    delete_set: EncodedDeleteSet
+
+def encode_state_vector(doc: YDoc) -> EncodedStateVector:
     """
     Encodes a state vector of a given Ypy document into its binary representation using lib0 v1
     encoding. State vector is a compact representation of updates performed on a given document and
@@ -155,7 +185,9 @@ def encode_state_vector(doc: YDoc) -> StateVector:
 
 YDocUpdate = List[int]
 
-def encode_state_as_update(doc: YDoc, vector: Optional[StateVector]) -> YDocUpdate:
+def encode_state_as_update(
+    doc: YDoc, vector: Optional[EncodedStateVector]
+) -> YDocUpdate:
     """
     Encodes all updates that have happened since a given version `vector` into a compact delta
     representation using lib0 v1 encoding. If `vector` parameter has not been provided, generated

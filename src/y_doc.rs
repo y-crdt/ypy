@@ -1,15 +1,19 @@
-use pyo3::prelude::*;
-use pyo3::types::PyTuple;
-use yrs::Doc;
-use yrs::OffsetKind;
-use yrs::Options;
-
 use crate::y_array::YArray;
 use crate::y_map::YMap;
 use crate::y_text::YText;
 use crate::y_transaction::YTransaction;
 use crate::y_xml::YXmlElement;
 use crate::y_xml::YXmlText;
+use pyo3::prelude::*;
+use pyo3::types::PyTuple;
+use yrs::updates::encoder::Encode;
+use yrs::AfterTransactionEvent;
+use yrs::Doc;
+use yrs::OffsetKind;
+use yrs::Options;
+use yrs::SubscriptionId;
+use yrs::Transaction;
+
 /// A Ypy document type. Documents are most important units of collaborative resources management.
 /// All shared collections live within a scope of their corresponding documents. All updates are
 /// generated on per document basis (rather than individual shared type). All operations on shared
@@ -158,6 +162,25 @@ impl YDoc {
     pub fn get_text(&mut self, name: &str) -> YText {
         self.begin_transaction().get_text(name)
     }
+
+    /// Subscribes a callback to a `YDoc` lifecycle event.
+    pub fn after_transaction_cleanup(&self, callback: PyObject) -> SubscriptionId {
+        self.0
+            .on_transaction_cleanup(move |txn, event| {
+                Python::with_gil(|py| {
+                    let event = PyAfterTransactionEvent::new(event, txn);
+                    if let Err(err) = callback.call1(py, (event,)) {
+                        err.restore(py)
+                    }
+                })
+            })
+            .into()
+    }
+
+    /// Cancels the callback associated with the `SubscriptionId`
+    pub fn unobserve(&mut self, subscription_id: SubscriptionId) -> PyResult<()> {
+        todo!("We need an `unobserve` method the yrs Doc")
+    }
 }
 
 /// Encodes a state vector of a given Ypy document into its binary representation using lib0 v1
@@ -231,4 +254,82 @@ pub fn encode_state_as_update(doc: &mut YDoc, vector: Option<Vec<u8>>) -> Vec<u8
 #[pyfunction]
 pub fn apply_update(doc: &mut YDoc, diff: Vec<u8>) {
     doc.begin_transaction().apply_v1(diff);
+}
+
+/// Possible hooks to for attaching callbacks to the `YDoc` via the `.on(hook, fn)` method.
+#[pyclass]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum YDocHook {
+    TransactionCleanup,
+}
+
+#[pyclass(unsendable)]
+pub struct PyAfterTransactionEvent {
+    inner: *const AfterTransactionEvent,
+    txn: *const Transaction,
+    before_state: Option<PyObject>,
+    after_state: Option<PyObject>,
+    delete_set: Option<PyObject>,
+}
+
+impl PyAfterTransactionEvent {
+    fn new(event: &AfterTransactionEvent, txn: &Transaction) -> Self {
+        let inner = event as *const AfterTransactionEvent;
+        let txn = txn as *const Transaction;
+        PyAfterTransactionEvent {
+            inner,
+            txn,
+            before_state: None,
+            after_state: None,
+            delete_set: None,
+        }
+    }
+
+    fn inner(&self) -> &AfterTransactionEvent {
+        unsafe { self.inner.as_ref().unwrap() }
+    }
+
+    fn txn(&self) -> &Transaction {
+        unsafe { self.txn.as_ref().unwrap() }
+    }
+}
+
+#[pymethods]
+impl PyAfterTransactionEvent {
+    /// Returns a current shared type instance, that current event changes refer to.
+    #[getter]
+    pub fn before_state(&mut self) -> PyObject {
+        if let Some(before_state) = self.before_state.as_ref() {
+            before_state.clone()
+        } else {
+            let before_state: PyObject =
+                Python::with_gil(|py| self.inner().before_state.encode_v1().into_py(py));
+            self.before_state = Some(before_state.clone());
+            before_state
+        }
+    }
+
+    #[getter]
+    pub fn after_state(&mut self) -> PyObject {
+        if let Some(after_state) = self.after_state.as_ref() {
+            after_state.clone()
+        } else {
+            let after_state: PyObject =
+                Python::with_gil(|py| self.inner().after_state.encode_v1().into_py(py));
+            self.after_state = Some(after_state.clone());
+            after_state
+        }
+    }
+
+    #[getter]
+    pub fn delete_set(&mut self) -> PyObject {
+        if let Some(delete_set) = self.delete_set.as_ref() {
+            delete_set.clone()
+        } else {
+            let delete_set: PyObject =
+                Python::with_gil(|py| self.inner().delete_set.encode_v1().into_py(py));
+            self.delete_set = Some(delete_set.clone());
+            delete_set
+        }
+    }
 }
