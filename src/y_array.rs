@@ -5,12 +5,14 @@ use std::ops::DerefMut;
 use crate::shared_types::{
     DeepSubscription, DefaultPyErr, PreliminaryObservationException, ShallowSubscription, SubId,
 };
-use crate::type_conversions::{events_into_py, insert_at};
+use crate::type_conversions::events_into_py;
 use crate::y_transaction::YTransaction;
 
 use super::shared_types::SharedType;
 use crate::type_conversions::ToPython;
 use pyo3::exceptions::PyIndexError;
+
+use crate::type_conversions::{py_into_any, PyObjectWrapper};
 use pyo3::prelude::*;
 use pyo3::types::{PyList, PySlice, PySliceIndices};
 use yrs::types::array::{ArrayEvent, ArrayIter};
@@ -54,26 +56,7 @@ impl YArray {
     /// document store and cannot be nested again: attempt to do so will result in an exception.
     #[new]
     pub fn new(init: Option<PyObject>) -> PyResult<Self> {
-        let elements = if let Some(iterable) = init {
-            Python::with_gil(|py| {
-                iterable.as_ref(py).iter().map(|iterable| {
-                    iterable
-                        .map(|element| match element {
-                            Ok(value) => {
-                                let obj: PyObject = value.into();
-                                obj
-                            }
-                            Err(py_err) => {
-                                py_err.restore(py);
-                                py.None()
-                            }
-                        })
-                        .collect()
-                })
-            })
-        } else {
-            Ok(vec![])
-        };
+        let elements = init.map(Self::py_iter).unwrap_or(Ok(Vec::default()));
         elements.map(|el_array| YArray(SharedType::prelim(el_array)))
     }
 
@@ -116,32 +99,74 @@ impl YArray {
             }
         })
     }
+    /// Adds a single item to the provided index in the array.
+    pub fn insert(&mut self, txn: &mut YTransaction, index: u32, item: PyObject) -> PyResult<()> {
+        match &mut self.0 {
+            SharedType::Integrated(array) if array.len() >= index => {
+                py_into_any(item).map(|any| array.insert(txn, index, any))
+            }
+            SharedType::Prelim(vec) if vec.len() >= index as usize => {
+                Ok(vec.insert(index as usize, item))
+            }
+            _ => Err(PyIndexError::new_err("Index out of bounds.")),
+        }
+    }
 
     /// Inserts a given range of `items` into this `YArray` instance, starting at given `index`.
-    pub fn insert(&mut self, txn: &mut YTransaction, index: u32, items: Vec<PyObject>) {
-        let mut j = index;
+    pub fn insert_range(
+        &mut self,
+        txn: &mut YTransaction,
+        index: u32,
+        items: PyObject,
+    ) -> PyResult<()> {
+        let items = Self::py_iter(items)?;
         match &mut self.0 {
-            SharedType::Integrated(array) => {
-                insert_at(array, txn, index, items);
+            SharedType::Integrated(array) if array.len() >= index => {
+                Self::insert_multiple_at(array, txn, index, items);
+                Ok(())
             }
-            SharedType::Prelim(vec) => {
+            SharedType::Prelim(vec) if vec.len() >= index as usize => {
+                let mut j = index;
                 for el in items {
                     vec.insert(j as usize, el);
                     j += 1;
                 }
+                Ok(())
             }
+            _ => Err(PyIndexError::new_err("Index out of range.")),
         }
     }
 
     /// Appends a range of `items` at the end of this `YArray` instance.
-    pub fn push(&mut self, txn: &mut YTransaction, items: Vec<PyObject>) {
-        let index = self.__len__() as u32; // length guaranteed to be non negative
-        self.insert(txn, index, items);
+    pub fn extend(&mut self, txn: &mut YTransaction, items: PyObject) -> PyResult<()> {
+        let index = self.__len__() as u32;
+        self.insert_range(txn, index, items)
+    }
+    /// Adds a single item to the end of the array
+    pub fn append(&mut self, txn: &mut YTransaction, item: PyObject) {
+        match &mut self.0 {
+            SharedType::Integrated(array) => {
+                let wrapper = PyObjectWrapper(item);
+                array.push_back(txn, wrapper)
+            }
+            SharedType::Prelim(vec) => vec.push(item),
+        }
+    }
+    /// Removes the element that the given index from the list.
+    pub fn delete(&mut self, txn: &mut YTransaction, index: u32) -> PyResult<()> {
+        match &mut self.0 {
+            SharedType::Integrated(v) if index < v.len() => Ok(v.remove(txn, index)),
+            SharedType::Prelim(v) if index < v.len() as u32 => {
+                v.remove(index as usize);
+                Ok(())
+            }
+            _ => Err(PyIndexError::new_err("Index out of bounds.")),
+        }
     }
 
     /// Deletes a range of items of given `length` from current `YArray` instance,
     /// starting from given `index`.
-    pub fn delete(&mut self, txn: &mut YTransaction, index: u32, length: u32) {
+    pub fn delete_range(&mut self, txn: &mut YTransaction, index: u32, length: u32) {
         match &mut self.0 {
             SharedType::Integrated(v) => v.remove_range(txn, index, length),
             SharedType::Prelim(v) => {
@@ -249,7 +274,7 @@ impl YArray {
                     Ok(Python::with_gil(|py| value.into_py(py)))
                 } else {
                     Err(PyIndexError::new_err(
-                        "Index outside the bounds of an YArray",
+                        "Index outside the range of an YArray",
                     ))
                 }
             }
@@ -258,7 +283,7 @@ impl YArray {
                     Ok(value.clone())
                 } else {
                     Err(PyIndexError::new_err(
-                        "Index outside the bounds of an YArray",
+                        "Index outside the range of an YArray",
                     ))
                 }
             }
@@ -321,6 +346,48 @@ impl YArray {
         } else {
             index as u32
         }
+    }
+
+    pub fn insert_multiple_at(dst: &Array, txn: &mut Transaction, index: u32, src: Vec<PyObject>) {
+        let mut j = index;
+        let mut i = 0;
+        while i < src.len() {
+            let mut anys = Vec::default();
+            while i < src.len() {
+                if let Ok(any) = py_into_any(src[i].clone()) {
+                    anys.push(any);
+                    i += 1;
+                } else {
+                    break;
+                }
+            }
+
+            if !anys.is_empty() {
+                let len = anys.len() as u32;
+                dst.insert_range(txn, j, anys);
+                j += len;
+            } else {
+                let wrapper = PyObjectWrapper(src[i].clone());
+                dst.insert(txn, j, wrapper);
+                i += 1;
+                j += 1;
+            }
+        }
+    }
+
+    fn py_iter(iterable: PyObject) -> PyResult<Vec<PyObject>> {
+        Python::with_gil(|py| {
+            iterable.as_ref(py).iter().and_then(|iterable| {
+                iterable
+                    .map(|element| {
+                        element.map(|el| {
+                            let el: PyObject = el.into();
+                            el
+                        })
+                    })
+                    .collect()
+            })
+        })
     }
 }
 #[derive(FromPyObject)]

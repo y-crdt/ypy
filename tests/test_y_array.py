@@ -9,10 +9,10 @@ def test_inserts():
     x = d1.get_array("test")
 
     with d1.begin_transaction() as txn:
-        x.insert(txn, 0, [1, 2.5, "hello", ["world"], True])
+        x.insert_range(txn, 0, [1, 2.5, "hello", ["world"], True])
 
     with d1.begin_transaction() as txn:
-        x.push(txn, [{"key": "value"}])
+        x.extend(txn, [{"key": "value"}])
 
     expected = [1, 2.5, "hello", ["world"], True, {"key": "value"}]
 
@@ -40,9 +40,9 @@ def test_inserts_nested():
     x = d1.get_array("test")
 
     nested = YArray()
-    d1.transact(lambda txn: nested.push(txn, ["world"]))
-    d1.transact(lambda txn: x.insert(txn, 0, [1, 2, nested, 3, 4]))
-    d1.transact(lambda txn: nested.insert(txn, 0, ["hello"]))
+    d1.transact(lambda txn: nested.append(txn, "world"))
+    d1.transact(lambda txn: x.insert_range(txn, 0, [1, 2, nested, 3, 4]))
+    d1.transact(lambda txn: nested.insert(txn, 0, "hello"))
 
     expected = [1, 2, ["hello", "world"], 3, 4]
 
@@ -63,13 +63,27 @@ def test_delete():
     assert d1.client_id == 1
     x = d1.get_array("test")
 
-    d1.transact(lambda txn: x.insert(txn, 0, [1, 2, ["hello", "world"], True]))
-    d1.transact(lambda txn: x.delete(txn, 1, 2))
+    d1.transact(
+        lambda txn: x.insert_range(
+            txn,
+            0,
+            [1, 2, ["hello", "world"], {"user": "unknown"}, "I'm here too!", True],
+        )
+    )
+    d1.transact(lambda txn: x.delete_range(txn, 1, 3))
 
-    expected = [1, True]
+    expected = [1, "I'm here too!", True]
 
     value = x.to_json()
     assert value == expected
+
+    with d1.begin_transaction() as txn:
+        x.delete(txn, 1)
+
+    assert x.to_json() == [1.0, True]
+    with pytest.raises(IndexError):
+        with d1.begin_transaction() as txn:
+            x.delete(txn, 2)
 
     d2 = YDoc(2)
     x = d2.get_array("test")
@@ -77,7 +91,7 @@ def test_delete():
     exchange_updates([d1, d2])
 
     value = x.to_json()
-    assert value == expected
+    assert value == [1.0, True]
 
 
 def test_get():
@@ -85,8 +99,8 @@ def test_get():
     integrated = d1.get_array("test")
     prelim = YArray()
 
-    d1.transact(lambda txn: integrated.insert(txn, 0, [1, 2, True]))
-    d1.transact(lambda txn: integrated.insert(txn, 1, ["hello", "world"]))
+    d1.transact(lambda txn: integrated.insert_range(txn, 0, [1, 2, True]))
+    d1.transact(lambda txn: integrated.insert_range(txn, 1, ["hello", "world"]))
 
     expected = [1, "hello", "world", 2, True]
     prelim = YArray(expected)
@@ -118,15 +132,15 @@ def test_iterator():
     x = d1.get_array("test")
 
     with d1.begin_transaction() as txn:
-        x.insert(txn, 0, [1, 2, 3])
+        x.insert_range(txn, 0, [1, 2, 3])
     assert len(x) == 3
-    i = 1
+    i = 1.0
     # Test iteration
     for v in x:
         assert v == i
-        i += 1
+        i += 1.0
     # Test contains
-    assert 2 in x
+    assert 2.0 in x
 
 
 def test_borrow_mut_edge_case():
@@ -136,14 +150,14 @@ def test_borrow_mut_edge_case():
     doc = YDoc()
     arr = doc.get_array("test")
     with doc.begin_transaction() as txn:
-        arr.insert(txn, 0, [1, 2, 3])
+        arr.insert_range(txn, 0, [1, 2, 3])
 
     # Ensure multiple transactions can be called in a row with the same variable name `txn`
     with doc.begin_transaction() as txn:
         # Ensure that multiple mutable borrow functions can be called in a tight loop
         for i in range(2000):
-            arr.insert(txn, 2, [1, 2, 3])
-            arr.delete(txn, 0, 3)
+            arr.insert_range(txn, 2, [1, 2, 3])
+            arr.delete_range(txn, 0, 3)
 
 
 def test_observer():
@@ -164,7 +178,7 @@ def test_observer():
 
     # insert initial data to an empty YArray
     with d1.begin_transaction() as txn:
-        x.insert(txn, 0, [1, 2, 3, 4])
+        x.insert_range(txn, 0, [1, 2, 3, 4])
     assert target.to_json() == x.to_json()
     assert delta == [{"insert": [1, 2, 3, 4]}]
 
@@ -173,7 +187,7 @@ def test_observer():
 
     # remove 2 items from the middle
     with d1.begin_transaction() as txn:
-        x.delete(txn, 1, 2)
+        x.delete_range(txn, 1, 2)
     assert target.to_json() == x.to_json()
     assert delta == [{"retain": 1}, {"delete": 2}]
 
@@ -182,7 +196,7 @@ def test_observer():
 
     # insert item in the middle
     with d1.begin_transaction() as txn:
-        x.insert(txn, 1, [5])
+        x.insert(txn, 1, 5)
     assert target.to_json() == x.to_json()
     assert delta == [{"retain": 1}, {"insert": [5]}]
 
@@ -193,7 +207,7 @@ def test_observer():
     x.unobserve(subscription_id)
 
     with d1.begin_transaction() as txn:
-        x.insert(txn, 1, [6])
+        x.insert(txn, 1, 6)
 
     assert target == None
     assert delta == None

@@ -6,7 +6,7 @@ use crate::{
 };
 use pyo3::create_exception;
 use pyo3::{exceptions::PyException, prelude::*};
-use std::convert::TryFrom;
+use std::{convert::TryFrom, fmt::Display};
 use yrs::types::TYPE_REFS_XML_TEXT;
 use yrs::types::{TypeRefs, TYPE_REFS_ARRAY, TYPE_REFS_MAP, TYPE_REFS_TEXT};
 use yrs::{types::TYPE_REFS_XML_ELEMENT, SubscriptionId};
@@ -86,6 +86,19 @@ impl Shared {
             Shared::XmlElement(_) => TYPE_REFS_XML_ELEMENT,
             Shared::XmlText(_) => TYPE_REFS_XML_TEXT,
         }
+    }
+}
+
+impl Display for Shared {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let info = Python::with_gil(|py| match self {
+            Shared::Text(t) => t.borrow(py).__str__(),
+            Shared::Array(a) => a.borrow(py).__str__(),
+            Shared::Map(m) => m.borrow(py).__str__(),
+            Shared::XmlElement(xml) => xml.borrow(py).__str__(),
+            Shared::XmlText(xml) => xml.borrow(py).__str__(),
+        });
+        write!(f, "{}", info)
     }
 }
 
