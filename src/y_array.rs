@@ -2,15 +2,19 @@ use std::convert::TryInto;
 use std::mem::ManuallyDrop;
 use std::ops::DerefMut;
 
-use crate::type_conversions::insert_at;
+use crate::shared_types::{
+    DeepSubscription, DefaultPyErr, PreliminaryObservationException, ShallowSubscription, SubId,
+};
+use crate::type_conversions::{events_into_py, insert_at};
 use crate::y_transaction::YTransaction;
 
 use super::shared_types::SharedType;
 use crate::type_conversions::ToPython;
-use pyo3::exceptions::{PyIndexError, PyTypeError};
+use pyo3::exceptions::PyIndexError;
 use pyo3::prelude::*;
 use pyo3::types::{PyList, PySlice, PySliceIndices};
 use yrs::types::array::{ArrayEvent, ArrayIter};
+use yrs::types::DeepObservable;
 use yrs::{Array, SubscriptionId, Transaction};
 
 /// A collection used to store data in an indexed sequence structure. This type is internally
@@ -186,35 +190,52 @@ impl YArray {
     /// Subscribes to all operations happening over this instance of `YArray`. All changes are
     /// batched and eventually triggered during transaction commit phase.
     /// Returns a `SubscriptionId` which can be used to cancel the callback with `unobserve`.
-    pub fn observe(&mut self, f: PyObject) -> PyResult<SubscriptionId> {
+    pub fn observe(&mut self, f: PyObject) -> PyResult<ShallowSubscription> {
         match &mut self.0 {
             SharedType::Integrated(array) => {
-                let subscription = array.observe(move |txn, e| {
-                    Python::with_gil(|py| {
-                        let event = YArrayEvent::new(e, txn);
-                        if let Err(err) = f.call1(py, (event,)) {
-                            err.restore(py)
-                        }
+                let sub: SubscriptionId = array
+                    .observe(move |txn, e| {
+                        Python::with_gil(|py| {
+                            let event = YArrayEvent::new(e, txn);
+                            if let Err(err) = f.call1(py, (event,)) {
+                                err.restore(py)
+                            }
+                        })
                     })
-                });
-                Ok(subscription.into())
+                    .into();
+                Ok(ShallowSubscription(sub))
             }
-            SharedType::Prelim(_) => Err(PyTypeError::new_err(
-                "Cannot observe a preliminary type. Must be added to a YDoc first",
-            )),
+            SharedType::Prelim(_) => Err(PreliminaryObservationException::default_message()),
+        }
+    }
+    /// Observes YArray events and events of all child elements.
+    pub fn observe_deep(&mut self, f: PyObject) -> PyResult<DeepSubscription> {
+        match &mut self.0 {
+            SharedType::Integrated(array) => {
+                let sub: SubscriptionId = array
+                    .observe_deep(move |txn, events| {
+                        Python::with_gil(|py| {
+                            let events = events_into_py(txn, events);
+                            if let Err(err) = f.call1(py, (events,)) {
+                                err.restore(py)
+                            }
+                        })
+                    })
+                    .into();
+                Ok(DeepSubscription(sub))
+            }
+            SharedType::Prelim(_) => Err(PreliminaryObservationException::default_message()),
         }
     }
 
     /// Cancels the callback of an observer using the Subscription ID returned from the `observe` method.
-    pub fn unobserve(&mut self, subscription_id: SubscriptionId) -> PyResult<()> {
+    pub fn unobserve(&mut self, subscription_id: SubId) -> PyResult<()> {
         match &mut self.0 {
-            SharedType::Integrated(v) => {
-                v.unobserve(subscription_id);
-                Ok(())
-            }
-            SharedType::Prelim(_) => Err(PyTypeError::new_err(
-                "Cannot call unobserve on a preliminary type. Must be added to a YDoc first",
-            )),
+            SharedType::Integrated(arr) => Ok(match subscription_id {
+                SubId::Shallow(ShallowSubscription(id)) => arr.unobserve(id),
+                SubId::Deep(DeepSubscription(id)) => arr.unobserve_deep(id),
+            }),
+            SharedType::Prelim(_) => Err(PreliminaryObservationException::default_message()),
         }
     }
 }
@@ -356,7 +377,7 @@ pub struct YArrayEvent {
 }
 
 impl YArrayEvent {
-    fn new(event: &ArrayEvent, txn: &Transaction) -> Self {
+    pub fn new(event: &ArrayEvent, txn: &Transaction) -> Self {
         let inner = event as *const ArrayEvent;
         let txn = txn as *const Transaction;
         YArrayEvent {

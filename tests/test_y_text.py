@@ -195,3 +195,33 @@ def test_formatting():
     assert delta == [{"retain": 4}, {"retain": 3, "attributes": {"bold": True}}]
 
     text.unobserve(sub)
+
+
+def test_deep_observe():
+    d = Y.YDoc()
+    text = d.get_text("text")
+    nested = Y.YMap({"bold": True})
+    with d.begin_transaction() as txn:
+        text.push(txn, "Hello")
+    events = None
+
+    def callback(e):
+        nonlocal events
+        events = e
+
+    sub = text.observe_deep(callback)
+
+    with d.begin_transaction() as txn:
+        # Currently, Yrs does not support deep observe on embedded values.
+        # Deep observe will pick up the same events as shallow observe.
+        text.push(txn, " World")
+
+    assert events is not None and len(events) == 1
+
+    # verify that the subscription drops
+    events = None
+    text.unobserve(sub)
+    with d.begin_transaction() as txn:
+        nested.delete(txn, "new_attr")
+
+    assert events is None

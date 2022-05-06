@@ -254,3 +254,22 @@ def test_xml_element_observer():
     assert target == None
     assert nodes == None
     assert attributes == None
+
+
+def test_deep_observe():
+    ydoc = Y.YDoc()
+    container = ydoc.get_xml_element("container")
+    with ydoc.begin_transaction() as txn:
+        text = container.insert_xml_text(txn, 0)
+
+    events = None
+
+    def callback(e: list):
+        nonlocal events
+        events = e
+
+    sub = container.observe_deep(callback)
+    with ydoc.begin_transaction() as txn:
+        container.first_child.push(txn, "nested")
+
+    assert events != None

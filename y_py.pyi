@@ -12,7 +12,13 @@ from typing import (
     Dict,
 )
 
-SubscriptionId = int
+class SubscriptionId:
+    """
+    Tracks an observer callback. Pass this to the `unobserve` method to cancel
+    its associated callback.
+    """
+
+Event = Union[YTextEvent, YArrayEvent, YMapEvent, YXmlTextEvent, YXmlElementEvent]
 
 class YDoc:
     """
@@ -424,6 +430,17 @@ class YText:
         Returns:
             A reference to the callback subscription.
         """
+    def observe_deep(self, f: Callable[[List[Event]]]) -> SubscriptionId:
+        """
+        Assigns a callback function to listen to the updates of the YText instance and those of its nested attributes.
+        Currently, this listens to the same events as YText.observe, but in the future this will also listen to
+        the events of embedded values.
+
+        Args:
+            f: Callback function that runs when the text object or its nested attributes receive an update.
+        Returns:
+            A reference to the callback subscription.
+        """
     def unobserve(self, subscription_id: SubscriptionId):
         """
         Cancels the observer callback associated with the `subscripton_id`.
@@ -524,6 +541,15 @@ class YArray:
 
         Args:
             f: Callback function that runs when the array object receives an update.
+        Returns:
+            An identifier associated with the callback subscription.
+        """
+    def observe_deep(self, f: Callable[[List[Event]]]) -> SubscriptionId:
+        """
+        Assigns a callback function to listen to the aggregated updates of the YArray and its child elements.
+
+        Args:
+            f: Callback function that runs when the array object or components receive an update.
         Returns:
             An identifier associated with the callback subscription.
         """
@@ -640,6 +666,15 @@ class YMap:
 
         Args:
             f: Callback function that runs when the map object receives an update.
+        Returns:
+            A reference to the callback subscription. Delete this observer in order to erase the associated callback function.
+        """
+    def observe_deep(self, f: Callable[[List[Event]]]) -> SubscriptionId:
+        """
+        Assigns a callback function to listen to YMap and child element updates.
+
+        Args:
+            f: Callback function that runs when the map object or any of its tracked elements receive an update.
         Returns:
             A reference to the callback subscription. Delete this observer in order to erase the associated callback function.
         """
@@ -777,6 +812,16 @@ class YXmlElement:
         Returns:
             A `SubscriptionId` that can be used to cancel the observer callback.
         """
+    def observe_deep(self, f: Callable[[List[Event]]]) -> SubscriptionId:
+        """
+        Subscribes to all operations happening over this instance of `YXmlElement` and its children. All changes are
+        batched and eventually triggered during transaction commit phase.
+
+        Args:
+            f: A callback function that receives update events from the Xml element and its children.
+        Returns:
+            A `SubscriptionId` that can be used to cancel the observer callback.
+        """
     def unobserve(self, subscription_id: SubscriptionId):
         """
         Cancels the observer callback associated with the `subscripton_id`.
@@ -845,6 +890,18 @@ class YXmlText:
 
         Args:
             f: A callback function that receives update events.
+            deep: Determines whether observer is triggered by changes to elements in the YXmlText.
+        Returns:
+            A `SubscriptionId` that can be used to cancel the observer callback.
+        """
+    def observe_deep(self, f: Callable[[List[Event]]]) -> SubscriptionId:
+        """
+        Subscribes to all operations happening over this instance of `YXmlText` and its children. All changes are
+        batched and eventually triggered during transaction commit phase.
+
+        Args:
+            f: A callback function that receives update events of this element and its descendants.
+            deep: Determines whether observer is triggered by changes to elements in the YXmlText.
         Returns:
             A `SubscriptionId` that can be used to cancel the observer callback.
         """

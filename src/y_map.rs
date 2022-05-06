@@ -5,10 +5,14 @@ use std::collections::HashMap;
 use std::mem::ManuallyDrop;
 use std::ops::DerefMut;
 use yrs::types::map::{MapEvent, MapIter};
+use yrs::types::DeepObservable;
 use yrs::{Map, SubscriptionId, Transaction};
 
-use crate::shared_types::SharedType;
-use crate::type_conversions::{PyValueWrapper, ToPython};
+use crate::shared_types::{
+    DeepSubscription, DefaultPyErr, PreliminaryObservationException, ShallowSubscription,
+    SharedType, SubId,
+};
+use crate::type_conversions::{events_into_py, PyValueWrapper, ToPython};
 use crate::y_transaction::YTransaction;
 
 /// Collection used to store key-value entries in an unordered manner. Keys are always represented
@@ -205,33 +209,51 @@ impl YMap {
         YMapKeyIterator(self.items())
     }
 
-    pub fn observe(&mut self, f: PyObject) -> PyResult<SubscriptionId> {
+    pub fn observe(&mut self, f: PyObject) -> PyResult<ShallowSubscription> {
         match &mut self.0 {
-            SharedType::Integrated(v) => Ok(v
-                .observe(move |txn, e| {
-                    Python::with_gil(|py| {
-                        let e = YMapEvent::new(e, txn);
-                        if let Err(err) = f.call1(py, (e,)) {
-                            err.restore(py)
-                        }
+            SharedType::Integrated(v) => {
+                let sub_id: SubscriptionId = v
+                    .observe(move |txn, e| {
+                        Python::with_gil(|py| {
+                            let e = YMapEvent::new(e, txn);
+                            if let Err(err) = f.call1(py, (e,)) {
+                                err.restore(py)
+                            }
+                        })
                     })
-                })
-                .into()),
-            SharedType::Prelim(_) => Err(PyTypeError::new_err(
-                "Cannot observe a preliminary type. Must be added to a YDoc first",
-            )),
+                    .into();
+                Ok(ShallowSubscription(sub_id))
+            }
+            SharedType::Prelim(_) => Err(PreliminaryObservationException::default_message()),
+        }
+    }
+
+    pub fn observe_deep(&mut self, f: PyObject) -> PyResult<DeepSubscription> {
+        match &mut self.0 {
+            SharedType::Integrated(map) => {
+                let sub: SubscriptionId = map
+                    .observe_deep(move |txn, events| {
+                        Python::with_gil(|py| {
+                            let events = events_into_py(txn, events);
+                            if let Err(err) = f.call1(py, (events,)) {
+                                err.restore(py)
+                            }
+                        })
+                    })
+                    .into();
+                Ok(DeepSubscription(sub))
+            }
+            SharedType::Prelim(_) => Err(PreliminaryObservationException::default_message()),
         }
     }
     /// Cancels the observer callback associated with the `subscripton_id`.
-    pub fn unobserve(&mut self, subscription_id: SubscriptionId) -> PyResult<()> {
+    pub fn unobserve(&mut self, subscription_id: SubId) -> PyResult<()> {
         match &mut self.0 {
-            SharedType::Integrated(map) => {
-                map.unobserve(subscription_id);
-                Ok(())
-            }
-            SharedType::Prelim(_) => Err(PyTypeError::new_err(
-                "Cannot unobserve a preliminary type. Must be added to a YDoc first",
-            )),
+            SharedType::Integrated(map) => Ok(match subscription_id {
+                SubId::Shallow(ShallowSubscription(id)) => map.unobserve(id),
+                SubId::Deep(DeepSubscription(id)) => map.unobserve_deep(id),
+            }),
+            SharedType::Prelim(_) => Err(PreliminaryObservationException::default_message()),
         }
     }
 }
@@ -296,7 +318,7 @@ pub struct YMapEvent {
 }
 
 impl YMapEvent {
-    fn new(event: &MapEvent, txn: &Transaction) -> Self {
+    pub fn new(event: &MapEvent, txn: &Transaction) -> Self {
         let inner = event as *const MapEvent;
         let txn = txn as *const Transaction;
         YMapEvent {
