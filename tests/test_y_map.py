@@ -172,8 +172,13 @@ def test_deep_observe():
         nonlocal events
         events = e
 
-    container.observe(callback, deep=True)
+    sub = container.observe_deep(callback)
     with doc.begin_transaction() as txn:
         container["inner"].set(txn, "addition", 1)
 
-    assert events != None
+    events = None
+    container.unobserve(sub)
+    with doc.begin_transaction() as txn:
+        container["inner"].set(txn, "don't show up", 1)
+
+    assert events is None

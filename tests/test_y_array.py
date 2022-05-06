@@ -215,16 +215,16 @@ def test_deep_observe():
         nonlocal events
         events = e
 
-    sub = container.observe(callback, deep=True)
+    sub = container.observe_deep(callback)
     with ydoc.begin_transaction() as txn:
         container[0].push(txn, [3])
 
     assert events != None
 
     # Ensure that observer unsubscribes
-    # events = None
-    # container.unobserve(sub)
-    # with ydoc.begin_transaction() as txn:
-    #     container[0].push(txn, [4])
+    events = None
+    container.unobserve(sub)
+    with ydoc.begin_transaction() as txn:
+        container[0].push(txn, [4])
 
-    # assert events == None
+    assert events == None

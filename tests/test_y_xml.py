@@ -268,7 +268,7 @@ def test_deep_observe():
         nonlocal events
         events = e
 
-    sub = container.observe(callback, deep=True)
+    sub = container.observe_deep(callback)
     with ydoc.begin_transaction() as txn:
         container.first_child.push(txn, "nested")
 

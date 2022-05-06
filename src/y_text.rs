@@ -1,4 +1,7 @@
-use crate::shared_types::SharedType;
+use crate::shared_types::{
+    DeepSubscription, DefaultPyErr, PreliminaryObservationException, ShallowSubscription,
+    SharedType, SubId,
+};
 use crate::type_conversions::py_into_any;
 use crate::type_conversions::{events_into_py, ToPython};
 use crate::y_transaction::YTransaction;
@@ -11,7 +14,7 @@ use std::rc::Rc;
 use yrs::types::text::TextEvent;
 use yrs::types::Attrs;
 use yrs::types::DeepObservable;
-use yrs::{SubscriptionId, Text, Transaction};
+use yrs::{Text, Transaction};
 
 /// A shared data type used for collaborative text editing. It enables multiple users to add and
 /// remove chunks of text in efficient manner. This type is internally represented as a mutable
@@ -192,45 +195,53 @@ impl YText {
         }
     }
 
-    pub fn observe(&mut self, f: PyObject, deep: Option<bool>) -> PyResult<SubscriptionId> {
-        let deep = deep.unwrap_or(false);
+    /// Observes updates from the `YText` instance.
+    pub fn observe(&mut self, f: PyObject) -> PyResult<ShallowSubscription> {
         match &mut self.0 {
-            SharedType::Integrated(text) if deep => {
-                let sub = text.observe_deep(move |txn, events| {
-                    Python::with_gil(|py| {
-                        let events = events_into_py(txn, events);
-                        if let Err(err) = f.call1(py, (events,)) {
-                            err.restore(py)
-                        }
+            SharedType::Integrated(text) => {
+                let sub_id = text
+                    .observe(move |txn, e| {
+                        Python::with_gil(|py| {
+                            let e = YTextEvent::new(e, txn);
+                            if let Err(err) = f.call1(py, (e,)) {
+                                err.restore(py)
+                            }
+                        });
                     })
-                });
-                Ok(sub.into())
+                    .into();
+                Ok(ShallowSubscription(sub_id))
             }
-            SharedType::Integrated(v) => Ok(v
-                .observe(move |txn, e| {
-                    Python::with_gil(|py| {
-                        let e = YTextEvent::new(e, txn);
-                        if let Err(err) = f.call1(py, (e,)) {
-                            err.restore(py)
-                        }
-                    });
-                })
-                .into()),
-            SharedType::Prelim(_) => Err(PyTypeError::new_err(
-                "Cannot observe a preliminary type. Must be added to a YDoc first",
-            )),
+            SharedType::Prelim(_) => Err(PreliminaryObservationException::default_message()),
+        }
+    }
+
+    /// Observes updates from the `YText` instance and all of its nested children.
+    pub fn observe_deep(&mut self, f: PyObject) -> PyResult<DeepSubscription> {
+        match &mut self.0 {
+            SharedType::Integrated(text) => {
+                let sub = text
+                    .observe_deep(move |txn, events| {
+                        Python::with_gil(|py| {
+                            let events = events_into_py(txn, events);
+                            if let Err(err) = f.call1(py, (events,)) {
+                                err.restore(py)
+                            }
+                        })
+                    })
+                    .into();
+                Ok(DeepSubscription(sub))
+            }
+            SharedType::Prelim(_) => Err(PreliminaryObservationException::default_message()),
         }
     }
     /// Cancels the observer callback associated with the `subscripton_id`.
-    pub fn unobserve(&mut self, subscription_id: SubscriptionId) -> PyResult<()> {
+    pub fn unobserve(&mut self, subscription_id: SubId) -> PyResult<()> {
         match &mut self.0 {
-            SharedType::Integrated(text) => {
-                text.unobserve(subscription_id);
-                Ok(())
-            }
-            SharedType::Prelim(_) => Err(PyTypeError::new_err(
-                "Cannot unobserve a preliminary type. Must be added to a YDoc first",
-            )),
+            SharedType::Integrated(text) => Ok(match subscription_id {
+                SubId::Shallow(ShallowSubscription(id)) => text.unobserve(id),
+                SubId::Deep(DeepSubscription(id)) => text.unobserve_deep(id),
+            }),
+            SharedType::Prelim(_) => Err(PreliminaryObservationException::default_message()),
         }
     }
 }

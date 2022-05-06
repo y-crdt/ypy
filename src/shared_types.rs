@@ -4,11 +4,42 @@ use crate::{
     y_text::YText,
     y_xml::{YXmlElement, YXmlText},
 };
-use pyo3::prelude::*;
+use pyo3::create_exception;
+use pyo3::{exceptions::PyException, prelude::*};
 use std::convert::TryFrom;
-use yrs::types::TYPE_REFS_XML_ELEMENT;
 use yrs::types::TYPE_REFS_XML_TEXT;
 use yrs::types::{TypeRefs, TYPE_REFS_ARRAY, TYPE_REFS_MAP, TYPE_REFS_TEXT};
+use yrs::{types::TYPE_REFS_XML_ELEMENT, SubscriptionId};
+
+// Common errors
+create_exception!(y_py, PreliminaryObservationException, PyException, "Occurs when an observer is attached to a Y type that is not integrated into a YDoc. Y types can only be observed once they have been added to a YDoc.");
+
+/// Creates a default error with a common message string for throwing a `PyErr`.
+pub(crate) trait DefaultPyErr {
+    /// Creates a new instance of the error with a default message.
+    fn default_message() -> PyErr;
+}
+
+impl DefaultPyErr for PreliminaryObservationException {
+    fn default_message() -> PyErr {
+        PreliminaryObservationException::new_err(
+            "Cannot observe a preliminary type. Must be added to a YDoc first",
+        )
+    }
+}
+
+#[pyclass]
+#[derive(Clone, Copy)]
+pub struct ShallowSubscription(pub SubscriptionId);
+#[pyclass]
+#[derive(Clone, Copy)]
+pub struct DeepSubscription(pub SubscriptionId);
+
+#[derive(FromPyObject)]
+pub enum SubId {
+    Shallow(ShallowSubscription),
+    Deep(DeepSubscription),
+}
 
 #[derive(Clone)]
 pub enum SharedType<T, P> {
