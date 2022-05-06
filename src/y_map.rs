@@ -141,14 +141,25 @@ impl YMap {
     }
 
     /// Removes an entry identified by a given `key` from this instance of `YMap`, if such exists.
-    pub fn pop(&mut self, txn: &mut YTransaction, key: &str) -> PyResult<PyObject> {
+    pub fn pop(
+        &mut self,
+        txn: &mut YTransaction,
+        key: &str,
+        fallback: Option<PyObject>,
+    ) -> PyResult<PyObject> {
         let popped = match &mut self.0 {
             SharedType::Integrated(v) => v
                 .remove(txn, key)
                 .map(|v| Python::with_gil(|py| v.into_py(py))),
             SharedType::Prelim(v) => v.remove(key),
         };
-        popped.ok_or(PyKeyError::new_err(format!("{key}")))
+        if let Some(value) = popped {
+            Ok(value)
+        } else if let Some(fallback) = fallback {
+            Ok(fallback)
+        } else {
+            Err(PyKeyError::new_err(format!("{key}")))
+        }
     }
 
     /// Retrieves an item from the map. If the item isn't found, the fallback value is returned.

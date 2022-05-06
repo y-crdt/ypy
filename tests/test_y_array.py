@@ -221,7 +221,7 @@ def test_deep_observe():
     container = ydoc.get_array("container")
     yarray = YArray([1, 2])
     with ydoc.begin_transaction() as txn:
-        container.push(txn, [yarray])
+        container.append(txn, yarray)
 
     events = None
 
@@ -231,7 +231,7 @@ def test_deep_observe():
 
     sub = container.observe_deep(callback)
     with ydoc.begin_transaction() as txn:
-        container[0].push(txn, [3])
+        container[0].append(txn, 3)
 
     assert events != None
 
@@ -239,6 +239,6 @@ def test_deep_observe():
     events = None
     container.unobserve(sub)
     with ydoc.begin_transaction() as txn:
-        container[0].push(txn, [4])
+        container[0].append(txn, 4)
 
     assert events == None

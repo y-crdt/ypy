@@ -108,7 +108,7 @@ impl YArray {
             SharedType::Prelim(vec) if vec.len() >= index as usize => {
                 Ok(vec.insert(index as usize, item))
             }
-            _ => Err(PyIndexError::new_err("Index out of bounds.")),
+            _ => Err(PyIndexError::default_message()),
         }
     }
 
@@ -133,7 +133,7 @@ impl YArray {
                 }
                 Ok(())
             }
-            _ => Err(PyIndexError::new_err("Index out of range.")),
+            _ => Err(PyIndexError::default_message()),
         }
     }
 
@@ -160,7 +160,7 @@ impl YArray {
                 v.remove(index as usize);
                 Ok(())
             }
-            _ => Err(PyIndexError::new_err("Index out of bounds.")),
+            _ => Err(PyIndexError::default_message()),
         }
     }
 
@@ -273,18 +273,14 @@ impl YArray {
                 if let Some(value) = v.get(index as u32) {
                     Ok(Python::with_gil(|py| value.into_py(py)))
                 } else {
-                    Err(PyIndexError::new_err(
-                        "Index outside the range of an YArray",
-                    ))
+                    Err(PyIndexError::default_message())
                 }
             }
             SharedType::Prelim(v) => {
                 if let Some(value) = v.get(index as usize) {
                     Ok(value.clone())
                 } else {
-                    Err(PyIndexError::new_err(
-                        "Index outside the range of an YArray",
-                    ))
+                    Err(PyIndexError::default_message())
                 }
             }
         }
@@ -507,5 +503,11 @@ impl YArrayEvent {
             self.delta = Some(delta.clone());
             delta
         }
+    }
+}
+
+impl DefaultPyErr for PyIndexError {
+    fn default_message() -> PyErr {
+        PyIndexError::new_err("Index out of bounds.")
     }
 }

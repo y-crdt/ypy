@@ -95,6 +95,7 @@ def test_pop():
     with pytest.raises(KeyError):
         with d1.begin_transaction() as txn:
             x.pop(txn, "does not exist")
+        assert x.pop(txn, "does not exist", "fallback") == "fallback"
     length = len(x)
     value = x.get("key")
     assert length == 0

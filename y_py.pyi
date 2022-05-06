@@ -644,14 +644,15 @@ class YMap:
             txn: A transaction to perform the insertion updates.
             items: An iterable object that produces key value tuples to insert into the YMap
         """
-    def pop(self, txn: YTransaction, key: str) -> Any:
+    def pop(self, txn: YTransaction, key: str, fallback: Optional[Any]) -> Any:
         """
         Removes an entry identified by a given `key` from this instance of `YMap`, if such exists.
-        Throws a KeyError if the key does not exist.
+        Throws a KeyError if the key does not exist and fallback value is not provided.
 
         Args:
             txn: The current transaction from a YDoc.
             key: Identifier of the requested item.
+            fallback: Returns this value if the key doesn't exist in the YMap
 
         Returns:
             The item at the key.

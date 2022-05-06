@@ -1,12 +1,11 @@
 use crate::shared_types::{
-    DeepSubscription, DefaultPyErr, PreliminaryObservationException, ShallowSubscription,
-    SharedType, SubId,
+    DeepSubscription, DefaultPyErr, IntegratedOperationException, PreliminaryObservationException,
+    ShallowSubscription, SharedType, SubId,
 };
 use crate::type_conversions::py_into_any;
 use crate::type_conversions::{events_into_py, ToPython};
 use crate::y_transaction::YTransaction;
 use lib0::any::Any;
-use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
 use pyo3::types::PyList;
 use std::collections::HashMap;
@@ -108,7 +107,7 @@ impl YText {
                     text.insert_with_attributes(txn, index, chunk, attributes);
                     Ok(())
                 }
-                SharedType::Prelim(_) => Err(PyTypeError::new_err("OOf")),
+                SharedType::Prelim(_) => Err(IntegratedOperationException::default_message()),
             }
         } else if let Some(Err(error)) = attributes {
             Err(error)
@@ -137,8 +136,7 @@ impl YText {
     ) -> PyResult<()> {
         match &mut self.0 {
             SharedType::Integrated(text) => {
-                let content = py_into_any(embed)
-                    .ok_or(PyTypeError::new_err("Content could not be embedded"))?;
+                let content = py_into_any(embed)?;
                 if let Some(Ok(attrs)) = attributes.map(Self::parse_attrs) {
                     text.insert_embed_with_attributes(txn, index, content, attrs)
                 } else {
@@ -146,9 +144,7 @@ impl YText {
                 }
                 Ok(())
             }
-            SharedType::Prelim(_) => Err(PyTypeError::new_err(
-                "Insert embeds requires YText instance to be integrated first.",
-            )),
+            SharedType::Prelim(_) => Err(IntegratedOperationException::default_message()),
         }
     }
 
@@ -168,9 +164,7 @@ impl YText {
                     text.format(txn, index, length, attrs);
                     Ok(())
                 }
-                SharedType::Prelim(_) => Err(PyTypeError::new_err(
-                    "Insert embeds requires YText instance to be integrated first.",
-                )),
+                SharedType::Prelim(_) => Err(IntegratedOperationException::default_message()),
             },
             Err(err) => Err(err),
         }
@@ -252,14 +246,8 @@ impl YText {
             .into_iter()
             .map(|(k, v)| {
                 let key = Rc::from(k);
-                let value = py_into_any(v);
-                if let Some(value) = value {
-                    Ok((key, value))
-                } else {
-                    Err(PyTypeError::new_err(
-                        "Cannot convert attributes into a standard type".to_string(),
-                    ))
-                }
+                let value = py_into_any(v)?;
+                Ok((key, value))
             })
             .collect()
     }

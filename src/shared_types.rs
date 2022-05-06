@@ -13,6 +13,7 @@ use yrs::{types::TYPE_REFS_XML_ELEMENT, SubscriptionId};
 
 // Common errors
 create_exception!(y_py, PreliminaryObservationException, PyException, "Occurs when an observer is attached to a Y type that is not integrated into a YDoc. Y types can only be observed once they have been added to a YDoc.");
+create_exception!(y_py, IntegratedOperationException, PyException, "Occurs when a method requires a type to be integrated (embedded into a YDoc), but is called on a preliminary type.");
 
 /// Creates a default error with a common message string for throwing a `PyErr`.
 pub(crate) trait DefaultPyErr {
@@ -24,6 +25,14 @@ impl DefaultPyErr for PreliminaryObservationException {
     fn default_message() -> PyErr {
         PreliminaryObservationException::new_err(
             "Cannot observe a preliminary type. Must be added to a YDoc first",
+        )
+    }
+}
+
+impl DefaultPyErr for IntegratedOperationException {
+    fn default_message() -> PyErr {
+        IntegratedOperationException::new_err(
+            "This operation requires the type to be integrated into a YDoc.",
         )
     }
 }
