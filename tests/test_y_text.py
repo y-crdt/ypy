@@ -136,3 +136,62 @@ def test_drop_sub_id():
 
     assert str(target) == str(x)
     assert delta == [{"insert": "abcd"}]
+
+
+def test_delta_embed_attributes():
+
+    d1 = Y.YDoc()
+    text = d1.get_text("test")
+
+    delta = None
+
+    def callback(e):
+        nonlocal delta
+        delta = e.delta
+
+    sub = text.observe(callback)
+
+    with d1.begin_transaction() as txn:
+        text.insert(txn, 0, "ab", {"bold": True})
+        text.insert_embed(txn, 1, {"image": "imageSrc.png"}, {"width": 100})
+
+    expected = [
+        {"insert": "a", "attributes": {"bold": True}},
+        {"insert": {"image": "imageSrc.png"}, "attributes": {"width": 100}},
+        {"insert": "b", "attributes": {"bold": True}},
+    ]
+    assert delta == expected
+
+    text.unobserve(sub)
+
+
+def test_formatting():
+    d1 = Y.YDoc()
+    text = d1.get_text("test")
+
+    delta = None
+    target = None
+
+    def callback(e):
+        nonlocal delta
+        nonlocal target
+        delta = e.delta
+        target = e.target
+
+    sub = text.observe(callback)
+
+    with d1.begin_transaction() as txn:
+        text.insert(txn, 0, "stylish")
+        text.format(txn, 0, 4, {"bold": True})
+
+    assert delta == [
+        {"insert": "styl", "attributes": {"bold": True}},
+        {"insert": "ish"},
+    ]
+
+    with d1.begin_transaction() as txn:
+        text.format(txn, 4, 7, {"bold": True})
+
+    assert delta == [{"retain": 4}, {"retain": 3, "attributes": {"bold": True}}]
+
+    text.unobserve(sub)

@@ -375,9 +375,36 @@ class YText:
         Returns:
             The underlying shared string stored in this data type.
         """
-    def insert(self, txn: YTransaction, index: int, chunk: str):
+    def insert(
+        self,
+        txn: YTransaction,
+        index: int,
+        chunk: str,
+        attributes: Optional[Dict[str, Any]],
+    ):
         """
-        Inserts a given `chunk` of text into this `YText` instance, starting at a given `index`.
+        Inserts a string of text into the `YText` instance starting at a given `index`.
+        Attributes are optional style modifiers (`{"bold": True}`) that can be attached to the inserted string.
+        Attributes are only supported for a `YText` instance which already has been integrated into document store.
+        """
+    def insert_embed(
+        self,
+        txn: YTransaction,
+        index: int,
+        embed: Any,
+        attributes: Optional[Dict[str, Any]],
+    ):
+        """
+        Inserts embedded content into the YText at the provided index. Attributes are user-defined metadata associated with the embedded content.
+        Attributes are only supported for a `YText` instance which already has been integrated into document store.
+        """
+    def format(
+        self, txn: YTransaction, index: int, length: int, attributes: Dict[str, Any]
+    ):
+        """
+        Wraps an existing piece of text within a range described by `index`-`length` parameters with
+        formatting blocks containing provided `attributes` metadata. This method only works for
+        `YText` instances that already have been integrated into document store
         """
     def push(self, txn: YTransaction, chunk: str):
         """
