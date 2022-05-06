@@ -433,6 +433,8 @@ class YText:
     def observe_deep(self, f: Callable[[List[Event]]]) -> SubscriptionId:
         """
         Assigns a callback function to listen to the updates of the YText instance and those of its nested attributes.
+        Currently, this listens to the same events as YText.observe, but in the future this will also listen to
+        the events of embedded values.
 
         Args:
             f: Callback function that runs when the text object or its nested attributes receive an update.
