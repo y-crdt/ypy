@@ -1,4 +1,7 @@
 use lib0::any::Any;
+use pyo3::create_exception;
+use pyo3::exceptions::PyException;
+use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
 use pyo3::types as pytypes;
 use pyo3::types::PyList;
@@ -20,6 +23,8 @@ use crate::y_text::YTextEvent;
 use crate::y_xml::YXmlEvent;
 use crate::y_xml::YXmlTextEvent;
 use crate::y_xml::{YXmlElement, YXmlText};
+
+create_exception!(y_py, MultipleIntegrationError, PyException, "A Ypy data type instance cannot be integrated into multiple YDocs or the same YDoc multiple times");
 
 pub trait ToPython {
     fn into_py(self, py: Python) -> PyObject;
@@ -140,23 +145,27 @@ impl<'a> IntoPy<PyObject> for EntryChangeWrapper<'a> {
     }
 }
 
-struct PyObjectWrapper(PyObject);
+pub(crate) struct PyObjectWrapper(pub PyObject);
 
 impl Prelim for PyObjectWrapper {
     fn into_content(self, _txn: &mut Transaction) -> (ItemContent, Option<Self>) {
-        let guard = Python::acquire_gil();
-        let py = guard.python();
-        let content = if let Some(any) = py_into_any(self.0.clone()) {
-            ItemContent::Any(vec![any])
-        } else if let Ok(shared) = Shared::extract(self.0.as_ref(py)) {
-            if shared.is_prelim() {
-                let branch = Branch::new(shared.type_ref(), None);
-                ItemContent::Type(branch)
-            } else {
-                panic!("Cannot integrate this type")
+        let content = match py_into_any(self.0.clone()) {
+            Ok(any) => ItemContent::Any(vec![any]),
+            Err(err) => {
+                if Python::with_gil(|py| err.is_instance_of::<MultipleIntegrationError>(py)) {
+                    let shared = Shared::try_from(self.0.clone()).unwrap();
+                    if shared.is_prelim() {
+                        let branch = Branch::new(shared.type_ref(), None);
+                        ItemContent::Type(branch)
+                    } else {
+                        Python::with_gil(|py| err.restore(py));
+                        ItemContent::Any(vec![])
+                    }
+                } else {
+                    Python::with_gil(|py| err.restore(py));
+                    ItemContent::Any(vec![])
+                }
             }
-        } else {
-            panic!("Cannot integrate this type")
         };
 
         let this = if let ItemContent::Type(_) = &content {
@@ -169,12 +178,10 @@ impl Prelim for PyObjectWrapper {
     }
 
     fn integrate(self, txn: &mut Transaction, inner_ref: BranchPtr) {
-        let guard = Python::acquire_gil();
-        let py = guard.python();
-        let obj_ref = self.0.as_ref(py);
-        if let Ok(shared) = Shared::extract(obj_ref) {
+        if let Ok(shared) = Shared::try_from(self.0) {
             if shared.is_prelim() {
-                Python::with_gil(|py| match shared {
+                Python::with_gil(|py| {
+                    match shared {
                     Shared::Text(v) => {
                         let text = Text::from(inner_ref);
                         let mut y_text = v.borrow_mut(py);
@@ -189,7 +196,7 @@ impl Prelim for PyObjectWrapper {
                         let mut y_array = v.borrow_mut(py);
                         if let SharedType::Prelim(items) = y_array.0.to_owned() {
                             let len = array.len();
-                            insert_at(&array, txn, len, items);
+                            YArray::insert_multiple_at(&array, txn, len, items);
                         }
                         y_array.0 = SharedType::Integrated(array.clone());
                     }
@@ -203,85 +210,66 @@ impl Prelim for PyObjectWrapper {
                         }
                         y_map.0 = SharedType::Integrated(map.clone());
                     }
-                    _ => panic!("Cannot integrate this type"),
+                    Shared::XmlElement(_) | Shared::XmlText(_) => unreachable!("As defined in Shared::is_prelim(), neither XML type can ever exist outside a YDoc"),
+                }
                 })
             }
         }
     }
 }
 
-pub fn insert_at(dst: &Array, txn: &mut Transaction, index: u32, src: Vec<PyObject>) {
-    let mut j = index;
-    let mut i = 0;
-    while i < src.len() {
-        let mut anys = Vec::default();
-        while i < src.len() {
-            if let Some(any) = py_into_any(src[i].clone()) {
-                anys.push(any);
-                i += 1;
-            } else {
-                break;
-            }
-        }
-
-        if !anys.is_empty() {
-            let len = anys.len() as u32;
-            dst.insert_range(txn, j, anys);
-            j += len;
-        } else {
-            let wrapper = PyObjectWrapper(src[i].clone());
-            dst.insert(txn, j, wrapper);
-            i += 1;
-            j += 1;
-        }
-    }
-}
-
 const MAX_JS_NUMBER: i64 = 2_i64.pow(53) - 1;
-pub fn py_into_any(v: PyObject) -> Option<Any> {
-    Python::with_gil(|py| -> Option<Any> {
+/// Converts a Python object into an integrated Any type.
+pub(crate) fn py_into_any(v: PyObject) -> PyResult<Any> {
+    Python::with_gil(|py| {
         let v = v.as_ref(py);
 
         if let Ok(b) = v.downcast::<pytypes::PyBool>() {
-            Some(Any::Bool(b.extract().unwrap()))
+            Ok(Any::Bool(b.extract().unwrap()))
         } else if let Ok(l) = v.downcast::<pytypes::PyInt>() {
             let num: i64 = l.extract().unwrap();
             if num > MAX_JS_NUMBER {
-                Some(Any::BigInt(num))
+                Ok(Any::BigInt(num))
             } else {
-                Some(Any::Number(num as f64))
+                Ok(Any::Number(num as f64))
             }
         } else if v.is_none() {
-            Some(Any::Null)
+            Ok(Any::Null)
         } else if let Ok(f) = v.downcast::<pytypes::PyFloat>() {
-            Some(Any::Number(f.extract().unwrap()))
+            Ok(Any::Number(f.extract().unwrap()))
         } else if let Ok(s) = v.downcast::<pytypes::PyString>() {
             let string: String = s.extract().unwrap();
-            Some(Any::String(string.into_boxed_str()))
+            Ok(Any::String(string.into_boxed_str()))
         } else if let Ok(list) = v.downcast::<pytypes::PyList>() {
-            let mut result = Vec::with_capacity(list.len());
-            for value in list.iter() {
-                result.push(py_into_any(value.into())?);
-            }
-            Some(Any::Array(result.into_boxed_slice()))
+            let result: PyResult<Vec<Any>> = list
+                .into_iter()
+                .map(|py_val| py_into_any(py_val.into()))
+                .collect();
+            result.map(|res| Any::Array(res.into_boxed_slice()))
         } else if let Ok(dict) = v.downcast::<pytypes::PyDict>() {
-            if let Ok(_) = Shared::extract(v) {
-                None
+            if let Ok(shared) = Shared::extract(v) {
+                Err(MultipleIntegrationError::new_err(format!(
+                    "Cannot integrate a nested Ypy object because is already integrated into a YDoc: {shared}"
+                )))
             } else {
-                let mut result = HashMap::new();
-                for (k, v) in dict.iter() {
-                    let key = k
-                        .downcast::<pytypes::PyString>()
-                        .unwrap()
-                        .extract()
-                        .unwrap();
-                    let value = py_into_any(v.into())?;
-                    result.insert(key, value);
-                }
-                Some(Any::Map(Box::new(result)))
+                let result: PyResult<HashMap<String, Any>> = dict
+                    .iter()
+                    .map(|(k, v)| {
+                        let key: String = k.extract()?;
+                        let value = py_into_any(v.into())?;
+                        Ok((key, value))
+                    })
+                    .collect();
+                result.map(|res| Any::Map(Box::new(res)))
             }
+        } else if let Ok(v) = Shared::try_from(PyObject::from(v)) {
+            Err(MultipleIntegrationError::new_err(format!(
+                "Cannot integrate a nested Ypy object because is already integrated into a YDoc: {v}"
+            )))
         } else {
-            None
+            Err(PyTypeError::new_err(format!(
+                "Cannot integrate this type into a YDoc: {v}"
+            )))
         }
     })
 }
@@ -348,17 +336,23 @@ pub struct PyValueWrapper(pub PyObject);
 
 impl Prelim for PyValueWrapper {
     fn into_content(self, _txn: &mut Transaction) -> (ItemContent, Option<Self>) {
-        let content = if let Some(any) = py_into_any(self.0.clone()) {
-            ItemContent::Any(vec![any])
-        } else if let Ok(shared) = Shared::try_from(self.0.clone()) {
-            if shared.is_prelim() {
-                let branch = Branch::new(shared.type_ref(), None);
-                ItemContent::Type(branch)
-            } else {
-                panic!("Cannot integrate this type")
+        let content = match py_into_any(self.0.clone()) {
+            Ok(any) => ItemContent::Any(vec![any]),
+            Err(err) => {
+                if Python::with_gil(|py| err.is_instance_of::<MultipleIntegrationError>(py)) {
+                    let shared = Shared::try_from(self.0.clone()).unwrap();
+                    if shared.is_prelim() {
+                        let branch = Branch::new(shared.type_ref(), None);
+                        ItemContent::Type(branch)
+                    } else {
+                        Python::with_gil(|py| err.restore(py));
+                        ItemContent::Any(vec![])
+                    }
+                } else {
+                    Python::with_gil(|py| err.restore(py));
+                    ItemContent::Any(vec![])
+                }
             }
-        } else {
-            panic!("Cannot integrate this type")
         };
 
         let this = if let ItemContent::Type(_) = &content {
@@ -373,7 +367,8 @@ impl Prelim for PyValueWrapper {
     fn integrate(self, txn: &mut Transaction, inner_ref: BranchPtr) {
         if let Ok(shared) = Shared::try_from(self.0) {
             if shared.is_prelim() {
-                Python::with_gil(|py| match shared {
+                Python::with_gil(|py| {
+                    match shared {
                     Shared::Text(v) => {
                         let text = Text::from(inner_ref);
                         let mut y_text = v.borrow_mut(py);
@@ -388,7 +383,7 @@ impl Prelim for PyValueWrapper {
                         let mut y_array = v.borrow_mut(py);
                         if let SharedType::Prelim(items) = y_array.0.to_owned() {
                             let len = array.len();
-                            insert_at(&array, txn, len, items);
+                            YArray::insert_multiple_at(&array, txn, len, items);
                         }
                         y_array.0 = SharedType::Integrated(array.clone());
                     }
@@ -403,7 +398,8 @@ impl Prelim for PyValueWrapper {
                         }
                         y_map.0 = SharedType::Integrated(map.clone());
                     }
-                    _ => panic!("Cannot integrate this type"),
+                    Shared::XmlElement(_) | Shared::XmlText(_) => unreachable!("As defined in Shared::is_prelim(), neither XML type can ever exist outside a YDoc"),
+                }
                 })
             }
         }

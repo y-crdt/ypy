@@ -1,4 +1,4 @@
-use pyo3::exceptions::PyTypeError;
+use pyo3::exceptions::{PyKeyError, PyTypeError};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use std::collections::HashMap;
@@ -141,36 +141,45 @@ impl YMap {
     }
 
     /// Removes an entry identified by a given `key` from this instance of `YMap`, if such exists.
-    pub fn delete(&mut self, txn: &mut YTransaction, key: &str) {
-        match &mut self.0 {
-            SharedType::Integrated(v) => {
-                v.remove(txn, key);
-            }
-            SharedType::Prelim(v) => {
-                v.remove(key);
-            }
+    pub fn pop(
+        &mut self,
+        txn: &mut YTransaction,
+        key: &str,
+        fallback: Option<PyObject>,
+    ) -> PyResult<PyObject> {
+        let popped = match &mut self.0 {
+            SharedType::Integrated(v) => v
+                .remove(txn, key)
+                .map(|v| Python::with_gil(|py| v.into_py(py))),
+            SharedType::Prelim(v) => v.remove(key),
+        };
+        if let Some(value) = popped {
+            Ok(value)
+        } else if let Some(fallback) = fallback {
+            Ok(fallback)
+        } else {
+            Err(PyKeyError::new_err(format!("{key}")))
         }
+    }
+
+    /// Retrieves an item from the map. If the item isn't found, the fallback value is returned.
+    pub fn get(&self, key: &str, fallback: Option<PyObject>) -> PyObject {
+        self.__getitem__(key)
+            .ok()
+            .unwrap_or_else(|| fallback.unwrap_or_else(|| Python::with_gil(|py| py.None())))
     }
 
     /// Returns value of an entry stored under given `key` within this instance of `YMap`,
     /// or `undefined` if no such entry existed.
-    pub fn __getitem__(&self, key: &str) -> PyObject {
-        match &self.0 {
-            SharedType::Integrated(v) => Python::with_gil(|py| {
-                if let Some(value) = v.get(key) {
-                    value.into_py(py)
-                } else {
-                    py.None()
-                }
-            }),
-            SharedType::Prelim(v) => {
-                if let Some(value) = v.get(key) {
-                    value.clone()
-                } else {
-                    Python::with_gil(|py| py.None())
-                }
-            }
-        }
+    pub fn __getitem__(&self, key: &str) -> PyResult<PyObject> {
+        let entry = match &self.0 {
+            SharedType::Integrated(y_map) => y_map
+                .get(key)
+                .map(|value| Python::with_gil(|py| value.into_py(py))),
+            SharedType::Prelim(hash_map) => hash_map.get(key).map(|value| value.clone()),
+        };
+
+        entry.ok_or_else(|| PyKeyError::new_err(format!("{key}")))
     }
 
     /// Returns an iterator that can be used to traverse over all entries stored within this

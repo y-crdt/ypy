@@ -3,11 +3,31 @@ import y_py as Y
 from y_py import YMap
 
 
+def test_get():
+    d = Y.YDoc()
+    m = d.get_map("map")
+
+    # Put user info into the map.
+    with d.begin_transaction() as txn:
+        m.update(txn, {"username": "John", "online": True})
+
+    # Extract the information from the map.
+    assert m.get("username") == "John"
+    assert m["online"] == True
+    # Ensure the default value is returned when key doesn't exist in map.
+    assert m.get("secretIdentity", "basic") == "basic"
+    # Ensure that nonexistant keys without default values return None.
+    assert m.get("SocialSecurityNumber") is None
+    # Ensure that indexing a non_existant key with bracket notation produces `KeyError`
+    with pytest.raises(KeyError):
+        m["doesn't exist"]
+
+
 def test_set():
     d1 = Y.YDoc()
     x = d1.get_map("test")
 
-    value = x["key"]
+    value = x.get("key")
     assert value == None
 
     d1.transact(lambda txn: x.set(txn, "key", "value1"))
@@ -61,7 +81,7 @@ def test_set_nested():
     assert json == {"key": {"a": "A", "b": "B"}}
 
 
-def test_delete():
+def test_pop():
     d1 = Y.YDoc()
     x = d1.get_map("test")
 
@@ -70,9 +90,14 @@ def test_delete():
     value = x["key"]
     assert length == 1
     assert value == "value1"
-    d1.transact(lambda txn: x.delete(txn, "key"))
+    d1.transact(lambda txn: x.pop(txn, "key"))
+
+    with pytest.raises(KeyError):
+        with d1.begin_transaction() as txn:
+            x.pop(txn, "does not exist")
+        assert x.pop(txn, "does not exist", "fallback") == "fallback"
     length = len(x)
-    value = x["key"]
+    value = x.get("key")
     assert length == 0
     assert value == None
 
@@ -136,7 +161,7 @@ def test_observer():
 
     # remove an entry and update another on
     with d1.begin_transaction() as txn:
-        x.delete(txn, "key1")
+        x.pop(txn, "key1")
         x.set(txn, "key2", "value2")
 
     assert get_value(target) == get_value(x)

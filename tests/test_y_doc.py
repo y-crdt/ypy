@@ -35,7 +35,7 @@ def test_encoding():
     array = doc.get_array("test")
     contents = [True, 42, "string"]
     with doc.begin_transaction() as txn:
-        array.insert(txn, 0, contents)
+        array.insert_range(txn, 0, contents)
 
     state_vec = Y.encode_state_vector(receiver)
     update = Y.encode_state_as_update(doc, state_vec)
@@ -52,15 +52,14 @@ def test_boolean_encoding():
     doc = YDoc()
     receiver = YDoc()
     array = doc.get_array("test")
-    contents = [True]
     with doc.begin_transaction() as txn:
-        array.insert(txn, 0, contents)
+        array.insert(txn, 0, True)
 
     state_vec = Y.encode_state_vector(receiver)
     update = Y.encode_state_as_update(doc, state_vec)
     Y.apply_update(receiver, update)
     value = receiver.get_array("test").to_json()
-    assert type(value[0]) == type(contents[0])
+    assert type(value[0]) == type(True)
 
 
 def test_tutorial():

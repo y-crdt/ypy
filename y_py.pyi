@@ -501,15 +501,31 @@ class YArray:
         """
         Converts an underlying contents of this `YArray` instance into their JSON representation.
         """
-    def insert(self, txn: YTransaction, index: int, items: List[Any]):
+    def insert(self, txn: YTransaction, index: int, item: Any):
+        """
+        Inserts an item at the provided index in the `YArray`.
+        """
+    def insert_range(self, txn: YTransaction, index: int, items: Iterable):
         """
         Inserts a given range of `items` into this `YArray` instance, starting at given `index`.
         """
-    def push(self, txn: YTransaction, items: List[Any]):
+    def append(self, txn: YTransaction, item: Any):
         """
-        Appends a range of `items` at the end of this `YArray` instance.
+        Adds a single item to the end of the `YArray`
         """
-    def delete(self, txn: YTransaction, index: int, length: int):
+    def extend(self, txn: YTransaction, items: Iterable):
+        """
+        Appends a sequence of `items` at the end of this `YArray` instance.
+        """
+    def delete(self, txn: YTransaction, index: int):
+        """
+        Deletes a single item from the array
+
+        Args:
+            txn: The transaction where the array is being modified.
+            index: The index of the element to be deleted.
+        """
+    def delete_range(self, txn: YTransaction, index: int, length: int):
         """
         Deletes a range of items of given `length` from current `YArray` instance,
         starting from given `index`.
@@ -628,14 +644,35 @@ class YMap:
             txn: A transaction to perform the insertion updates.
             items: An iterable object that produces key value tuples to insert into the YMap
         """
-    def delete(self, txn: YTransaction, key: str):
+    def pop(self, txn: YTransaction, key: str, fallback: Optional[Any]) -> Any:
         """
         Removes an entry identified by a given `key` from this instance of `YMap`, if such exists.
-        """
-    def __getitem__(self, key: str) -> Any | None:
-        """
+        Throws a KeyError if the key does not exist and fallback value is not provided.
+
+        Args:
+            txn: The current transaction from a YDoc.
+            key: Identifier of the requested item.
+            fallback: Returns this value if the key doesn't exist in the YMap
+
         Returns:
-            Value of an entry stored under given `key` within this instance of `YMap`, or `None` if no such entry existed.
+            The item at the key.
+        """
+    def get(key: str, fallback: Any) -> Any | None:
+        """
+        Args:
+            key: The identifier for the requested data.
+            fallback: If the key doesn't exist in the map, this fallback value will be returned.
+
+        Returns:
+            Requested data or the provided fallback value.
+        """
+    def __getitem__(self, key: str) -> Any:
+        """
+        Args:
+            key: The identifier for the requested data.
+
+        Returns:
+            Value of an entry stored under given `key` within this instance of `YMap`. Will throw a `KeyError` if the provided key is unassigned.
         """
     def __iter__(self) -> Iterator[str]:
         """

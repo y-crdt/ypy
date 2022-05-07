@@ -200,7 +200,6 @@ def test_formatting():
 def test_deep_observe():
     d = Y.YDoc()
     text = d.get_text("text")
-    nested = Y.YMap({"bold": True})
     with d.begin_transaction() as txn:
         text.push(txn, "Hello")
     events = None
@@ -222,6 +221,6 @@ def test_deep_observe():
     events = None
     text.unobserve(sub)
     with d.begin_transaction() as txn:
-        nested.delete(txn, "new_attr")
+        text.push(txn, " should not trigger")
 
     assert events is None
