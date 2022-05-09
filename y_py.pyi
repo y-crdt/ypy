@@ -140,13 +140,6 @@ class YDoc:
         Returns:
             A subscription identifier that can be used to cancel the callback.
         """
-    def unobserve(subscription: SubscriptionId):
-        """
-        Cancels subscriptions associated with a part of the YDoc lifecycle.
-
-        Args:
-            subscription: Subscription identifier for the callback to be cancelled.
-        """
 
 EncodedStateVector = List[int]
 EncodedDeleteSet = List[int]

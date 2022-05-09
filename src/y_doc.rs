@@ -164,7 +164,7 @@ impl YDoc {
     }
 
     /// Subscribes a callback to a `YDoc` lifecycle event.
-    pub fn after_transaction_cleanup(&self, callback: PyObject) -> SubscriptionId {
+    pub fn after_transaction_cleanup(&mut self, callback: PyObject) -> SubscriptionId {
         self.0
             .on_transaction_cleanup(move |txn, event| {
                 Python::with_gil(|py| {
@@ -175,11 +175,6 @@ impl YDoc {
                 })
             })
             .into()
-    }
-
-    /// Cancels the callback associated with the `SubscriptionId`
-    pub fn unobserve(&mut self, subscription_id: SubscriptionId) -> PyResult<()> {
-        todo!("We need an `unobserve` method the yrs Doc")
     }
 }
 
@@ -254,13 +249,6 @@ pub fn encode_state_as_update(doc: &mut YDoc, vector: Option<Vec<u8>>) -> Vec<u8
 #[pyfunction]
 pub fn apply_update(doc: &mut YDoc, diff: Vec<u8>) {
     doc.begin_transaction().apply_v1(diff);
-}
-
-/// Possible hooks to for attaching callbacks to the `YDoc` via the `.on(hook, fn)` method.
-#[pyclass]
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub enum YDocHook {
-    TransactionCleanup,
 }
 
 #[pyclass(unsendable)]
