@@ -99,21 +99,8 @@ def test_after_transaction_cleanup():
     # Update the document
     with doc.begin_transaction() as txn:
         text.insert(txn, 0, "abc")
-        text.remove_range(txn, 1, 2)
+        text.delete(txn, 1, 2)
 
     assert before_state != None
     assert after_state != None
     assert delete_set != None
-
-    # Test dropping the subscription
-    doc.unobserve(sub)
-    before_state = None
-    after_state = None
-    delete_set = None
-
-    with doc.begin_transaction() as txn:
-        text.insert(txn, 0, "should not update")
-
-    assert before_state == None
-    assert after_state == None
-    assert delete_set == None
