@@ -10,7 +10,7 @@ def test_to_string():
     prelim = YText(expected)
     integrated = d.get_text("test")
     with d.begin_transaction() as txn:
-        integrated.push(txn, expected)
+        integrated.extend(txn, expected)
     for test in [prelim, integrated]:
         assert str(test) == expected
         assert test.to_json() == expected_json
@@ -21,8 +21,8 @@ def test_inserts():
     d1 = Y.YDoc()
     x = d1.get_text("test")
     with d1.begin_transaction() as txn:
-        x.push(txn, "hello ")
-        x.push(txn, "world!")
+        x.extend(txn, "hello ")
+        x.extend(txn, "world!")
     value = str(x)
     expected = "hello world!"
     assert value == expected
@@ -39,10 +39,12 @@ def test_deletes():
     d1 = Y.YDoc()
     x = d1.get_text("test")
 
-    d1.transact(lambda txn: x.push(txn, "hello world!"))
+    d1.transact(lambda txn: x.extend(txn, "hello world!"))
 
     assert len(x) == 12
-    d1.transact(lambda txn: x.delete(txn, 5, 6))
+    with d1.begin_transaction() as txn:
+        x.delete_range(txn, 5, 5)
+        x.delete(txn, 5)
     assert len(x) == 6
     d1.transact(lambda txn: x.insert(txn, 5, " Yrs"))
     assert len(x) == 10
@@ -89,7 +91,7 @@ def test_observer():
 
     # remove 2 chars from the middle
     with d1.begin_transaction() as txn:
-        x.delete(txn, 1, 2)
+        x.delete_range(txn, 1, 2)
 
     assert str(target) == str(x)
     assert delta == [{"retain": 1}, {"delete": 2}]
@@ -201,7 +203,7 @@ def test_deep_observe():
     d = Y.YDoc()
     text = d.get_text("text")
     with d.begin_transaction() as txn:
-        text.push(txn, "Hello")
+        text.extend(txn, "Hello")
     events = None
 
     def callback(e):
@@ -213,7 +215,7 @@ def test_deep_observe():
     with d.begin_transaction() as txn:
         # Currently, Yrs does not support deep observe on embedded values.
         # Deep observe will pick up the same events as shallow observe.
-        text.push(txn, " World")
+        text.extend(txn, " World")
 
     assert events is not None and len(events) == 1
 
@@ -221,6 +223,6 @@ def test_deep_observe():
     events = None
     text.unobserve(sub)
     with d.begin_transaction() as txn:
-        text.push(txn, " should not trigger")
+        text.extend(txn, " should not trigger")
 
     assert events is None

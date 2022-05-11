@@ -66,7 +66,7 @@ def test_tutorial():
     d1 = Y.YDoc()
     text = d1.get_text("test")
     with d1.begin_transaction() as txn:
-        text.push(txn, "hello world!")
+        text.extend(txn, "hello world!")
 
     d2 = Y.YDoc()
     state_vector = Y.encode_state_vector(d2)
@@ -78,7 +78,7 @@ def test_tutorial():
     assert value == "hello world!"
 
 
-def test_after_transaction_cleanup():
+def test_observe_after_transaction():
     doc = Y.YDoc()
     text = doc.get_text("test")
     before_state = None
@@ -99,7 +99,7 @@ def test_after_transaction_cleanup():
     # Update the document
     with doc.begin_transaction() as txn:
         text.insert(txn, 0, "abc")
-        text.delete(txn, 1, 2)
+        text.delete_range(txn, 1, 2)
 
     assert before_state != None
     assert after_state != None

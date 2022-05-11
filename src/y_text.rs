@@ -171,16 +171,20 @@ impl YText {
     }
 
     /// Appends a given `chunk` of text at the end of current `YText` instance.
-    pub fn push(&mut self, txn: &mut YTransaction, chunk: &str) {
+    pub fn extend(&mut self, txn: &mut YTransaction, chunk: &str) {
         match &mut self.0 {
             SharedType::Integrated(v) => v.push(txn, chunk),
             SharedType::Prelim(v) => v.push_str(chunk),
         }
     }
+    /// Deletes character at the specified index.
+    pub fn delete(&mut self, txn: &mut YTransaction, index: u32) {
+        self.delete_range(txn, index, 1);
+    }
 
     /// Deletes a specified range of of characters, starting at a given `index`.
     /// Both `index` and `length` are counted in terms of a number of UTF-8 character bytes.
-    pub fn delete(&mut self, txn: &mut YTransaction, index: u32, length: u32) {
+    pub fn delete_range(&mut self, txn: &mut YTransaction, index: u32, length: u32) {
         match &mut self.0 {
             SharedType::Integrated(v) => v.remove_range(txn, index, length),
             SharedType::Prelim(v) => {
