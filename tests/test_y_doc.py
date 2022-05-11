@@ -76,3 +76,31 @@ def test_tutorial():
     value = str(d2.get_text("test"))
 
     assert value == "hello world!"
+
+
+def test_after_transaction_cleanup():
+    doc = Y.YDoc()
+    text = doc.get_text("test")
+    before_state = None
+    after_state = None
+    delete_set = None
+
+    def callback(event):
+        nonlocal before_state
+        nonlocal after_state
+        nonlocal delete_set
+        before_state = event.before_state
+        after_state = event.after_state
+        delete_set = event.delete_set
+
+    # Subscribe callback
+    sub = doc.observe_after_transaction(callback)
+
+    # Update the document
+    with doc.begin_transaction() as txn:
+        text.insert(txn, 0, "abc")
+        text.delete(txn, 1, 2)
+
+    assert before_state != None
+    assert after_state != None
+    assert delete_set != None
