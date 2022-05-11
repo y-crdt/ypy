@@ -94,7 +94,7 @@ def test_after_transaction_cleanup():
         delete_set = event.delete_set
 
     # Subscribe callback
-    sub = doc.after_transaction_cleanup(callback)
+    sub = doc.observe_after_transaction(callback)
 
     # Update the document
     with doc.begin_transaction() as txn:

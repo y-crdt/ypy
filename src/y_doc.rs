@@ -164,7 +164,7 @@ impl YDoc {
     }
 
     /// Subscribes a callback to a `YDoc` lifecycle event.
-    pub fn after_transaction_cleanup(&mut self, callback: PyObject) -> SubscriptionId {
+    pub fn observe_after_transaction(&mut self, callback: PyObject) -> SubscriptionId {
         self.0
             .on_transaction_cleanup(move |txn, event| {
                 Python::with_gil(|py| {

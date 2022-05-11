@@ -127,7 +127,7 @@ class YDoc:
         If there was an instance with this name, but it was of different type, it will be projected
         onto `YText` instance.
         """
-    def after_transaction_cleanup(
+    def observe_after_transaction(
         self, callback: Callable[[AfterTransactionEvent]]
     ) -> SubscriptionId:
         """
@@ -475,6 +475,12 @@ class YText:
         """
 
 class YTextEvent:
+    """
+    Communicates updates that occurred during a transaction for an instance of `YText`.
+    The `target` references the `YText` element that receives the update.
+    The `delta` is a list of updates applied by the transaction.
+    """
+
     target: YText
     delta: List[YTextDelta]
     def path(self) -> List[Union[int, str]]:
@@ -605,6 +611,12 @@ class YArray:
 YArrayObserver = Any
 
 class YArrayEvent:
+    """
+    Communicates updates that occurred during a transaction for an instance of `YArray`.
+    The `target` references the `YArray` element that receives the update.
+    The `delta` is a list of updates applied by the transaction.
+    """
+
     target: YArray
     delta: List[ArrayDelta]
     def path(self) -> List[Union[int, str]]:
@@ -749,6 +761,13 @@ class YMap:
         """
 
 class YMapEvent:
+    """
+    Communicates updates that occurred during a transaction for an instance of `YMap`.
+    The `target` references the `YText` element that receives the update.
+    The `delta` is a list of updates applied by the transaction.
+    The `keys` are a list of changed values for a specific key.
+    """
+
     target: YMap
     delta: List[Dict]
     keys: List[YMapEventKeyChange]
