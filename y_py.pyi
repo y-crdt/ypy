@@ -437,11 +437,15 @@ class YText:
         formatting blocks containing provided `attributes` metadata. This method only works for
         `YText` instances that already have been integrated into document store
         """
-    def push(self, txn: YTransaction, chunk: str):
+    def extend(self, txn: YTransaction, chunk: str):
         """
         Appends a given `chunk` of text at the end of current `YText` instance.
         """
-    def delete(self, txn: YTransaction, index: int, length: int):
+    def delete(self, txn: YTransaction, index: int):
+        """
+        Deletes the character at the specified `index`.
+        """
+    def delete_range(self, txn: YTransaction, index: int, length: int):
         """
         Deletes a specified range of of characters, starting at a given `index`.
         Both `index` and `length` are counted in terms of a number of UTF-8 character bytes.
