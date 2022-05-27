@@ -45,9 +45,9 @@ class YDoc:
     client_id: int
     def __init__(
         self,
-        client_id: Optional[int],
-        offset_kind: Optional[str],
-        skip_gc: Optional[bool],
+        client_id: Optional[int]=None,
+        offset_kind: str="utf8",
+        skip_gc:bool=False,
     ):
         """
         Creates a new Ypy document. If `client_id` parameter was passed it will be used as this
@@ -179,7 +179,7 @@ def encode_state_vector(doc: YDoc) -> EncodedStateVector:
 YDocUpdate = List[int]
 
 def encode_state_as_update(
-    doc: YDoc, vector: Optional[EncodedStateVector]
+    doc: YDoc, vector: Optional[EncodedStateVector]=None
 ) -> YDocUpdate:
     """
     Encodes all updates that have happened since a given version `vector` into a compact delta
@@ -304,7 +304,7 @@ class YTransaction:
                 del remote_txn
 
         """
-    def diff_v1(self, vector: Optional[List[int]]) -> List[int]:
+    def diff_v1(self, vector: Optional[List[int]]=None) -> List[int]:
         """
         Encodes all updates that have happened since a given version `vector` into a compact delta
         representation using lib0 v1 encoding. If `vector` parameter has not been provided, generated
@@ -377,7 +377,9 @@ class YText:
     """
 
     prelim: bool
-    def __init__(self, init: Optional[str]):
+    """True if this element has not been integrated into a YDoc."""
+
+    def __init__(self, init:str=""):
         """
         Creates a new preliminary instance of a `YText` shared data type, with its state initialized
         to provided parameter.
@@ -411,7 +413,7 @@ class YText:
         txn: YTransaction,
         index: int,
         chunk: str,
-        attributes: Optional[Dict[str, Any]],
+        attributes: Dict[str, Any]={},
     ):
         """
         Inserts a string of text into the `YText` instance starting at a given `index`.
@@ -423,7 +425,7 @@ class YText:
         txn: YTransaction,
         index: int,
         embed: Any,
-        attributes: Optional[Dict[str, Any]],
+        attributes: Dict[str, Any]={},
     ):
         """
         Inserts embedded content into the YText at the provided index. Attributes are user-defined metadata associated with the embedded content.
@@ -508,7 +510,9 @@ class YTextChangeRetain(TypedDict):
 
 class YArray:
     prelim: bool
-    def __init__(init: Optional[Iterable[Any]]):
+    """True if this element has not been integrated into a YDoc."""
+
+    def __init__(init: Optional[Iterable[Any]]=None):
         """
         Creates a new preliminary instance of a `YArray` shared data type, with its state
         initialized to provided parameter.
@@ -630,18 +634,23 @@ class YArrayEvent:
         """
 
 ArrayDelta = Union[ArrayChangeInsert, ArrayChangeDelete, ArrayChangeRetain]
+"""A modification to a YArray during a transaction."""
 
 class ArrayChangeInsert(TypedDict):
+    """Update message that elements were inserted in a YArray."""
     insert: List[Any]
 
 class ArrayChangeDelete:
-    retain: int
+    """Update message that elements were deleted in a YArray."""
+    delete: int
 
 class ArrayChangeRetain:
-    delete: int
+    """Update message that elements were left unmodified in a YArray."""
+    retain: int
 
 class YMap:
     prelim: bool
+    """True if this element has not been integrated into a YDoc."""
     def __init__(dict: dict):
         """
         Creates a new preliminary instance of a `YMap` shared data type, with its state
@@ -685,7 +694,7 @@ class YMap:
             txn: A transaction to perform the insertion updates.
             items: An iterable object that produces key value tuples to insert into the YMap
         """
-    def pop(self, txn: YTransaction, key: str, fallback: Optional[Any]) -> Any:
+    def pop(self, txn: YTransaction, key: str, fallback: Optional[Any]=None) -> Any:
         """
         Removes an entry identified by a given `key` from this instance of `YMap`, if such exists.
         Throws a KeyError if the key does not exist and fallback value is not provided.
@@ -773,8 +782,12 @@ class YMapEvent:
     """
 
     target: YMap
+    """The element modified during this event."""
     delta: List[Dict]
+    """The changes caused by this event."""
     keys: List[YMapEventKeyChange]
+    """A list of modifications to the YMap by key. 
+    Includes the type of modification along with the before and after state."""
     def path(self) -> List[Union[int, str]]:
         """
         Returns:
@@ -787,9 +800,11 @@ class YMapEventKeyChange(TypedDict):
     newValue: Optional[Any]
 
 YXmlAttributes = Iterator[Tuple[str, str]]
+"""Generates a sequence of key/value properties for an XML Element"""
 
 Xml = Union[YXmlElement, YXmlText]
 YXmlTreeWalker = Iterator[Xml]
+"""Visits elements in an Xml tree"""
 EntryChange = Dict[Literal["action", "newValue", "oldValue"], Any]
 
 class YXmlElementEvent:
