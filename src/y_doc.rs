@@ -97,7 +97,7 @@ impl YDoc {
     ///     text.insert(txn, 0, 'hello world')
     /// ```
     pub fn begin_transaction(&mut self) -> YTransaction {
-        YTransaction(self.0.transact())
+        YTransaction::new(self.0.transact())
     }
 
     pub fn transact(&mut self, callback: PyObject) -> PyResult<PyObject> {

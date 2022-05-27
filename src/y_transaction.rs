@@ -1,5 +1,7 @@
 use crate::{y_array::YArray, y_map::YMap, y_text::YText};
 use pyo3::prelude::*;
+use pyo3::types::PyDict;
+use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 use yrs::updates::decoder::Decode;
 use yrs::updates::encoder::{Encode, Encoder};
@@ -25,24 +27,49 @@ use yrs::{
 ///     text.insert(txn, 0, 'hello world')
 /// ```
 #[pyclass(unsendable)]
-pub struct YTransaction(pub Transaction);
+pub struct YTransaction {
+    pub inner: Transaction,
+    pub cached_before_state: Option<PyObject>,
+}
 
 impl Deref for YTransaction {
     type Target = Transaction;
 
     fn deref(&self) -> &Self::Target {
-        &self.0
+        &self.inner
     }
 }
 
 impl DerefMut for YTransaction {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
+        &mut self.inner
+    }
+}
+
+impl YTransaction {
+    pub fn new(txn: Transaction) -> Self {
+        YTransaction {
+            inner: txn,
+            cached_before_state: None,
+        }
     }
 }
 
 #[pymethods]
 impl YTransaction {
+    #[getter]
+    pub fn before_state(&mut self) -> PyObject {
+        if self.cached_before_state.is_none() {
+            let before_state = Python::with_gil(|py| {
+                let state_map: HashMap<u64, u32> =
+                    self.before_state.iter().map(|(x, y)| (*x, *y)).collect();
+                state_map.into_py(py)
+            });
+            self.cached_before_state = Some(before_state);
+        }
+        return self.cached_before_state.as_ref().unwrap().clone();
+    }
+
     /// Returns a `YText` shared data type, that's accessible for subsequent accesses using given
     /// `name`.
     ///
@@ -51,7 +78,7 @@ impl YTransaction {
     /// If there was an instance with this name, but it was of different type, it will be projected
     /// onto `YText` instance.
     pub fn get_text(&mut self, name: &str) -> YText {
-        self.0.get_text(name).into()
+        self.deref_mut().get_text(name).into()
     }
 
     /// Returns a `YArray` shared data type, that's accessible for subsequent accesses using given
@@ -62,7 +89,7 @@ impl YTransaction {
     /// If there was an instance with this name, but it was of different type, it will be projected
     /// onto `YArray` instance.
     pub fn get_array(&mut self, name: &str) -> YArray {
-        self.0.get_array(name).into()
+        self.deref_mut().get_array(name).into()
     }
 
     /// Returns a `YMap` shared data type, that's accessible for subsequent accesses using given
@@ -73,14 +100,14 @@ impl YTransaction {
     /// If there was an instance with this name, but it was of different type, it will be projected
     /// onto `YMap` instance.
     pub fn get_map(&mut self, name: &str) -> YMap {
-        self.0.get_map(name).into()
+        self.deref_mut().get_map(name).into()
     }
 
     /// Triggers a post-update series of operations without `free`ing the transaction. This includes
     /// compaction and optimization of internal representation of updates, triggering events etc.
     /// Ypy transactions are auto-committed when they are `free`d.
     pub fn commit(&mut self) {
-        self.0.commit()
+        self.deref_mut().commit()
     }
 
     /// Encodes a state vector of a given transaction document into its binary representation using
@@ -111,7 +138,7 @@ impl YTransaction {
     ///
     /// ```
     pub fn state_vector_v1(&self) -> Vec<u8> {
-        let sv = self.0.state_vector();
+        let sv = self.state_vector();
         let payload = sv.encode_v1();
         payload
     }
@@ -149,7 +176,7 @@ impl YTransaction {
         } else {
             StateVector::default()
         };
-        self.0.encode_diff(&sv, &mut encoder);
+        self.encode_diff(&sv, &mut encoder);
         encoder.to_vec()
     }
 
@@ -181,7 +208,7 @@ impl YTransaction {
         let diff: Vec<u8> = diff.to_vec();
         let mut decoder = DecoderV1::from(diff.as_slice());
         let update = Update::decode(&mut decoder);
-        self.0.apply_update(update)
+        self.apply_update(update)
     }
 
     /// Allows YTransaction to be used with a Python context block.
