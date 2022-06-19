@@ -241,6 +241,8 @@ class YTransaction:
             text.insert(txn, 0, 'hello world')
     """
 
+    before_state: Dict[int, int]
+
     def get_text(self, name: str) -> YText:
         """
         Returns:
