@@ -1,6 +1,5 @@
 use crate::{y_array::YArray, y_map::YMap, y_text::YText};
 use pyo3::prelude::*;
-use pyo3::types::PyDict;
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 use yrs::updates::decoder::Decode;
