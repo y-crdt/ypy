@@ -1,6 +1,6 @@
 [package]
 name = "y-py"
-version = "0.5.1"
+version = "0.5.2"
 authors = ["John Waidhofer <waidhoferj@gmail.com>", "Kevin Jahns <kevin.jahns@protonmail.com>", "Pierre-Olivier Simonard <pierre.olivier.simonard@gmail.com>"]
 edition = "2018"
 homepage = "https://github.com/y-crdt/ypy"
@@ -13,8 +13,8 @@ name = "y_py"
 crate-type = ["cdylib"]
 
 [dependencies]
-lib0 = "0.9.2"
-yrs = "0.9.2"
+lib0 = "0.9.3"
+yrs = "0.9.3"
 
 
 [dependencies.pyo3]
