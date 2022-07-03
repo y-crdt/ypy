@@ -4,6 +4,8 @@ from y_py import YMap
 
 
 def test_get():
+    import y_py as Y
+
     d = Y.YDoc()
     m = d.get_map("map")
 
@@ -108,24 +110,33 @@ def test_pop():
     assert value == "value2"
 
 
-def test_iterator():
+def test_items_view():
     d = Y.YDoc()
-    x = d.get_map("test")
+    m = d.get_map("test")
 
     with d.begin_transaction() as txn:
-        x.set(txn, "a", 1)
-        x.set(txn, "b", 2)
-        x.set(txn, "c", 3)
-        expected = {"a": 1, "b": 2, "c": 3}
-        for (key, val) in x.items():
-            v = expected[key]
-            assert val == v
-            del expected[key]
+        vals = {"a": 1, "b": 2, "c": 3}
+        m.update(txn, vals)
+        items = m.items()
+        # Ensure that the item view is a multi use iterator
+        for _ in range(2):
+            expected = vals.copy()
+            for (key, val) in items:
+                v = expected[key]
+                assert val == v
+                del expected[key]
 
-        expected = {"a": 1, "b": 2, "c": 3}
-        for key in x:
+        assert len(items) == 3
+        assert ("b", 2) in items
+
+        # Ensure that the item view stays up to date with map state
+        m.set(txn, "d", 4)
+        assert ("d", 4) in items
+
+        expected = list("abcd")
+        for key in m:
             assert key in expected
-            assert key in x
+            assert key in m
 
 
 def test_observer():

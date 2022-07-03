@@ -182,7 +182,7 @@ impl YMap {
         entry.ok_or_else(|| PyKeyError::new_err(format!("{key}")))
     }
 
-    /// Returns an iterator that can be used to traverse over all entries stored within this
+    /// Returns an item view that can be used to traverse over all entries stored within this
     /// instance of `YMap`. Order of entry is not specified.
     ///
     /// Example:
@@ -199,23 +199,13 @@ impl YMap {
     ///     for (key, value) in map.entries(txn)):
     ///         print(key, value)
     /// ```
-    pub fn items(&self) -> YMapIterator {
-        match &self.0 {
-            SharedType::Integrated(val) => unsafe {
-                let this: *const Map = val;
-                let shared_iter = InnerYMapIterator::Integrated((*this).iter());
-                YMapIterator(ManuallyDrop::new(shared_iter))
-            },
-            SharedType::Prelim(val) => unsafe {
-                let this: *const HashMap<String, PyObject> = val;
-                let shared_iter = InnerYMapIterator::Prelim((*this).iter());
-                YMapIterator(ManuallyDrop::new(shared_iter))
-            },
-        }
+    pub fn items(&self) -> ItemView {
+        ItemView(&self.0)
     }
 
     pub fn __iter__(&self) -> YMapKeyIterator {
-        YMapKeyIterator(self.items())
+        let inner: *const _ = &self.0;
+        YMapKeyIterator(YMapIterator::from(inner))
     }
 
     pub fn observe(&mut self, f: PyObject) -> PyResult<ShallowSubscription> {
@@ -267,6 +257,55 @@ impl YMap {
     }
 }
 
+#[pyclass(unsendable)]
+pub struct ItemView(*const SharedType<Map, HashMap<String, PyObject>>);
+
+#[pymethods]
+impl ItemView {
+    fn __iter__(slf: PyRef<Self>) -> YMapIterator {
+        YMapIterator::from(slf.0)
+    }
+
+    fn __len__(&self) -> usize {
+        unsafe {
+            match &*self.0 {
+                SharedType::Integrated(map) => map.len() as usize,
+                SharedType::Prelim(map) => map.len(),
+            }
+        }
+    }
+
+    fn __str__(&self) -> String {
+        let vals: String = YMapIterator::from(self.0)
+            .map(|(key, val)| format!("({key}, {val})"))
+            .collect::<Vec<String>>()
+            .join(", ");
+        format!("{{{vals}}}")
+    }
+
+    fn __repr__(&self) -> String {
+        let data = self.__str__();
+        format!("ItemView({data})")
+    }
+
+    fn __contains__(&self, el: PyObject) -> bool {
+        let kv: Result<(String, PyObject), _> = Python::with_gil(|py| el.extract(py));
+        kv.ok()
+            .and_then(|(key, value)| unsafe {
+                match &*self.0 {
+                    SharedType::Integrated(map) if map.contains(&key) => map.get(&key).map(|v| {
+                        Python::with_gil(|py| v.into_py(py).as_ref(py).eq(value)).unwrap_or(false)
+                    }),
+                    SharedType::Prelim(map) if map.contains_key(&key) => map
+                        .get(&key)
+                        .map(|v| Python::with_gil(|py| v.as_ref(py).eq(value).unwrap_or(false))),
+                    _ => None,
+                }
+            })
+            .unwrap_or(false)
+    }
+}
+
 pub enum InnerYMapIterator {
     Integrated(MapIter<'static>),
     Prelim(std::collections::hash_map::Iter<'static, String, PyObject>),
@@ -278,6 +317,25 @@ pub struct YMapIterator(ManuallyDrop<InnerYMapIterator>);
 impl Drop for YMapIterator {
     fn drop(&mut self) {
         unsafe { ManuallyDrop::drop(&mut self.0) }
+    }
+}
+
+impl From<*const SharedType<Map, HashMap<String, PyObject>>> for YMapIterator {
+    fn from(inner_map_ptr: *const SharedType<Map, HashMap<String, PyObject>>) -> Self {
+        unsafe {
+            match &*inner_map_ptr {
+                SharedType::Integrated(val) => {
+                    let this: *const Map = val;
+                    let shared_iter = InnerYMapIterator::Integrated((*this).iter());
+                    YMapIterator(ManuallyDrop::new(shared_iter))
+                }
+                SharedType::Prelim(val) => {
+                    let this: *const HashMap<String, PyObject> = val;
+                    let shared_iter = InnerYMapIterator::Prelim((*this).iter());
+                    YMapIterator(ManuallyDrop::new(shared_iter))
+                }
+            }
+        }
     }
 }
 

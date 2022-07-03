@@ -45,9 +45,9 @@ class YDoc:
     client_id: int
     def __init__(
         self,
-        client_id: Optional[int]=None,
-        offset_kind: str="utf8",
-        skip_gc:bool=False,
+        client_id: Optional[int] = None,
+        offset_kind: str = "utf8",
+        skip_gc: bool = False,
     ):
         """
         Creates a new Ypy document. If `client_id` parameter was passed it will be used as this
@@ -145,7 +145,6 @@ EncodedStateVector = bytes
 EncodedDeleteSet = bytes
 YDocUpdate = bytes
 
-
 class AfterTransactionEvent:
     """
     Holds transaction update information from a commit after state vectors have been compressed.
@@ -178,9 +177,8 @@ def encode_state_vector(doc: YDoc) -> EncodedStateVector:
 
     """
 
-
 def encode_state_as_update(
-    doc: YDoc, vector: Optional[Union[EncodedStateVector, List[int]]]=None
+    doc: YDoc, vector: Optional[Union[EncodedStateVector, List[int]]] = None
 ) -> YDocUpdate:
     """
     Encodes all updates that have happened since a given version `vector` into a compact delta
@@ -307,7 +305,7 @@ class YTransaction:
                 del remote_txn
 
         """
-    def diff_v1(self, vector: Optional[EncodedStateVector]=None) -> YDocUpdate:
+    def diff_v1(self, vector: Optional[EncodedStateVector] = None) -> YDocUpdate:
         """
         Encodes all updates that have happened since a given version `vector` into a compact delta
         representation using lib0 v1 encoding. If `vector` parameter has not been provided, generated
@@ -382,7 +380,7 @@ class YText:
     prelim: bool
     """True if this element has not been integrated into a YDoc."""
 
-    def __init__(self, init:str=""):
+    def __init__(self, init: str = ""):
         """
         Creates a new preliminary instance of a `YText` shared data type, with its state initialized
         to provided parameter.
@@ -416,7 +414,7 @@ class YText:
         txn: YTransaction,
         index: int,
         chunk: str,
-        attributes: Dict[str, Any]={},
+        attributes: Dict[str, Any] = {},
     ):
         """
         Inserts a string of text into the `YText` instance starting at a given `index`.
@@ -428,7 +426,7 @@ class YText:
         txn: YTransaction,
         index: int,
         embed: Any,
-        attributes: Dict[str, Any]={},
+        attributes: Dict[str, Any] = {},
     ):
         """
         Inserts embedded content into the YText at the provided index. Attributes are user-defined metadata associated with the embedded content.
@@ -515,7 +513,7 @@ class YArray:
     prelim: bool
     """True if this element has not been integrated into a YDoc."""
 
-    def __init__(init: Optional[Iterable[Any]]=None):
+    def __init__(init: Optional[Iterable[Any]] = None):
         """
         Creates a new preliminary instance of a `YArray` shared data type, with its state
         initialized to provided parameter.
@@ -641,14 +639,17 @@ ArrayDelta = Union[ArrayChangeInsert, ArrayChangeDelete, ArrayChangeRetain]
 
 class ArrayChangeInsert(TypedDict):
     """Update message that elements were inserted in a YArray."""
+
     insert: List[Any]
 
 class ArrayChangeDelete:
     """Update message that elements were deleted in a YArray."""
+
     delete: int
 
 class ArrayChangeRetain:
     """Update message that elements were left unmodified in a YArray."""
+
     retain: int
 
 class YMap:
@@ -697,7 +698,7 @@ class YMap:
             txn: A transaction to perform the insertion updates.
             items: An iterable object that produces key value tuples to insert into the YMap
         """
-    def pop(self, txn: YTransaction, key: str, fallback: Optional[Any]=None) -> Any:
+    def pop(self, txn: YTransaction, key: str, fallback: Optional[Any] = None) -> Any:
         """
         Removes an entry identified by a given `key` from this instance of `YMap`, if such exists.
         Throws a KeyError if the key does not exist and fallback value is not provided.
@@ -732,7 +733,7 @@ class YMap:
         Returns:
             An iterator that traverses all keys of the `YMap` in an unspecified order.
         """
-    def items(self) -> Iterator[Tuple[str, Any]]:
+    def items(self) -> YMapItemsView:
         """
         Returns:
             An iterator that can be used to traverse over all entries stored within this instance of `YMap`. Order of entry is not specified.
@@ -775,6 +776,16 @@ class YMap:
         Args:
             subscription_id: reference to a subscription provided by the `observe` method.
         """
+
+class YMapItemsView:
+    """Tracks key/values inside a YMap. Similar functionality to dict_items for a Python dict"""
+
+    def __iter__() -> Iterator[Tuple[str, Any]]:
+        """Produces key value tuples of elements inside the map"""
+    def __contains__() -> bool:
+        """Checks membership of kv tuples in the view"""
+    def __len__() -> int:
+        """Checks number of items in the view."""
 
 class YMapEvent:
     """
