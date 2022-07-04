@@ -362,6 +362,13 @@ impl YMapEvent {
         }
     }
 
+    pub fn __repr__(&mut self) -> String {
+        let target = self.target();
+        let keys = self.keys();
+        let path = self.path();
+        format!("YMapEvent(target={target}, keys={keys}, path={path})")
+    }
+
     /// Returns an array of keys and indexes creating a path from root type down to current instance
     /// of shared type (accessible via `target` getter).
     pub fn path(&self) -> PyObject {

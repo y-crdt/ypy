@@ -1,6 +1,6 @@
 from test_helper import exchange_updates
 import y_py as Y
-from y_py import YText
+from y_py import YText, YTextEvent
 
 
 def test_to_string():
@@ -69,7 +69,7 @@ def test_observer():
     target = None
     delta = None
 
-    def callback(e):
+    def callback(e: YTextEvent):
         nonlocal target
         nonlocal delta
         target = e.target

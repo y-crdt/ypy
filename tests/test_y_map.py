@@ -1,6 +1,6 @@
 import pytest
 import y_py as Y
-from y_py import YMap
+from y_py import YMap, YMapEvent
 
 
 def test_get():
@@ -137,7 +137,7 @@ def test_observer():
     def get_value(x):
         return x.to_json()
 
-    def callback(e):
+    def callback(e: YMapEvent):
         nonlocal target
         nonlocal entries
         target = e.target
@@ -196,12 +196,14 @@ def test_deep_observe():
     def callback(e: list):
         nonlocal events
         events = e
+        assert len(e[0].path()) == 1
 
     sub = container.observe_deep(callback)
     with doc.begin_transaction() as txn:
         container["inner"].set(txn, "addition", 1)
 
     events = None
+
     container.unobserve(sub)
     with doc.begin_transaction() as txn:
         container["inner"].set(txn, "don't show up", 1)

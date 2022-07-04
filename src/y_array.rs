@@ -475,6 +475,13 @@ impl YArrayEvent {
         }
     }
 
+    fn __repr__(&mut self) -> String {
+        let target = self.target();
+        let delta = self.delta();
+        let path = self.path();
+        format!("YArrayEvent(target={target}, delta={delta}, path={path})")
+    }
+
     /// Returns an array of keys and indexes creating a path from root type down to current instance
     /// of shared type (accessible via `target` getter).
     pub fn path(&self) -> PyObject {

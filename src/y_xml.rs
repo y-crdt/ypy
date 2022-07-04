@@ -458,6 +458,15 @@ impl YXmlEvent {
         }
     }
 
+    fn __repr__(&mut self) -> String {
+        let target = self.target();
+        let delta = self.delta();
+        let keys = self.keys();
+        let path = self.path();
+
+        format!("YXmlEvent(target={target}, delta={delta}, keys={keys}, path={path})")
+    }
+
     /// Returns an array of keys and indexes creating a path from root type down to current instance
     /// of shared type (accessible via `target` getter).
     pub fn path(&self) -> PyObject {
@@ -555,6 +564,15 @@ impl YXmlTextEvent {
                 target
             })
         }
+    }
+
+    fn __repr__(&mut self) -> String {
+        let target = self.target();
+        let delta = self.delta();
+        let keys = self.keys();
+        let path = self.path();
+
+        format!("YXmlEvent(target={target}, delta={delta}, keys={keys}, path={path})")
     }
 
     /// Returns a current shared type instance, that current event changes refer to.

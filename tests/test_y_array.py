@@ -1,7 +1,7 @@
 from test_helper import exchange_updates
 import pytest
 
-from y_py import YDoc, YArray
+from y_py import YDoc, YArray, YArrayEvent
 
 
 def test_inserts():
@@ -168,7 +168,7 @@ def test_observer():
     target = None
     delta = None
 
-    def callback(e):
+    def callback(e: YArrayEvent):
         nonlocal target
         nonlocal delta
         target = e.target
