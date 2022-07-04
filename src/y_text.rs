@@ -333,14 +333,10 @@ impl YTextEvent {
         }
     }
 
-    fn __str__(&self) -> String {
-        format!(
-            "YTextEvent(target={:?}, delta={:?})",
-            self.target, self.delta
-        )
-    }
-
-    fn __repr__(&self) -> String {
-        self.__str__()
+    fn __repr__(&mut self) -> String {
+        let target = self.target();
+        let delta = self.delta();
+        let path = self.path();
+        format!("YTextEvent(target={target}, delta={delta}, path={path})")
     }
 }
