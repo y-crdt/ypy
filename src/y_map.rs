@@ -203,9 +203,19 @@ impl YMap {
         ItemView(&self.0)
     }
 
-    pub fn __iter__(&self) -> YMapKeyIterator {
+    pub fn keys(&self) -> KeyView {
         let inner: *const _ = &self.0;
-        YMapKeyIterator(YMapIterator::from(inner))
+        KeyView(inner)
+    }
+
+    pub fn __iter__(&self) -> KeyIterator {
+        let inner: *const _ = &self.0;
+        KeyIterator(YMapIterator::from(inner))
+    }
+
+    pub fn values(&self) -> ValueView {
+        let inner: *const _ = &self.0;
+        ValueView(inner)
     }
 
     pub fn observe(&mut self, f: PyObject) -> PyResult<ShallowSubscription> {
@@ -306,6 +316,82 @@ impl ItemView {
     }
 }
 
+#[pyclass(unsendable)]
+pub struct KeyView(*const SharedType<Map, HashMap<String, PyObject>>);
+
+#[pymethods]
+impl KeyView {
+    fn __iter__(slf: PyRef<Self>) -> KeyIterator {
+        KeyIterator(YMapIterator::from(slf.0))
+    }
+
+    fn __len__(&self) -> usize {
+        unsafe {
+            match &*self.0 {
+                SharedType::Integrated(map) => map.len() as usize,
+                SharedType::Prelim(map) => map.len(),
+            }
+        }
+    }
+
+    fn __str__(&self) -> String {
+        let vals: String = YMapIterator::from(self.0)
+            .map(|(key, _)| key)
+            .collect::<Vec<String>>()
+            .join(", ");
+        format!("{{{vals}}}")
+    }
+
+    fn __repr__(&self) -> String {
+        let data = self.__str__();
+        format!("KeyView({data})")
+    }
+
+    fn __contains__(&self, el: PyObject) -> bool {
+        let key: Result<String, _> = Python::with_gil(|py| el.extract(py));
+        key.ok()
+            .map(|key| unsafe {
+                match &*self.0 {
+                    SharedType::Integrated(map) => map.contains(&key),
+                    SharedType::Prelim(map) => map.contains_key(&key),
+                }
+            })
+            .unwrap_or(false)
+    }
+}
+
+#[pyclass(unsendable)]
+pub struct ValueView(*const SharedType<Map, HashMap<String, PyObject>>);
+
+#[pymethods]
+impl ValueView {
+    fn __iter__(slf: PyRef<Self>) -> ValueIterator {
+        ValueIterator(YMapIterator::from(slf.0))
+    }
+
+    fn __len__(&self) -> usize {
+        unsafe {
+            match &*self.0 {
+                SharedType::Integrated(map) => map.len() as usize,
+                SharedType::Prelim(map) => map.len(),
+            }
+        }
+    }
+
+    fn __str__(&self) -> String {
+        let vals: String = YMapIterator::from(self.0)
+            .map(|(_, v)| v.to_string())
+            .collect::<Vec<String>>()
+            .join(", ");
+        format!("{{{vals}}}")
+    }
+
+    fn __repr__(&self) -> String {
+        let data = self.__str__();
+        format!("ValueView({data})")
+    }
+}
+
 pub enum InnerYMapIterator {
     Integrated(MapIter<'static>),
     Prelim(std::collections::hash_map::Iter<'static, String, PyObject>),
@@ -363,15 +449,28 @@ impl YMapIterator {
 }
 
 #[pyclass(unsendable)]
-pub struct YMapKeyIterator(YMapIterator);
+pub struct KeyIterator(YMapIterator);
 
 #[pymethods]
-impl YMapKeyIterator {
+impl KeyIterator {
     fn __iter__(slf: PyRef<Self>) -> PyRef<Self> {
         slf
     }
     fn __next__(mut slf: PyRefMut<Self>) -> Option<String> {
         slf.0.next().map(|(k, _)| k)
+    }
+}
+
+#[pyclass(unsendable)]
+pub struct ValueIterator(YMapIterator);
+
+#[pymethods]
+impl ValueIterator {
+    fn __iter__(slf: PyRef<Self>) -> PyRef<Self> {
+        slf
+    }
+    fn __next__(mut slf: PyRefMut<Self>) -> Option<PyObject> {
+        slf.0.next().map(|(_, v)| v)
     }
 }
 

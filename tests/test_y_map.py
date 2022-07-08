@@ -133,10 +133,44 @@ def test_items_view():
         m.set(txn, "d", 4)
         assert ("d", 4) in items
 
-        expected = list("abcd")
-        for key in m:
-            assert key in expected
-            assert key in m
+
+def test_keys_values():
+    d = Y.YDoc()
+    m = d.get_map("test")
+    expected_keys = list("abc")
+    expected_values = list(range(1, 4))
+    with d.begin_transaction() as txn:
+        m.update(txn, zip(expected_keys, expected_values))
+
+    # Ensure basic iteration works
+    for key in m:
+        assert key in expected_keys
+        assert key in m
+
+    # Ensure keys can be iterated over multiple times
+    keys = m.keys()
+    for _ in range(2):
+        for key in keys:
+            assert key in expected_keys
+            assert key in keys
+
+    values = m.values()
+
+    for _ in range(2):
+        for val in values:
+            assert val in expected_values
+            assert val in values
+
+    # Ensure keys and values reflect updates to map
+    with d.begin_transaction() as txn:
+        m.set(txn, "d", 4)
+
+    assert "d" in keys
+    assert 4 in values
+
+    # Ensure key view operations
+    assert len(keys) == 4
+    assert len(values) == 4
 
 
 def test_observer():
