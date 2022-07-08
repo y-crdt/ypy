@@ -733,10 +733,10 @@ class YMap:
         Returns:
             An iterator that traverses all keys of the `YMap` in an unspecified order.
         """
-    def items(self) -> Iterator[Tuple[str, Any]]:
+    def items(self) -> YMapItemsView:
         """
         Returns:
-            An iterator that can be used to traverse over all entries stored within this instance of `YMap`. Order of entry is not specified.
+            A view that can be used to iterate over all entries stored within this instance of `YMap`. Order of entry is not specified.
 
         Example::
 
@@ -750,6 +750,16 @@ class YMap:
                 map.set(txn, 'key2', true)
             for (key, value) in map.items()):
                 print(key, value)
+        """
+    def keys(self) -> YMapKeysView:
+        """
+        Returns:
+            A view of all key identifiers in the YMap. The order of keys is not stable.
+        """
+    def values(self) -> YMapValuesView:
+        """
+        Returns:
+            A view of all values in the YMap. The order of values is not stable.
         """
     def observe(self, f: Callable[[YMapEvent]]) -> SubscriptionId:
         """
@@ -776,6 +786,36 @@ class YMap:
         Args:
             subscription_id: reference to a subscription provided by the `observe` method.
         """
+
+class YMapItemsView:
+    """Tracks key/values inside a YMap. Similar functionality to dict_items for a Python dict"""
+
+    def __iter__() -> Iterator[Tuple[str, Any]]:
+        """Produces key value tuples of elements inside the view"""
+    def __contains__() -> bool:
+        """Checks membership of kv tuples in the view"""
+    def __len__() -> int:
+        """Checks number of items in the view."""
+
+class YMapKeysView:
+    """Tracks key identifiers inside of a YMap"""
+
+    def __iter__() -> Iterator[str]:
+        """Produces keys of the view"""
+    def __contains__() -> bool:
+        """Checks membership of keys in the view"""
+    def __len__() -> int:
+        """Checks number of keys in the view."""
+
+class YMapValuesView:
+    """Tracks values inside of a YMap"""
+
+    def __iter__() -> Iterator[Any]:
+        """Produces values of the view"""
+    def __contains__() -> bool:
+        """Checks membership of values in the view"""
+    def __len__() -> int:
+        """Checks number of values in the view."""
 
 class YMapEvent:
     """

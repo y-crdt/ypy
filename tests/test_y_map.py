@@ -4,6 +4,8 @@ from y_py import YMap, YMapEvent
 
 
 def test_get():
+    import y_py as Y
+
     d = Y.YDoc()
     m = d.get_map("map")
 
@@ -108,24 +110,67 @@ def test_pop():
     assert value == "value2"
 
 
-def test_iterator():
+def test_items_view():
     d = Y.YDoc()
-    x = d.get_map("test")
+    m = d.get_map("test")
 
     with d.begin_transaction() as txn:
-        x.set(txn, "a", 1)
-        x.set(txn, "b", 2)
-        x.set(txn, "c", 3)
-        expected = {"a": 1, "b": 2, "c": 3}
-        for (key, val) in x.items():
-            v = expected[key]
-            assert val == v
-            del expected[key]
+        vals = {"a": 1, "b": 2, "c": 3}
+        m.update(txn, vals)
+        items = m.items()
+        # Ensure that the item view is a multi use iterator
+        for _ in range(2):
+            expected = vals.copy()
+            for (key, val) in items:
+                v = expected[key]
+                assert val == v
+                del expected[key]
 
-        expected = {"a": 1, "b": 2, "c": 3}
-        for key in x:
-            assert key in expected
-            assert key in x
+        assert len(items) == 3
+        assert ("b", 2) in items
+
+        # Ensure that the item view stays up to date with map state
+        m.set(txn, "d", 4)
+        assert ("d", 4) in items
+
+
+def test_keys_values():
+    d = Y.YDoc()
+    m = d.get_map("test")
+    expected_keys = list("abc")
+    expected_values = list(range(1, 4))
+    with d.begin_transaction() as txn:
+        m.update(txn, zip(expected_keys, expected_values))
+
+    # Ensure basic iteration works
+    for key in m:
+        assert key in expected_keys
+        assert key in m
+
+    # Ensure keys can be iterated over multiple times
+    keys = m.keys()
+    for _ in range(2):
+        for key in keys:
+            assert key in expected_keys
+            assert key in keys
+
+    values = m.values()
+
+    for _ in range(2):
+        for val in values:
+            assert val in expected_values
+            assert val in values
+
+    # Ensure keys and values reflect updates to map
+    with d.begin_transaction() as txn:
+        m.set(txn, "d", 4)
+
+    assert "d" in keys
+    assert 4 in values
+
+    # Ensure key view operations
+    assert len(keys) == 4
+    assert len(values) == 4
 
 
 def test_observer():
