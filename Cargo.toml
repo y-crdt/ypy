@@ -1,6 +1,6 @@
 [package]
 name = "y-py"
-version = "0.5.2"
+version = "0.5.3"
 rust-version = "1.58"
 authors = ["John Waidhofer <waidhoferj@gmail.com>", "Kevin Jahns <kevin.jahns@protonmail.com>", "Pierre-Olivier Simonard <pierre.olivier.simonard@gmail.com>"]
 edition = "2018"
