@@ -199,7 +199,7 @@ impl YDoc {
 /// apply_update(local_doc, remote_delta)
 /// ```
 #[pyfunction]
-pub fn encode_state_vector(doc: &mut YDoc) -> Vec<u8> {
+pub fn encode_state_vector(doc: &mut YDoc) -> PyObject {
     doc.begin_transaction().state_vector_v1()
 }
 
@@ -224,7 +224,7 @@ pub fn encode_state_vector(doc: &mut YDoc) -> Vec<u8> {
 /// apply_update(local_doc, remote_delta)
 /// ```
 #[pyfunction]
-pub fn encode_state_as_update(doc: &mut YDoc, vector: Option<Vec<u8>>) -> Vec<u8> {
+pub fn encode_state_as_update(doc: &mut YDoc, vector: Option<Vec<u8>>) -> PyResult<PyObject> {
     doc.begin_transaction().diff_v1(vector)
 }
 
@@ -247,8 +247,9 @@ pub fn encode_state_as_update(doc: &mut YDoc, vector: Option<Vec<u8>>) -> Vec<u8
 /// apply_update(local_doc, remote_delta)
 /// ```
 #[pyfunction]
-pub fn apply_update(doc: &mut YDoc, diff: Vec<u8>) {
-    doc.begin_transaction().apply_v1(diff);
+pub fn apply_update(doc: &mut YDoc, diff: Vec<u8>) -> PyResult<()> {
+    doc.begin_transaction().apply_v1(diff)?;
+    Ok(())
 }
 
 #[pyclass(unsendable)]
