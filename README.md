@@ -23,7 +23,7 @@ text = d1.get_text('test')
 # Start a transaction in order to update the text
 with d1.begin_transaction() as txn:
     # Add text contents
-    text.push(txn, "hello world!")
+    text.extend(txn, "hello world!")
 
 # Create another document
 d2 = Y.YDoc()
