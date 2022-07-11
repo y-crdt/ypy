@@ -37,7 +37,7 @@ class YDoc:
         doc = YDoc()
         with doc.begin_transaction() as txn:
             text = txn.get_text('name')
-            text.push(txn, 'hello world')
+            text.extend(txn, 'hello world')
             output = text.to_string(txn)
             print(output)
     """

@@ -13,7 +13,7 @@ Each user working with Ypy data can read and update information through a shared
     # Start a transaction in order to update the text
     with d1.begin_transaction() as txn:
         # Add text contents
-        text.push(txn, "hello world!")
+        text.extend(txn, "hello world!")
 
     # Create another document
     d2 = Y.YDoc()
