@@ -27,6 +27,7 @@ pub fn y_py(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<y_map::YMapEvent>()?;
     m.add_class::<y_xml::YXmlTextEvent>()?;
     m.add_class::<y_xml::YXmlEvent>()?;
+    m.add_class::<y_doc::AfterTransactionEvent>()?;
     // Functions
     m.add_wrapped(wrap_pyfunction!(encode_state_vector))?;
     m.add_wrapped(wrap_pyfunction!(encode_state_as_update))?;
