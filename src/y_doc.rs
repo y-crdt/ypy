@@ -5,9 +5,10 @@ use crate::y_transaction::YTransaction;
 use crate::y_xml::YXmlElement;
 use crate::y_xml::YXmlText;
 use pyo3::prelude::*;
+use pyo3::types::PyBytes;
 use pyo3::types::PyTuple;
 use yrs::updates::encoder::Encode;
-use yrs::AfterTransactionEvent;
+use yrs::AfterTransactionEvent as YrsAfterTransactionEvent;
 use yrs::Doc;
 use yrs::OffsetKind;
 use yrs::Options;
@@ -96,7 +97,7 @@ impl YDoc {
     /// with doc.begin_transaction() as txn:
     ///     text.insert(txn, 0, 'hello world')
     /// ```
-    pub fn begin_transaction(&mut self) -> YTransaction {
+    pub fn begin_transaction(&self) -> YTransaction {
         YTransaction::new(self.0.transact())
     }
 
@@ -168,7 +169,7 @@ impl YDoc {
         self.0
             .observe_transaction_cleanup(move |txn, event| {
                 Python::with_gil(|py| {
-                    let event = PyAfterTransactionEvent::new(event, txn);
+                    let event = AfterTransactionEvent::new(event, txn);
                     if let Err(err) = callback.call1(py, (event,)) {
                         err.restore(py)
                     }
@@ -224,7 +225,7 @@ pub fn encode_state_vector(doc: &mut YDoc) -> PyObject {
 /// apply_update(local_doc, remote_delta)
 /// ```
 #[pyfunction]
-pub fn encode_state_as_update(doc: &mut YDoc, vector: Option<Vec<u8>>) -> PyResult<PyObject> {
+pub fn encode_state_as_update(doc: &YDoc, vector: Option<Vec<u8>>) -> PyResult<PyObject> {
     doc.begin_transaction().diff_v1(vector)
 }
 
@@ -253,19 +254,19 @@ pub fn apply_update(doc: &mut YDoc, diff: Vec<u8>) -> PyResult<()> {
 }
 
 #[pyclass(unsendable)]
-pub struct PyAfterTransactionEvent {
-    inner: *const AfterTransactionEvent,
+pub struct AfterTransactionEvent {
+    inner: *const YrsAfterTransactionEvent,
     txn: *const Transaction,
     before_state: Option<PyObject>,
     after_state: Option<PyObject>,
     delete_set: Option<PyObject>,
 }
 
-impl PyAfterTransactionEvent {
-    fn new(event: &AfterTransactionEvent, txn: &Transaction) -> Self {
-        let inner = event as *const AfterTransactionEvent;
+impl AfterTransactionEvent {
+    fn new(event: &YrsAfterTransactionEvent, txn: &Transaction) -> Self {
+        let inner = event as *const YrsAfterTransactionEvent;
         let txn = txn as *const Transaction;
-        PyAfterTransactionEvent {
+        AfterTransactionEvent {
             inner,
             txn,
             before_state: None,
@@ -274,7 +275,7 @@ impl PyAfterTransactionEvent {
         }
     }
 
-    fn inner(&self) -> &AfterTransactionEvent {
+    fn inner(&self) -> &YrsAfterTransactionEvent {
         unsafe { self.inner.as_ref().unwrap() }
     }
 
@@ -284,15 +285,16 @@ impl PyAfterTransactionEvent {
 }
 
 #[pymethods]
-impl PyAfterTransactionEvent {
+impl AfterTransactionEvent {
     /// Returns a current shared type instance, that current event changes refer to.
     #[getter]
     pub fn before_state(&mut self) -> PyObject {
         if let Some(before_state) = self.before_state.as_ref() {
             before_state.clone()
         } else {
+            let before_state = self.inner().before_state.encode_v1();
             let before_state: PyObject =
-                Python::with_gil(|py| self.inner().before_state.encode_v1().into_py(py));
+                Python::with_gil(|py| PyBytes::new(py, &before_state).into());
             self.before_state = Some(before_state.clone());
             before_state
         }
@@ -303,8 +305,9 @@ impl PyAfterTransactionEvent {
         if let Some(after_state) = self.after_state.as_ref() {
             after_state.clone()
         } else {
+            let after_state = self.inner().after_state.encode_v1();
             let after_state: PyObject =
-                Python::with_gil(|py| self.inner().after_state.encode_v1().into_py(py));
+                Python::with_gil(|py| PyBytes::new(py, &after_state).into());
             self.after_state = Some(after_state.clone());
             after_state
         }
@@ -315,10 +318,15 @@ impl PyAfterTransactionEvent {
         if let Some(delete_set) = self.delete_set.as_ref() {
             delete_set.clone()
         } else {
-            let delete_set: PyObject =
-                Python::with_gil(|py| self.inner().delete_set.encode_v1().into_py(py));
+            let delete_set = self.inner().delete_set.encode_v1();
+            let delete_set: PyObject = Python::with_gil(|py| PyBytes::new(py, &delete_set).into());
             self.delete_set = Some(delete_set.clone());
             delete_set
         }
+    }
+
+    pub fn get_update(&self) -> PyObject {
+        let update = self.txn().encode_update_v1();
+        Python::with_gil(|py| PyBytes::new(py, &update).into())
     }
 }

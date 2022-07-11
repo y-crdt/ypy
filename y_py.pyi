@@ -151,8 +151,23 @@ class AfterTransactionEvent:
     """
 
     before_state: EncodedStateVector
+    """
+    Encoded state of YDoc before the transaction.
+    """
     after_state: EncodedStateVector
+    """
+    Encoded state of the YDoc after the transaction.
+    """
     delete_set: EncodedDeleteSet
+    """
+    Elements deleted by the associated transaction.
+    """
+
+    def get_update(self) -> YDocUpdate:
+        """
+        Returns:
+            Encoded payload of all updates produced by the transaction.
+        """
 
 def encode_state_vector(doc: YDoc) -> EncodedStateVector:
     """

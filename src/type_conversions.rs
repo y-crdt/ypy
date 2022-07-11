@@ -30,10 +30,7 @@ pub trait ToPython {
     fn into_py(self, py: Python) -> PyObject;
 }
 
-impl<T> ToPython for Vec<T>
-where
-    T: ToPython,
-{
+impl ToPython for Vec<Any> {
     fn into_py(self, py: Python) -> PyObject {
         let elements = self.into_iter().map(|v| v.into_py(py));
         let arr: PyObject = pyo3::types::PyList::new(py, elements).into();

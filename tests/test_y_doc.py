@@ -1,4 +1,5 @@
-from y_py import YDoc
+from y_py import YDoc, AfterTransactionEvent
+
 import y_py as Y
 import pytest
 
@@ -104,3 +105,24 @@ def test_observe_after_transaction():
     assert before_state != None
     assert after_state != None
     assert delete_set != None
+
+
+def test_get_update():
+    """
+    Ensures that developers can access the encoded update data in the `observe_after_transaction` event.
+    """
+    d = Y.YDoc()
+    m = d.get_map("foo")
+    r = d.get_map("foo")
+    update: bytes = None
+
+    def get_update(event: AfterTransactionEvent) -> None:
+        nonlocal update
+        update = event.get_update()
+
+    d.observe_after_transaction(get_update)
+
+    with d.begin_transaction() as txn:
+        m.set(txn, "hi", "there")
+
+    assert type(update) == bytes
