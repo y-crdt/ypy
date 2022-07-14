@@ -7,6 +7,7 @@ use pyo3::types as pytypes;
 use pyo3::types::PyList;
 use std::collections::HashMap;
 use std::convert::TryFrom;
+use std::convert::TryInto;
 use std::ops::Deref;
 use yrs::block::{ItemContent, Prelim};
 use yrs::types::Events;
@@ -244,25 +245,17 @@ pub(crate) fn py_into_any(v: PyObject) -> PyResult<Any> {
                 .collect();
             result.map(|res| Any::Array(res.into_boxed_slice()))
         } else if let Ok(dict) = v.downcast::<pytypes::PyDict>() {
-            if let Ok(shared) = Shared::extract(v) {
-                Err(MultipleIntegrationError::new_err(format!(
-                    "Cannot integrate a nested Ypy object because is already integrated into a YDoc: {shared}"
-                )))
-            } else {
-                let result: PyResult<HashMap<String, Any>> = dict
-                    .iter()
-                    .map(|(k, v)| {
-                        let key: String = k.extract()?;
-                        let value = py_into_any(v.into())?;
-                        Ok((key, value))
-                    })
-                    .collect();
-                result.map(|res| Any::Map(Box::new(res)))
-            }
+            let result: PyResult<HashMap<String, Any>> = dict
+                .iter()
+                .map(|(k, v)| {
+                    let key: String = k.extract()?;
+                    let value = py_into_any(v.into())?;
+                    Ok((key, value))
+                })
+                .collect();
+            result.map(|res| Any::Map(Box::new(res)))
         } else if let Ok(v) = Shared::try_from(PyObject::from(v)) {
-            Err(MultipleIntegrationError::new_err(format!(
-                "Cannot integrate a nested Ypy object because is already integrated into a YDoc: {v}"
-            )))
+            v.try_into()
         } else {
             Err(PyTypeError::new_err(format!(
                 "Cannot integrate this type into a YDoc: {v}"

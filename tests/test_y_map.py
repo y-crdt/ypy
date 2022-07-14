@@ -254,3 +254,14 @@ def test_deep_observe():
         container["inner"].set(txn, "don't show up", 1)
 
     assert events is None
+
+
+def test_borrow_issue():
+    doc = Y.YDoc()
+    wrapper = doc.get_map("wrapper")
+    inner = Y.YMap({"Foo": "Bar"})
+
+    with doc.begin_transaction() as txn:
+        wrapper.set(txn, "inner", inner)
+
+    print(wrapper)

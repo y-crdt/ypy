@@ -1,12 +1,14 @@
 use crate::{
+    type_conversions::{py_into_any, MultipleIntegrationError},
     y_array::YArray,
     y_map::YMap,
     y_text::YText,
     y_xml::{YXmlElement, YXmlText},
 };
+use lib0::any::Any;
 use pyo3::create_exception;
 use pyo3::{exceptions::PyException, prelude::*};
-use std::{convert::TryFrom, fmt::Display};
+use std::{collections::HashMap, convert::TryFrom, fmt::Display};
 use yrs::types::TYPE_REFS_XML_TEXT;
 use yrs::types::{TypeRefs, TYPE_REFS_ARRAY, TYPE_REFS_MAP, TYPE_REFS_TEXT};
 use yrs::{types::TYPE_REFS_XML_ELEMENT, SubscriptionId};
@@ -130,5 +132,46 @@ impl TryFrom<PyObject> for Shared {
                 ))
             }
         })
+    }
+}
+
+impl TryFrom<Shared> for Any {
+    type Error = PyErr;
+
+    fn try_from(shared: Shared) -> Result<Self, Self::Error> {
+        const integrated_message: &str = "All shared types should be preliminary at this point.";
+
+        if shared.is_prelim() {
+            Python::with_gil(|py| match shared {
+                Shared::Text(text) => match text.borrow(py).0 {
+                    SharedType::Prelim(text) => Ok(Any::String(text.into_boxed_str())),
+                    SharedType::Integrated(_) => unreachable!(integrated_message),
+                },
+                Shared::Array(array) => match array.borrow(py).0 {
+                    SharedType::Prelim(array) => {
+                        let any_array: PyResult<Vec<Any>> =
+                            array.into_iter().map(|v| py_into_any(v)).collect();
+                        Ok(Any::Array(any_array?.into_boxed_slice()))
+                    }
+                    SharedType::Integrated(_) => unreachable!(integrated_message),
+                },
+                Shared::Map(dict) => match dict.borrow(py).0 {
+                    SharedType::Prelim(dict) => {
+                        let any_dict: PyResult<HashMap<String, Any>> = dict
+                            .into_iter()
+                            .map(|(k, v)| py_into_any(v).map(|v| (k, v)))
+                            .collect();
+                        Ok(Any::Map(Box::new(any_dict?)))
+                    }
+                    SharedType::Integrated(_) => unreachable!(integrated_message),
+                },
+                Shared::XmlElement(xml) => unimplemented!(),
+                Shared::XmlText(xml) => unimplemented!(),
+            })
+        } else {
+            Err(MultipleIntegrationError::new_err(format!(
+                "Cannot integrate a nested Ypy object because is already integrated into a YDoc: {shared}"
+            )))
+        }
     }
 }
