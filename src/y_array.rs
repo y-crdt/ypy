@@ -10,9 +10,10 @@ use crate::y_transaction::YTransaction;
 
 use super::shared_types::SharedType;
 use crate::type_conversions::ToPython;
+use lib0::any::Any;
 use pyo3::exceptions::PyIndexError;
 
-use crate::type_conversions::{py_into_any, PyObjectWrapper};
+use crate::type_conversions::PyObjectWrapper;
 use pyo3::prelude::*;
 use pyo3::types::{PyList, PySlice, PySliceIndices};
 use yrs::types::array::{ArrayEvent, ArrayIter};
@@ -103,7 +104,8 @@ impl YArray {
     pub fn insert(&mut self, txn: &mut YTransaction, index: u32, item: PyObject) -> PyResult<()> {
         match &mut self.0 {
             SharedType::Integrated(array) if array.len() >= index => {
-                py_into_any(item).map(|any| array.insert(txn, index, any))
+                array.insert(txn, index, PyObjectWrapper(item));
+                Ok(())
             }
             SharedType::Prelim(vec) if vec.len() >= index as usize => {
                 Ok(vec.insert(index as usize, item))
@@ -348,9 +350,9 @@ impl YArray {
         let mut j = index;
         let mut i = 0;
         while i < src.len() {
-            let mut anys = Vec::default();
+            let mut anys: Vec<Any> = Vec::default();
             while i < src.len() {
-                if let Ok(any) = py_into_any(src[i].clone()) {
+                if let Ok(any) = PyObjectWrapper(src[i].clone()).try_into() {
                     anys.push(any);
                     i += 1;
                 } else {

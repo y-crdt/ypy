@@ -258,10 +258,8 @@ def test_deep_observe():
 
 def test_borrow_issue():
     doc = Y.YDoc()
-    wrapper = doc.get_map("wrapper")
+    wrapper = doc.get_array("wrapper")
     inner = Y.YMap({"Foo": "Bar"})
 
     with doc.begin_transaction() as txn:
-        wrapper.set(txn, "inner", inner)
-
-    print(wrapper)
+        wrapper.append(txn, inner)
