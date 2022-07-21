@@ -1,18 +1,12 @@
 use crate::{
-    type_conversions::{MultipleIntegrationError, PyObjectWrapper},
     y_array::YArray,
     y_map::YMap,
     y_text::YText,
     y_xml::{YXmlElement, YXmlText},
 };
-use lib0::any::Any;
 use pyo3::create_exception;
 use pyo3::{exceptions::PyException, prelude::*};
-use std::{
-    collections::HashMap,
-    convert::{TryFrom, TryInto},
-    fmt::Display,
-};
+use std::{convert::TryFrom, fmt::Display};
 use yrs::types::TYPE_REFS_XML_TEXT;
 use yrs::types::{TypeRefs, TYPE_REFS_ARRAY, TYPE_REFS_MAP, TYPE_REFS_TEXT};
 use yrs::{types::TYPE_REFS_XML_ELEMENT, SubscriptionId};
@@ -71,16 +65,6 @@ impl<I, P> SharedType<I, P> {
     #[inline(always)]
     pub fn prelim(prelim: P) -> Self {
         SharedType::Prelim(prelim)
-    }
-}
-
-impl<I, P: Default> SharedType<I, P> {
-    /// Extracts the preliminary value if it exists and replaces it with a default value.
-    fn take_prelim(&mut self) -> Option<P> {
-        match self {
-            SharedType::Integrated(_) => None,
-            SharedType::Prelim(p) => Some(std::mem::take(p)),
-        }
     }
 }
 
@@ -146,47 +130,5 @@ impl TryFrom<PyObject> for Shared {
                 ))
             }
         })
-    }
-}
-
-impl TryFrom<Shared> for Any {
-    type Error = PyErr;
-
-    fn try_from(shared: Shared) -> Result<Self, Self::Error> {
-        if shared.is_prelim() {
-            Python::with_gil(|py| {
-                match shared {
-                Shared::Text(text) => {
-                    let content = text
-                        .borrow_mut(py)
-                        .0
-                        .take_prelim()
-                        .unwrap()
-                        .into_boxed_str();
-                    Ok(Any::String(content))
-                }
-
-                Shared::Array(array) => {
-                    let content = array.borrow_mut(py).0.take_prelim().unwrap();
-                    let any_array: Result<Vec<Any>, _> =
-                        content.into_iter().map(|v| PyObjectWrapper(v).try_into()).collect();
-                    Ok(Any::Array(any_array?.into_boxed_slice()))
-                }
-                Shared::Map(dict) => {
-                    let content = dict.borrow_mut(py).0.take_prelim().unwrap();
-                    let any_dict: PyResult<HashMap<String, Any>> = content
-                        .into_iter()
-                        .map(|(k, v)| PyObjectWrapper(v).try_into().map(|v| (k, v)))
-                        .collect();
-                    Ok(Any::Map(Box::new(any_dict?)))
-                }
-                Shared::XmlElement(_) | Shared::XmlText(_) => unreachable!("As defined in Shared::is_prelim(), neither XML type can ever exist outside a YDoc"),
-            }
-            })
-        } else {
-            Err(MultipleIntegrationError::new_err(format!(
-                "Cannot integrate a nested Ypy object because is already integrated into a YDoc: {shared}"
-            )))
-        }
     }
 }

@@ -114,6 +114,7 @@ impl ToPython for &Change {
     }
 }
 
+#[repr(transparent)]
 struct EntryChangeWrapper<'a>(&'a EntryChange);
 
 impl<'a> IntoPy<PyObject> for EntryChangeWrapper<'a> {
@@ -143,6 +144,7 @@ impl<'a> IntoPy<PyObject> for EntryChangeWrapper<'a> {
     }
 }
 
+#[repr(transparent)]
 pub(crate) struct PyObjectWrapper(pub PyObject);
 
 impl Prelim for PyObjectWrapper {
@@ -258,7 +260,9 @@ impl TryFrom<PyObjectWrapper> for Any {
                     .collect();
                 result.map(|res| Any::Map(Box::new(res)))
             } else if let Ok(v) = Shared::try_from(PyObject::from(v)) {
-                v.try_into()
+                Err(MultipleIntegrationError::new_err(format!(
+                    "Cannot integrate a nested Ypy object because is already integrated into a YDoc: {v}"
+                )))
             } else {
                 Err(PyTypeError::new_err(format!(
                     "Cannot integrate this type into a YDoc: {v}"
