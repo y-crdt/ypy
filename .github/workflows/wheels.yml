@@ -16,7 +16,7 @@ jobs:
     runs-on: macos-latest
     strategy:
       matrix:
-        python-version: ["3.7", "3.10"] # Empty string will trigger a build with the latest python version
+        python-version: ["3.7", "3.10"]
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
@@ -33,11 +33,11 @@ jobs:
         uses: messense/maturin-action@v1
         with:
           target: x86_64
-          args: --release --out dist --sdist
+          args: --release --out dist --sdist --find-interpreter
       - name: Build wheels - universal2
         uses: messense/maturin-action@v1
         with:
-          args: --release --universal2 --out dist
+          args: --release --universal2 --out dist --find-interpreter
       - name: Upload wheels
         uses: actions/upload-artifact@v2
         with:
@@ -49,7 +49,7 @@ jobs:
     strategy:
       matrix:
         target: [x64, x86]
-        python-version: ["3.7", "3.10"] # Empty string will trigger a build with the latest python version
+        python-version: ["3.7", "3.10"]
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
@@ -66,7 +66,7 @@ jobs:
         uses: messense/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          args: --release --out dist
+          args: --release --out dist --find-interpreter
       - name: Upload wheels
         uses: actions/upload-artifact@v2
         with:
@@ -78,7 +78,7 @@ jobs:
     strategy:
       matrix:
         target: [x86_64, i686]
-        python-version: ["3.7", "3.10"] # Empty string will trigger a build with the latest python version
+        python-version: ["3.7", "3.10"]
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
@@ -90,7 +90,7 @@ jobs:
         with:
           target: ${{ matrix.target }}
           manylinux: auto
-          args: --release --out dist
+          args: --release --out dist --find-interpreter
       - name: Upload wheels
         uses: actions/upload-artifact@v2
         with:
