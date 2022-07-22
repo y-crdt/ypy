@@ -2,13 +2,13 @@ use crate::shared_types::{
     DeepSubscription, DefaultPyErr, IntegratedOperationException, PreliminaryObservationException,
     ShallowSubscription, SharedType, SubId,
 };
-use crate::type_conversions::py_into_any;
-use crate::type_conversions::{events_into_py, ToPython};
+use crate::type_conversions::{events_into_py, PyObjectWrapper, ToPython};
 use crate::y_transaction::YTransaction;
 use lib0::any::Any;
 use pyo3::prelude::*;
 use pyo3::types::PyList;
 use std::collections::HashMap;
+use std::convert::TryInto;
 use std::rc::Rc;
 use yrs::types::text::TextEvent;
 use yrs::types::Attrs;
@@ -136,7 +136,7 @@ impl YText {
     ) -> PyResult<()> {
         match &mut self.0 {
             SharedType::Integrated(text) => {
-                let content = py_into_any(embed)?;
+                let content = PyObjectWrapper(embed).try_into()?;
                 if let Some(Ok(attrs)) = attributes.map(Self::parse_attrs) {
                     text.insert_embed_with_attributes(txn, index, content, attrs)
                 } else {
@@ -250,7 +250,7 @@ impl YText {
             .into_iter()
             .map(|(k, v)| {
                 let key = Rc::from(k);
-                let value = py_into_any(v)?;
+                let value = PyObjectWrapper(v).try_into()?;
                 Ok((key, value))
             })
             .collect()

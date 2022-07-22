@@ -12,7 +12,7 @@ use crate::shared_types::{
     DeepSubscription, DefaultPyErr, PreliminaryObservationException, ShallowSubscription,
     SharedType, SubId,
 };
-use crate::type_conversions::{events_into_py, PyValueWrapper, ToPython};
+use crate::type_conversions::{events_into_py, PyObjectWrapper, ToPython};
 use crate::y_transaction::YTransaction;
 
 /// Collection used to store key-value entries in an unordered manner. Keys are always represented
@@ -103,7 +103,7 @@ impl YMap {
     pub fn set(&mut self, txn: &mut YTransaction, key: &str, value: PyObject) {
         match &mut self.0 {
             SharedType::Integrated(v) => {
-                v.insert(txn, key.to_string(), PyValueWrapper(value));
+                v.insert(txn, key.to_string(), PyObjectWrapper(value));
             }
             SharedType::Prelim(v) => {
                 v.insert(key.to_string(), value);

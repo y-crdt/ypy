@@ -51,14 +51,14 @@ pub enum SubId {
 }
 
 #[derive(Clone)]
-pub enum SharedType<T, P> {
-    Integrated(T),
+pub enum SharedType<I, P> {
+    Integrated(I),
     Prelim(P),
 }
 
-impl<T, P> SharedType<T, P> {
+impl<I, P> SharedType<I, P> {
     #[inline(always)]
-    pub fn new(value: T) -> Self {
+    pub fn new(value: I) -> Self {
         SharedType::Integrated(value)
     }
 
