@@ -1,6 +1,6 @@
 [package]
 name = "y-py"
-version = "0.5.3"
+version = "0.5.4"
 rust-version = "1.58"
 authors = ["John Waidhofer <waidhoferj@gmail.com>", "Kevin Jahns <kevin.jahns@protonmail.com>", "Pierre-Olivier Simonard <pierre.olivier.simonard@gmail.com>"]
 edition = "2018"
@@ -14,9 +14,8 @@ name = "y_py"
 crate-type = ["cdylib"]
 
 [dependencies]
-lib0 = "0.10.2"
-yrs = "0.10.2"
-
+lib0 = "0.11.1"
+yrs = "0.11.1"
 
 [dependencies.pyo3]
 version = "0.16.5"
