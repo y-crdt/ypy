@@ -1,12 +1,19 @@
-use pyo3::exceptions::PyTypeError;
+use crate::shared_types::{
+    DeepSubscription, DefaultPyErr, IntegratedOperationException, PreliminaryObservationException,
+    ShallowSubscription, SharedType, SubId,
+};
+use crate::type_conversions::{events_into_py, PyObjectWrapper, ToPython};
+use crate::y_transaction::YTransaction;
+use lib0::any::Any;
 use pyo3::prelude::*;
 use pyo3::types::PyList;
+use std::collections::HashMap;
+use std::convert::TryInto;
+use std::rc::Rc;
 use yrs::types::text::TextEvent;
-use yrs::{Subscription, Text, Transaction};
-
-use crate::shared_types::SharedType;
-use crate::type_conversions::ToPython;
-use crate::y_transaction::YTransaction;
+use yrs::types::Attrs;
+use yrs::types::DeepObservable;
+use yrs::{Text, Transaction};
 
 /// A shared data type used for collaborative text editing. It enables multiple users to add and
 /// remove chunks of text in efficient manner. This type is internally represented as a mutable
@@ -56,51 +63,128 @@ impl YText {
         }
     }
 
+    /// Returns an underlying shared string stored in this data type.
+    pub fn __str__(&self) -> String {
+        match &self.0 {
+            SharedType::Integrated(v) => v.to_string(),
+            SharedType::Prelim(v) => v.clone(),
+        }
+    }
+
+    pub fn __repr__(&self) -> String {
+        format!("YText({})", self.__str__())
+    }
+
     /// Returns length of an underlying string stored in this `YText` instance,
     /// understood as a number of UTF-8 encoded bytes.
-    #[getter]
-    pub fn length(&self) -> u32 {
+    pub fn __len__(&self) -> usize {
         match &self.0 {
-            SharedType::Integrated(v) => v.len(),
-            SharedType::Prelim(v) => v.len() as u32,
+            SharedType::Integrated(v) => v.len() as usize,
+            SharedType::Prelim(v) => v.len(),
         }
     }
 
     /// Returns an underlying shared string stored in this data type.
-    pub fn to_string(&self, txn: &YTransaction) -> String {
-        match &self.0 {
-            SharedType::Integrated(v) => v.to_string(txn),
-            SharedType::Prelim(v) => v.clone(),
-        }
-    }
-
-    /// Returns an underlying shared string stored in this data type.
-    pub fn to_json(&self, txn: &YTransaction) -> String {
-        match &self.0 {
-            SharedType::Integrated(v) => v.to_string(txn),
-            SharedType::Prelim(v) => v.clone(),
-        }
+    pub fn to_json(&self) -> String {
+        let mut json_string = String::new();
+        Any::String(self.__str__().into_boxed_str()).to_json(&mut json_string);
+        json_string
     }
 
     /// Inserts a given `chunk` of text into this `YText` instance, starting at a given `index`.
-    pub fn insert(&mut self, txn: &mut YTransaction, index: u32, chunk: &str) {
+    pub fn insert(
+        &mut self,
+        txn: &mut YTransaction,
+        index: u32,
+        chunk: &str,
+        attributes: Option<HashMap<String, PyObject>>,
+    ) -> PyResult<()> {
+        let attributes: Option<PyResult<Attrs>> = attributes.map(Self::parse_attrs);
+
+        if let Some(Ok(attributes)) = attributes {
+            match &mut self.0 {
+                SharedType::Integrated(text) => {
+                    text.insert_with_attributes(txn, index, chunk, attributes);
+                    Ok(())
+                }
+                SharedType::Prelim(_) => Err(IntegratedOperationException::default_message()),
+            }
+        } else if let Some(Err(error)) = attributes {
+            Err(error)
+        } else {
+            match &mut self.0 {
+                SharedType::Integrated(text) => text.insert(txn, index, chunk),
+                SharedType::Prelim(prelim_string) => {
+                    prelim_string.insert_str(index as usize, chunk)
+                }
+            }
+            Ok(())
+        }
+    }
+
+    /// Inserts a given `embed` object into this `YText` instance, starting at a given `index`.
+    ///
+    /// Optional object with defined `attributes` will be used to wrap provided `embed`
+    /// with a formatting blocks.`attributes` are only supported for a `YText` instance which
+    /// already has been integrated into document store.
+    pub fn insert_embed(
+        &mut self,
+        txn: &mut YTransaction,
+        index: u32,
+        embed: PyObject,
+        attributes: Option<HashMap<String, PyObject>>,
+    ) -> PyResult<()> {
         match &mut self.0 {
-            SharedType::Integrated(v) => v.insert(txn, index, chunk),
-            SharedType::Prelim(v) => v.insert_str(index as usize, chunk),
+            SharedType::Integrated(text) => {
+                let content = PyObjectWrapper(embed).try_into()?;
+                if let Some(Ok(attrs)) = attributes.map(Self::parse_attrs) {
+                    text.insert_embed_with_attributes(txn, index, content, attrs)
+                } else {
+                    text.insert_embed(txn, index, content)
+                }
+                Ok(())
+            }
+            SharedType::Prelim(_) => Err(IntegratedOperationException::default_message()),
+        }
+    }
+
+    /// Wraps an existing piece of text within a range described by `index`-`length` parameters with
+    /// formatting blocks containing provided `attributes` metadata. This method only works for
+    /// `YText` instances that already have been integrated into document store.
+    pub fn format(
+        &mut self,
+        txn: &mut YTransaction,
+        index: u32,
+        length: u32,
+        attributes: HashMap<String, PyObject>,
+    ) -> PyResult<()> {
+        match Self::parse_attrs(attributes) {
+            Ok(attrs) => match &mut self.0 {
+                SharedType::Integrated(text) => {
+                    text.format(txn, index, length, attrs);
+                    Ok(())
+                }
+                SharedType::Prelim(_) => Err(IntegratedOperationException::default_message()),
+            },
+            Err(err) => Err(err),
         }
     }
 
     /// Appends a given `chunk` of text at the end of current `YText` instance.
-    pub fn push(&mut self, txn: &mut YTransaction, chunk: &str) {
+    pub fn extend(&mut self, txn: &mut YTransaction, chunk: &str) {
         match &mut self.0 {
             SharedType::Integrated(v) => v.push(txn, chunk),
             SharedType::Prelim(v) => v.push_str(chunk),
         }
     }
+    /// Deletes character at the specified index.
+    pub fn delete(&mut self, txn: &mut YTransaction, index: u32) {
+        self.delete_range(txn, index, 1);
+    }
 
     /// Deletes a specified range of of characters, starting at a given `index`.
     /// Both `index` and `length` are counted in terms of a number of UTF-8 character bytes.
-    pub fn delete(&mut self, txn: &mut YTransaction, index: u32, length: u32) {
+    pub fn delete_range(&mut self, txn: &mut YTransaction, index: u32, length: u32) {
         match &mut self.0 {
             SharedType::Integrated(v) => v.remove_range(txn, index, length),
             SharedType::Prelim(v) => {
@@ -109,22 +193,67 @@ impl YText {
         }
     }
 
-    pub fn observe(&mut self, f: PyObject) -> PyResult<YTextObserver> {
+    /// Observes updates from the `YText` instance.
+    pub fn observe(&mut self, f: PyObject) -> PyResult<ShallowSubscription> {
         match &mut self.0 {
-            SharedType::Integrated(v) => Ok(v
-                .observe(move |txn, e| {
-                    Python::with_gil(|py| {
-                        let e = YTextEvent::new(e, txn);
-                        if let Err(err) = f.call1(py, (e,)) {
-                            err.restore(py)
-                        }
-                    });
-                })
-                .into()),
-            SharedType::Prelim(_) => Err(PyTypeError::new_err(
-                "Cannot observe a preliminary type. Must be added to a YDoc first",
-            )),
+            SharedType::Integrated(text) => {
+                let sub_id = text
+                    .observe(move |txn, e| {
+                        Python::with_gil(|py| {
+                            let e = YTextEvent::new(e, txn);
+                            if let Err(err) = f.call1(py, (e,)) {
+                                err.restore(py)
+                            }
+                        });
+                    })
+                    .into();
+                Ok(ShallowSubscription(sub_id))
+            }
+            SharedType::Prelim(_) => Err(PreliminaryObservationException::default_message()),
         }
+    }
+
+    /// Observes updates from the `YText` instance and all of its nested children.
+    pub fn observe_deep(&mut self, f: PyObject) -> PyResult<DeepSubscription> {
+        match &mut self.0 {
+            SharedType::Integrated(text) => {
+                let sub = text
+                    .observe_deep(move |txn, events| {
+                        Python::with_gil(|py| {
+                            let events = events_into_py(txn, events);
+                            if let Err(err) = f.call1(py, (events,)) {
+                                err.restore(py)
+                            }
+                        })
+                    })
+                    .into();
+                Ok(DeepSubscription(sub))
+            }
+            SharedType::Prelim(_) => Err(PreliminaryObservationException::default_message()),
+        }
+    }
+    /// Cancels the observer callback associated with the `subscripton_id`.
+    pub fn unobserve(&mut self, subscription_id: SubId) -> PyResult<()> {
+        match &mut self.0 {
+            SharedType::Integrated(text) => Ok(match subscription_id {
+                SubId::Shallow(ShallowSubscription(id)) => text.unobserve(id),
+                SubId::Deep(DeepSubscription(id)) => text.unobserve_deep(id),
+            }),
+            SharedType::Prelim(_) => Err(PreliminaryObservationException::default_message()),
+        }
+    }
+}
+
+impl YText {
+    fn parse_attrs(attrs: HashMap<String, PyObject>) -> PyResult<Attrs> {
+        attrs
+            .into_iter()
+            .map(|(k, v)| {
+                let key = Rc::from(k);
+                let value = PyObjectWrapper(v).try_into()?;
+                Ok((key, value))
+            })
+            .collect()
     }
 }
 
@@ -138,7 +267,7 @@ pub struct YTextEvent {
 }
 
 impl YTextEvent {
-    fn new(event: &TextEvent, txn: &Transaction) -> Self {
+    pub fn new(event: &TextEvent, txn: &Transaction) -> Self {
         let inner = event as *const TextEvent;
         let txn = txn as *const Transaction;
         YTextEvent {
@@ -176,7 +305,7 @@ impl YTextEvent {
     /// Returns an array of keys and indexes creating a path from root type down to current instance
     /// of shared type (accessible via `target` getter).
     pub fn path(&self) -> PyObject {
-        Python::with_gil(|py| self.inner().path(self.txn()).into_py(py))
+        Python::with_gil(|py| self.inner().path().into_py(py))
     }
 
     /// Returns a list of text changes made over corresponding `YText` collection within
@@ -203,13 +332,11 @@ impl YTextEvent {
             delta
         }
     }
-}
 
-#[pyclass(unsendable)]
-pub struct YTextObserver(Subscription<TextEvent>);
-
-impl From<Subscription<TextEvent>> for YTextObserver {
-    fn from(o: Subscription<TextEvent>) -> Self {
-        YTextObserver(o)
+    fn __repr__(&mut self) -> String {
+        let target = self.target();
+        let delta = self.delta();
+        let path = self.path();
+        format!("YTextEvent(target={target}, delta={delta}, path={path})")
     }
 }

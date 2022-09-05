@@ -1,15 +1,20 @@
-use pyo3::prelude::*;
-use pyo3::types::PyTuple;
-use yrs::Doc;
-use yrs::OffsetKind;
-use yrs::Options;
-
 use crate::y_array::YArray;
 use crate::y_map::YMap;
 use crate::y_text::YText;
 use crate::y_transaction::YTransaction;
 use crate::y_xml::YXmlElement;
 use crate::y_xml::YXmlText;
+use pyo3::prelude::*;
+use pyo3::types::PyBytes;
+use pyo3::types::PyTuple;
+use yrs::updates::encoder::Encode;
+use yrs::AfterTransactionEvent as YrsAfterTransactionEvent;
+use yrs::Doc;
+use yrs::OffsetKind;
+use yrs::Options;
+use yrs::SubscriptionId;
+use yrs::Transaction;
+
 /// A Ypy document type. Documents are most important units of collaborative resources management.
 /// All shared collections live within a scope of their corresponding documents. All updates are
 /// generated on per document basis (rather than individual shared type). All operations on shared
@@ -30,7 +35,7 @@ use crate::y_xml::YXmlText;
 ///     output = text.to_string(txn)
 ///     print(output)
 /// ```
-#[pyclass(unsendable)]
+#[pyclass(unsendable, subclass)]
 pub struct YDoc(pub Doc);
 
 #[pymethods]
@@ -92,8 +97,8 @@ impl YDoc {
     /// with doc.begin_transaction() as txn:
     ///     text.insert(txn, 0, 'hello world')
     /// ```
-    pub fn begin_transaction(&mut self) -> YTransaction {
-        YTransaction(self.0.transact())
+    pub fn begin_transaction(&self) -> YTransaction {
+        YTransaction::new(self.0.transact())
     }
 
     pub fn transact(&mut self, callback: PyObject) -> PyResult<PyObject> {
@@ -158,6 +163,20 @@ impl YDoc {
     pub fn get_text(&mut self, name: &str) -> YText {
         self.begin_transaction().get_text(name)
     }
+
+    /// Subscribes a callback to a `YDoc` lifecycle event.
+    pub fn observe_after_transaction(&mut self, callback: PyObject) -> SubscriptionId {
+        self.0
+            .observe_transaction_cleanup(move |txn, event| {
+                Python::with_gil(|py| {
+                    let event = AfterTransactionEvent::new(event, txn);
+                    if let Err(err) = callback.call1(py, (event,)) {
+                        err.restore(py)
+                    }
+                })
+            })
+            .into()
+    }
 }
 
 /// Encodes a state vector of a given Ypy document into its binary representation using lib0 v1
@@ -181,7 +200,7 @@ impl YDoc {
 /// apply_update(local_doc, remote_delta)
 /// ```
 #[pyfunction]
-pub fn encode_state_vector(doc: &mut YDoc) -> Vec<u8> {
+pub fn encode_state_vector(doc: &mut YDoc) -> PyObject {
     doc.begin_transaction().state_vector_v1()
 }
 
@@ -206,7 +225,7 @@ pub fn encode_state_vector(doc: &mut YDoc) -> Vec<u8> {
 /// apply_update(local_doc, remote_delta)
 /// ```
 #[pyfunction]
-pub fn encode_state_as_update(doc: &mut YDoc, vector: Option<Vec<u8>>) -> Vec<u8> {
+pub fn encode_state_as_update(doc: &YDoc, vector: Option<Vec<u8>>) -> PyResult<PyObject> {
     doc.begin_transaction().diff_v1(vector)
 }
 
@@ -229,6 +248,85 @@ pub fn encode_state_as_update(doc: &mut YDoc, vector: Option<Vec<u8>>) -> Vec<u8
 /// apply_update(local_doc, remote_delta)
 /// ```
 #[pyfunction]
-pub fn apply_update(doc: &mut YDoc, diff: Vec<u8>) {
-    doc.begin_transaction().apply_v1(diff);
+pub fn apply_update(doc: &mut YDoc, diff: Vec<u8>) -> PyResult<()> {
+    doc.begin_transaction().apply_v1(diff)?;
+    Ok(())
+}
+
+#[pyclass(unsendable)]
+pub struct AfterTransactionEvent {
+    inner: *const YrsAfterTransactionEvent,
+    txn: *const Transaction,
+    before_state: Option<PyObject>,
+    after_state: Option<PyObject>,
+    delete_set: Option<PyObject>,
+}
+
+impl AfterTransactionEvent {
+    fn new(event: &YrsAfterTransactionEvent, txn: &Transaction) -> Self {
+        let inner = event as *const YrsAfterTransactionEvent;
+        let txn = txn as *const Transaction;
+        AfterTransactionEvent {
+            inner,
+            txn,
+            before_state: None,
+            after_state: None,
+            delete_set: None,
+        }
+    }
+
+    fn inner(&self) -> &YrsAfterTransactionEvent {
+        unsafe { self.inner.as_ref().unwrap() }
+    }
+
+    fn txn(&self) -> &Transaction {
+        unsafe { self.txn.as_ref().unwrap() }
+    }
+}
+
+#[pymethods]
+impl AfterTransactionEvent {
+    /// Returns a current shared type instance, that current event changes refer to.
+    #[getter]
+    pub fn before_state(&mut self) -> PyObject {
+        if let Some(before_state) = self.before_state.as_ref() {
+            before_state.clone()
+        } else {
+            let before_state = self.inner().before_state.encode_v1();
+            let before_state: PyObject =
+                Python::with_gil(|py| PyBytes::new(py, &before_state).into());
+            self.before_state = Some(before_state.clone());
+            before_state
+        }
+    }
+
+    #[getter]
+    pub fn after_state(&mut self) -> PyObject {
+        if let Some(after_state) = self.after_state.as_ref() {
+            after_state.clone()
+        } else {
+            let after_state = self.inner().after_state.encode_v1();
+            let after_state: PyObject =
+                Python::with_gil(|py| PyBytes::new(py, &after_state).into());
+            self.after_state = Some(after_state.clone());
+            after_state
+        }
+    }
+
+    #[getter]
+    pub fn delete_set(&mut self) -> PyObject {
+        if let Some(delete_set) = self.delete_set.as_ref() {
+            delete_set.clone()
+        } else {
+            let delete_set = self.inner().delete_set.encode_v1();
+            let delete_set: PyObject = Python::with_gil(|py| PyBytes::new(py, &delete_set).into());
+            self.delete_set = Some(delete_set.clone());
+            delete_set
+        }
+    }
+
+    pub fn get_update(&self) -> PyObject {
+        let update = self.txn().encode_update_v1();
+        Python::with_gil(|py| PyBytes::new(py, &update).into())
+    }
 }

@@ -1,6 +1,7 @@
 [package]
 name = "y-py"
-version = "0.2.3"
+version = "0.5.4"
+rust-version = "1.58"
 authors = ["John Waidhofer <waidhoferj@gmail.com>", "Kevin Jahns <kevin.jahns@protonmail.com>", "Pierre-Olivier Simonard <pierre.olivier.simonard@gmail.com>"]
 edition = "2018"
 homepage = "https://github.com/y-crdt/ypy"
@@ -13,9 +14,9 @@ name = "y_py"
 crate-type = ["cdylib"]
 
 [dependencies]
-yrs = "0.4.0"
-lib0 = "0.4.0"
+lib0 = "0.11.1"
+yrs = "0.11.1"
 
 [dependencies.pyo3]
-version = "0.14.5"
+version = "0.16.5"
 features = ["extension-module"]

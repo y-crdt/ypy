@@ -1,5 +1,8 @@
 use crate::{y_array::YArray, y_map::YMap, y_text::YText};
-use pyo3::prelude::*;
+use pyo3::exceptions::PyException;
+use pyo3::types::PyBytes;
+use pyo3::{create_exception, prelude::*};
+use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 use yrs::updates::decoder::Decode;
 use yrs::updates::encoder::{Encode, Encoder};
@@ -7,6 +10,13 @@ use yrs::{
     updates::{decoder::DecoderV1, encoder::EncoderV1},
     StateVector, Transaction, Update,
 };
+
+create_exception!(
+    y_py,
+    EncodingException,
+    PyException,
+    "Occurs due to issues in the encoding/decoding process of y_py updates."
+);
 
 /// A transaction that serves as a proxy to document block store. Ypy shared data types execute
 /// their operations in a context of a given transaction. Each document can have only one active
@@ -25,24 +35,49 @@ use yrs::{
 ///     text.insert(txn, 0, 'hello world')
 /// ```
 #[pyclass(unsendable)]
-pub struct YTransaction(pub Transaction);
+pub struct YTransaction {
+    pub inner: Transaction,
+    pub cached_before_state: Option<PyObject>,
+}
 
 impl Deref for YTransaction {
     type Target = Transaction;
 
     fn deref(&self) -> &Self::Target {
-        &self.0
+        &self.inner
     }
 }
 
 impl DerefMut for YTransaction {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
+        &mut self.inner
+    }
+}
+
+impl YTransaction {
+    pub fn new(txn: Transaction) -> Self {
+        YTransaction {
+            inner: txn,
+            cached_before_state: None,
+        }
     }
 }
 
 #[pymethods]
 impl YTransaction {
+    #[getter]
+    pub fn before_state(&mut self) -> PyObject {
+        if self.cached_before_state.is_none() {
+            let before_state = Python::with_gil(|py| {
+                let state_map: HashMap<u64, u32> =
+                    self.before_state.iter().map(|(x, y)| (*x, *y)).collect();
+                state_map.into_py(py)
+            });
+            self.cached_before_state = Some(before_state);
+        }
+        return self.cached_before_state.as_ref().unwrap().clone();
+    }
+
     /// Returns a `YText` shared data type, that's accessible for subsequent accesses using given
     /// `name`.
     ///
@@ -51,7 +86,7 @@ impl YTransaction {
     /// If there was an instance with this name, but it was of different type, it will be projected
     /// onto `YText` instance.
     pub fn get_text(&mut self, name: &str) -> YText {
-        self.0.get_text(name).into()
+        self.deref_mut().get_text(name).into()
     }
 
     /// Returns a `YArray` shared data type, that's accessible for subsequent accesses using given
@@ -62,7 +97,7 @@ impl YTransaction {
     /// If there was an instance with this name, but it was of different type, it will be projected
     /// onto `YArray` instance.
     pub fn get_array(&mut self, name: &str) -> YArray {
-        self.0.get_array(name).into()
+        self.deref_mut().get_array(name).into()
     }
 
     /// Returns a `YMap` shared data type, that's accessible for subsequent accesses using given
@@ -73,14 +108,14 @@ impl YTransaction {
     /// If there was an instance with this name, but it was of different type, it will be projected
     /// onto `YMap` instance.
     pub fn get_map(&mut self, name: &str) -> YMap {
-        self.0.get_map(name).into()
+        self.deref_mut().get_map(name).into()
     }
 
     /// Triggers a post-update series of operations without `free`ing the transaction. This includes
     /// compaction and optimization of internal representation of updates, triggering events etc.
     /// Ypy transactions are auto-committed when they are `free`d.
     pub fn commit(&mut self) {
-        self.0.commit()
+        self.deref_mut().commit()
     }
 
     /// Encodes a state vector of a given transaction document into its binary representation using
@@ -110,10 +145,10 @@ impl YTransaction {
     ///     del remote_txn
     ///
     /// ```
-    pub fn state_vector_v1(&self) -> Vec<u8> {
-        let sv = self.0.state_vector();
+    pub fn state_vector_v1(&self) -> PyObject {
+        let sv = self.state_vector();
         let payload = sv.encode_v1();
-        payload
+        Python::with_gil(|py| PyBytes::new(py, &payload).into())
     }
 
     /// Encodes all updates that have happened since a given version `vector` into a compact delta
@@ -142,15 +177,17 @@ impl YTransaction {
     ///     del local_txn
     ///     del remote_txn
     /// ```
-    pub fn diff_v1(&self, vector: Option<Vec<u8>>) -> Vec<u8> {
+    pub fn diff_v1(&self, vector: Option<Vec<u8>>) -> PyResult<PyObject> {
         let mut encoder = EncoderV1::new();
         let sv = if let Some(vector) = vector {
             StateVector::decode_v1(vector.to_vec().as_slice())
+                .map_err(|e| EncodingException::new_err(e.to_string()))?
         } else {
             StateVector::default()
         };
-        self.0.encode_diff(&sv, &mut encoder);
-        encoder.to_vec()
+        self.encode_diff(&sv, &mut encoder);
+        let bytes: PyObject = Python::with_gil(|py| PyBytes::new(py, &encoder.to_vec()).into());
+        Ok(bytes)
     }
 
     /// Applies delta update generated by the remote document replica to a current transaction's
@@ -177,11 +214,13 @@ impl YTransaction {
     ///     del local_txn
     ///     del remote_txn
     /// ```
-    pub fn apply_v1(&mut self, diff: Vec<u8>) {
+    pub fn apply_v1(&mut self, diff: Vec<u8>) -> PyResult<()> {
         let diff: Vec<u8> = diff.to_vec();
         let mut decoder = DecoderV1::from(diff.as_slice());
-        let update = Update::decode(&mut decoder);
-        self.0.apply_update(update)
+        let update =
+            Update::decode(&mut decoder).map_err(|e| EncodingException::new_err(e.to_string()))?;
+        self.apply_update(update);
+        Ok(())
     }
 
     /// Allows YTransaction to be used with a Python context block.
@@ -216,12 +255,12 @@ impl YTransaction {
     /// ```
     fn __exit__<'p>(
         &'p mut self,
-        _exc_type: Option<&'p PyAny>,
-        _exc_value: Option<&'p PyAny>,
+        exception_type: Option<&'p PyAny>,
+        _exception_value: Option<&'p PyAny>,
         _traceback: Option<&'p PyAny>,
     ) -> PyResult<bool> {
         self.commit();
         drop(self);
-        return Ok(true);
+        Ok(exception_type.is_none())
     }
 }
