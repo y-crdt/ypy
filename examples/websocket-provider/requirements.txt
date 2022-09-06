@@ -1,1 +1,5 @@
 y_py
+websockets
+numpy
+vispy
+p5

@@ -1,30 +1,27 @@
 import asyncio
-from utils import read_config
+from turtle import update
+import websockets
 
+connected = set()
 
-async def handle_echo(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
-    data = await reader.read(1024)
-    message = data.decode()
-    addr = writer.get_extra_info("peername")
+async def server_handler(websocket):
+    # Register.
+    connected.add(websocket)
+    try:
+        async for message in websocket:
+            peers = {peer for peer in connected if peer is not websocket}
+            websockets.broadcast(peers, message)
 
-    print(f"Received {message!r} from {addr!r}")
-
-    print(f"Send: {message!r}")
-    writer.write(data)
-    await writer.drain()
-
-    print("Close the connection")
-    writer.close()
+    except websockets.exceptions.ConnectionClosedError: 
+        pass
+    finally:
+        # Unregister.
+        connected.remove(websocket)
 
 
 async def main():
-    server = await asyncio.start_server(handle_echo, "127.0.0.1", 8888)
+    async with websockets.serve(server_handler, "localhost", 8765):
+        await asyncio.Future()  # run forever
 
-    addrs = ", ".join(str(sock.getsockname()) for sock in server.sockets)
-    print(f"Serving on {addrs}")
-
-    async with server:
-        await server.serve_forever()
-
-
-asyncio.run(main())
+if __name__ == "__main__":
+    asyncio.run(main())
