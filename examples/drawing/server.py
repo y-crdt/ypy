@@ -20,7 +20,7 @@ async def server_handler(websocket):
 
 
 async def main():
-    async with websockets.serve(server_handler, "localhost", 8765):
+    async with websockets.serve(server_handler, "localhost", 7654):
         await asyncio.Future()  # run forever
 
 if __name__ == "__main__":

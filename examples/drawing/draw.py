@@ -1,3 +1,4 @@
+from turtle import position
 from p5 import *
 from y_py import YDoc, YArray, AfterTransactionEvent
 from client import YDocWSClient
@@ -8,9 +9,13 @@ client: YDocWSClient
 
 
 def setup():
+    """
+    Initialization logic that runs before the `draw()` loop.
+    """
     global strokes
     global doc
     global client
+    title("Ypy Drawing Demo")
     size(720, 480)
     doc = YDoc(0)
     strokes = doc.get_array("strokes")
@@ -19,9 +24,10 @@ def setup():
     
 
 
-    
-
 def draw():
+    """
+    Handles user input and updates the canvas.
+    """
     global strokes
     global doc
     global client
