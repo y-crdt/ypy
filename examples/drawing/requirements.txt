@@ -1,0 +1,6 @@
+y_py
+websockets
+glfw; sys_platform != 'win32'
+numpy
+vispy
+p5
