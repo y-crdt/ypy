@@ -585,6 +585,15 @@ class YArray:
         Deletes a range of items of given `length` from current `YArray` instance,
         starting from given `index`.
         """
+    def move_to(self, txn: YTransaction, source: int, target: int):
+        """
+        Moves a single item found at `source` index into `target` index position
+
+        Args:
+            txn: The transaction where the array is being modified.
+            source: The index of the element to be moved.
+            target: The new position of the element.
+        """
     def __getitem__(self, index: Union[int, slice]) -> Any:
         """
         Returns:

@@ -177,6 +177,27 @@ impl YArray {
         }
     }
 
+    /// Moves the element from the index source to target.
+    pub fn move_to(&mut self, txn: &mut YTransaction, source: u32, target: u32) -> PyResult<()> {
+        match &mut self.0 {
+            SharedType::Integrated(v) => Ok(v.move_to(txn, source, target)),
+            SharedType::Prelim(v) if source < v.len() as u32 && target < v.len() as u32 => {
+                if source < 0 as u32 || target < 0 as u32 {
+                    Err::<PyIndexError, ()>(());
+                }
+                if source < target {
+                    let el = v.remove(source as usize);
+                    v.insert((target-1) as usize, el);
+                } else if source > target {
+                    let el = v.remove(source as usize);
+                    v.insert(target as usize, el);
+                }
+                Ok(())
+            }
+            _ => Err(PyIndexError::default_message()),
+        }
+    }
+
     pub fn __getitem__(&self, index: Index) -> PyResult<PyObject> {
         // Apply index to the Array type
         match index {
