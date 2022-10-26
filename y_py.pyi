@@ -314,7 +314,7 @@ class YTransaction:
             try:
                 local_sv = local_txn.state_vector_v1()
                 remote_delta = remote_txn.diff_v1(local_sv)
-                local_txn.applyV1(remote_delta)
+                local_txn.apply_v1(remote_delta)
             finally:
                 del local_txn
                 del remote_txn
@@ -342,7 +342,7 @@ class YTransaction:
             try:
                 local_sv = local_txn.state_vector_v1()
                 remote_delta = remote_txn.diff_v1(local_sv)
-                local_txn.applyV1(remote_delta)
+                local_txn.apply_v1(remote_delta)
             finally:
                 del local_txn
                 del remote_txn
@@ -367,7 +367,7 @@ class YTransaction:
             try:
                 local_sv = local_txn.state_vector_v1()
                 remote_delta = remote_txn.diff_v1(local_sv)
-                local_txn.applyV1(remote_delta)
+                local_txn.apply_v1(remote_delta)
             finally:
                 del local_txn
                 del remote_txn
