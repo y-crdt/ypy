@@ -587,12 +587,39 @@ class YArray:
         """
     def move_to(self, txn: YTransaction, source: int, target: int):
         """
-        Moves a single item found at `source` index into `target` index position
+        Moves a single item found at `source` index into `target` index position.
 
         Args:
             txn: The transaction where the array is being modified.
             source: The index of the element to be moved.
             target: The new position of the element.
+        """
+    def move_range_to(self, txn: YTransaction, start: int, end: int, target: int):
+        """
+        Moves all elements found within `start`..`end` indexes range (both side inclusive) into
+        new position pointed by `target` index. All elements inserted concurrently by other peers
+        inside of moved range will be moved as well after synchronization (although it make take
+        more than one sync roundtrip to achieve convergence).
+
+        Args:
+            txn: The transaction where the array is being modified.
+            start: The index of the first element of the range (inclusive).
+            end: The index of the last element of the range (inclusive).
+            target: The new position of the element.
+        
+        Example:
+        ```
+        import y_py as Y
+        doc = Y.Doc();
+        array = doc.get_array('array')
+
+        with doc.begin_transaction() as t:
+            array.insert_range(t, 0, [1,2,3,4]);
+        
+        // move elements 2 and 3 after the 4
+        with doc.begin_transaction() as t:
+            array.move_range_to(t, 1, 2, 4);
+        ```
         """
     def __getitem__(self, index: Union[int, slice]) -> Any:
         """
