@@ -22,7 +22,6 @@ class TextEditor:
         self.text = self.doc.get_text("content")
         
         self._id = str(random.random())
-        print("user ID:", self._id)
         self.cursors = self.doc.get_map("cursors")
         self.ws_client = YDocWSClient()
         self.doc.observe_after_transaction(self.ws_client.send_updates)
@@ -76,7 +75,6 @@ class TextEditor:
         updates.pop(self._id)
         
         for k,pos in self.cursors.items():
-            print("found something", self._id, k, pos)
             self.textbox.tag_remove("cursor", "1.0", END)
             start = self.text_to_doc_pos(int(pos))
             end = self.text_to_doc_pos(int(pos) + 1)
@@ -126,7 +124,6 @@ class TextEditor:
 
 
     def on_entry(self, e):
-        print(self.cursors)
         selection_tags = self.textbox.tag_ranges(SEL)
         if len(selection_tags) == 2:
             self.delete_selected(selection_tags)
@@ -155,7 +152,6 @@ class TextEditor:
         with self.doc.begin_transaction() as txn:
             self.text.delete_range(txn,start, end - start)
             self.cursors.set(txn, self._id, start)
-        print(start, end)
 
 
     def on_delete(self, e):
