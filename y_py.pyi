@@ -726,7 +726,7 @@ class YMap:
         Returns:
             The item at the key.
         """
-    def get(key: str, fallback: Any) -> Any | None:
+    def get(self, key: str, fallback: Any) -> Any | None:
         """
         Args:
             key: The identifier for the requested data.
