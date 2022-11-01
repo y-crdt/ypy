@@ -14,7 +14,7 @@ def demo():
     sleep(1)
     # Clients
     for _ in range(2):
-        processes.append(subprocess.Popen([py, "client.py"]))
+        processes.append(subprocess.Popen([py, "text_editor.py"]))
 
 
     wait_until_done()
@@ -35,8 +35,6 @@ def wait_until_done():
     print("waiting")
     while input("Enter 'q' to quit: ").lower() != 'q':
         continue
-
-
 
 if __name__ == "__main__":
     demo()
