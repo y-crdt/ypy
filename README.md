@@ -39,28 +39,29 @@ assert value == "hello world!"
 
 ## Development Setup
 
-0. Install Rust and Python
-1. Install `maturin` in order to build Ypy
+0. [Install Rust](https://www.rust-lang.org/tools/install) and [Python](https://www.python.org/downloads/) (consider [pyenv](https://github.com/pyenv/pyenv))
+1. [Install Poetry](https://python-poetry.org/docs/#installation) 
+ - [Optional] Configure Poetry to create `.venv` folders in current directory when running `poetry install`: `poetry config virtualenvs.in-project true`
+2. Install the `y-py` dependencies into the virtual environment and build a wheel for `y-py` using `maturin`
 
+*All `poetry run` commands below can be replaced by entering into `poetry shell` first if you prefer*
 ```
-pip install maturin
+poetry install
+poetry run maturin develop
 ```
-
-2. Create a development build of the library
-   `maturin develop`
 
 ## Tests
 
-All tests are located in `/tests`. You can run them with `pytest`.
+All tests are located in `/tests`. You can run them with:
 
 ```
-pytest
+poetry run pytest
 ```
 
 ## Build Ypy :
 
-Build the library as a wheel and store them in `target/wheels` :
+Build the library as a wheel and store them in `target/wheels`:
 
 ```
-maturin build
+poetry run maturin build
 ```
