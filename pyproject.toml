@@ -4,10 +4,16 @@ version = "0.5.4"
 description = "Python bindings for the Y-CRDT built from yrs (Rust)"
 authors = ["John Waidhofer <waidhoferj@gmail.com>", "Kevin Jahns <kevin.jahns@protonmail.com>", "Pierre-Olivier Simonard <pierre.olivier.simonard@gmail.com>"]
 license = "MIT"
+homepage = "https://github.com/y-crdt/ypy"
+repository = "https://github.com/y-crdt/ypy"
 
 [tool.poetry.dependencies]
 python = "^3.9"
 
+# May get a deprecation warning developing with Poetry >=1.2, but at least
+# using .dev-dependencies vice .group.dev.dependencies won't throw an error if 
+# you're using Poetry <1.2
+# https://python-poetry.org/blog/announcing-poetry-1.2.0/#dependency-groups
 [tool.poetry.dev-dependencies]
 pytest = "^7.2.0"
 maturin = "^0.13.6"
