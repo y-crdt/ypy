@@ -43,7 +43,8 @@ assert value == "hello world!"
   - Some alternative bootstrapping options are [pyenv](https://github.com/pyenv/pyenv) for Python and using [conda](https://conda.io/projects/conda/en/latest/user-guide/install/index.html) to [conda install rust](https://anaconda.org/conda-forge/rust)
 1. Install [hatch](https://hatch.pypa.io/latest/install/) (`python -m pip install hatch`)
 2. Create a development build of the library
-   
+
+Make sure to `unset CONDA_PREFIX` if you are in a conda environment.
 ```
 python -m hatch run maturin develop
 ```
