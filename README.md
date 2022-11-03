@@ -44,9 +44,9 @@ assert value == "hello world!"
 1. Install [hatch](https://hatch.pypa.io/latest/install/) (`python -m pip install hatch`)
 2. Create a development build of the library
 
-Make sure to `unset CONDA_PREFIX` if you are in a conda environment.
+*Make sure to `unset CONDA_PREFIX` if you are in a conda environment. If `hatch` is not found on your PATH, you can run `python -m hatch` instead*
 ```
-python -m hatch run maturin develop
+hatch run maturin develop
 ```
 
 ## Tests
@@ -54,7 +54,7 @@ python -m hatch run maturin develop
 All tests are located in `/tests`. You can run them with `pytest`.
 
 ```
-python -m hatch run pytest
+hatch run pytest
 ```
 
 ## Build Ypy :
@@ -62,5 +62,5 @@ python -m hatch run pytest
 Build the library as a wheel and store them in `target/wheels` :
 
 ```
-python -m hatch run maturin build
+hatch run maturin build
 ```
