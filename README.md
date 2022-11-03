@@ -40,7 +40,7 @@ assert value == "hello world!"
 ## Development Setup
 
 0. [Install Rust](https://www.rust-lang.org/tools/install) and [Python](https://www.python.org/downloads/) (consider [pyenv](https://github.com/pyenv/pyenv))
-1. Install [hatch](https://hatch.pypa.io/1.2/install/) (`python -m pip install hatch`)
+1. Install [hatch](https://hatch.pypa.io/latest/install/) (`python -m pip install hatch`)
 2. Create a development build of the library
    
 ```
