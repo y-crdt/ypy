@@ -7,7 +7,7 @@ name = "y-py"
 version = "0.5.4"
 description = "Python bindings for the Y-CRDT built from yrs (Rust)"
 authors = [
-    { name = "John Waidofer", email = "waidhoferj@gmail.com" },
+    { name = "John Waidhofer", email = "waidhoferj@gmail.com" },
     { name = "Kevin Jahns", email = "kevin.jahns@protonmail.com" },
     { name = "Pierre-Olivier Simonard", email = "pierre.olivier.simonard@gmail.com" }
 ]
