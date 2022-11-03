@@ -52,7 +52,7 @@ python -m hatch run maturin develop
 All tests are located in `/tests`. You can run them with `pytest`.
 
 ```
-python -m hatch run maturin develop
+python -m hatch run pytest
 ```
 
 ## Build Ypy :
