@@ -39,7 +39,8 @@ assert value == "hello world!"
 
 ## Development Setup
 
-0. [Install Rust](https://www.rust-lang.org/tools/install) and [Python](https://www.python.org/downloads/) (consider [pyenv](https://github.com/pyenv/pyenv))
+0. [Install Rust](https://www.rust-lang.org/tools/install) and [Python](https://www.python.org/downloads/) 
+  - Some alternative bootstrapping options are [pyenv](https://github.com/pyenv/pyenv) for Python and using [conda](https://conda.io/projects/conda/en/latest/user-guide/install/index.html) to [conda install rust](https://anaconda.org/conda-forge/rust)
 1. Install [hatch](https://hatch.pypa.io/latest/install/) (`python -m pip install hatch`)
 2. Create a development build of the library
    
