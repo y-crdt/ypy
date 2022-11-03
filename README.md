@@ -39,22 +39,20 @@ assert value == "hello world!"
 
 ## Development Setup
 
-0. Install Rust and Python
-1. Install `maturin` in order to build Ypy
-
-```
-pip install maturin
-```
-
+0. [Install Rust](https://www.rust-lang.org/tools/install) and [Python](https://www.python.org/downloads/) (consider [pyenv](https://github.com/pyenv/pyenv))
+1. Install [hatch](https://hatch.pypa.io/1.2/install/) (`python -m pip install hatch`)
 2. Create a development build of the library
-   `maturin develop`
+   
+```
+python -m hatch run maturin develop
+```
 
 ## Tests
 
 All tests are located in `/tests`. You can run them with `pytest`.
 
 ```
-pytest
+python -m hatch run maturin develop
 ```
 
 ## Build Ypy :
@@ -62,5 +60,5 @@ pytest
 Build the library as a wheel and store them in `target/wheels` :
 
 ```
-maturin build
+python -m hatch run maturin build
 ```

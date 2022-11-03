@@ -1,3 +1,17 @@
 [build-system]
 requires = ["maturin>=0.13,<0.14"]
 build-backend = "maturin"
+
+[project]
+name = "y-py"
+version = "0.5.4"
+description = "Python bindings for the Y-CRDT built from yrs (Rust)"
+authors = [
+    { name = "John Waidofer", email = "waidhoferj@gmail.com" },
+    { name = "Kevin Jahns", email = "kevin.jahns@protonmail.com" },
+    { name = "Pierre-Olivier Simonard", email = "pierre.olivier.simonard@gmail.com" }
+]
+readme = "README.md"
+homepage = "https://github.com/y-crdt/ypy"
+repository = "https://github.com/y-crdt/ypy"
+dependencies = ["pytest", "maturin"]
