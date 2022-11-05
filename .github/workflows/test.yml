@@ -34,11 +34,12 @@ jobs:
           toolchain: stable
           profile: minimal
           default: true
+      - name: Install Hatch
+        run: |
+          pip install hatch
       - name: Build Ypy
         run: |
-          pip install maturin
-          maturin develop
+          hatch run maturin develop
       - name: Run Tests
         run: |
-          pip install pytest
-          pytest
+          hatch run pytest
