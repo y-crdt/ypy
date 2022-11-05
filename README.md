@@ -51,15 +51,15 @@ hatch run maturin develop
 
 ## Tests
 
-All tests are located in `/tests`. You can run them with `pytest`.
+All tests are located in `/tests`. There is a `test` environment matrix defined in `pyproject.toml` that will run `pytest` against `py37` through `py310`.
 
 ```
-hatch run pytest
+hatch run test:pytest
 ```
 
 ## Build Ypy :
 
-Build the library as a wheel and store them in `target/wheels` :
+Build the library as a wheel and store them in `target/wheels`:
 
 ```
 hatch run maturin build

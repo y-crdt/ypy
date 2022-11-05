@@ -15,3 +15,6 @@ readme = "README.md"
 homepage = "https://github.com/y-crdt/ypy"
 repository = "https://github.com/y-crdt/ypy"
 dependencies = ["pytest", "maturin"]
+
+[[tool.hatch.envs.test.matrix]]
+python = ["37", "38", "39", "310"]
