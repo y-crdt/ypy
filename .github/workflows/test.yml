@@ -16,7 +16,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        python-version: ["3.7", "3.10"] # Empty string will trigger a build with the latest python version
+        python-version: ["3.7", "3.11"] # Empty string will trigger a build with the latest python version
     defaults:
       run:
         shell: bash -l {0}
