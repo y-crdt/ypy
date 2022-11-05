@@ -39,6 +39,7 @@ jobs:
           pip install hatch
       - name: Build Ypy
         run: |
+          unset CONDA_PREFIX 
           hatch run maturin develop
       - name: Run Tests
         run: |
