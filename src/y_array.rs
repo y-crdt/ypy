@@ -177,6 +177,86 @@ impl YArray {
         }
     }
 
+    /// Moves the element from the index source to target.
+    pub fn move_to(&mut self, txn: &mut YTransaction, source: u32, target: u32) -> PyResult<()> {
+        match &mut self.0 {
+            SharedType::Integrated(v) => {
+                v.move_to(txn, source, target);
+                Ok(())
+            },
+            SharedType::Prelim(_) if source < 0 as u32 || target < 0 as u32 => Err(PyIndexError::default_message()),
+            SharedType::Prelim(v) if source < v.len() as u32 && target < v.len() as u32 => {
+                if source < target {
+                    let el = v.remove(source as usize);
+                    v.insert((target-1) as usize, el);
+                } else if source > target {
+                    let el = v.remove(source as usize);
+                    v.insert(target as usize, el);
+                }
+                Ok(())
+            }
+            _ => Err(PyIndexError::default_message()),
+        }
+    }
+
+    /// Moves all elements found within `start`..`end` indexes range (both side inclusive) into
+    /// new position pointed by `target` index. All elements inserted concurrently by other peers
+    /// inside of moved range will be moved as well after synchronization (although it make take
+    /// more than one sync roundtrip to achieve convergence).
+    ///
+    /// `assoc_start`/`assoc_end` flags are used to mark if ranges should include elements that
+    /// might have been inserted concurrently at the edges of the range definition.
+    ///
+    /// Example:
+    /// ```
+    /// use yrs::Doc;
+    /// let doc = Doc::new();
+    /// let array = doc.transact().get_array("array");
+    /// array.insert_range(&mut doc.transact(), 0, [1,2,3,4]);
+    /// // move elements 2 and 3 after the 4
+    /// array.move_range_to(&mut doc.transact(), 1, 2, 4);
+    /// ```
+    pub fn move_range_to(
+        &mut self,
+        txn: &mut YTransaction,
+        start: u32,
+        end: u32,
+        target: u32,
+    ) -> PyResult<()> {
+        match &mut self.0 {
+            SharedType::Integrated(v) => {
+                v.move_range_to(txn, start, true, end, false, target);
+                Ok(())
+            },
+
+            // y-rs does nothing if end < start
+            // SharedType::Prelim(_) if end < start => Err(PyIndexError::default_message()),
+            SharedType::Prelim(_) if start < 0 as u32 || end < 0 as u32 || target < 0 as u32 => Err(PyIndexError::default_message()),
+            SharedType::Prelim(v) if start > v.len() as u32 || end > v.len() as u32 || target > v.len() as u32 => Err(PyIndexError::default_message()),
+
+            // It doesn't make sense to move a range into the same range (it's basically a no-op).
+            SharedType::Prelim(_) if target >= start && target <= end  => Ok(()),
+
+            SharedType::Prelim(v) => {
+                let mut i: usize = 0;
+                let mut n: usize = (end - start + 1) as usize;
+                let backwards = target > end;
+
+                while n > 0 {
+                    let item = v.remove(start as usize + i);
+                    if backwards {
+                        v.insert(target as usize - 1, item);
+                    } else {
+                        v.insert(target as usize + i, item);
+                        i += 1;
+                    }
+                    n -= 1;
+                }
+                Ok(())
+            }
+        }
+    }
+
     pub fn __getitem__(&self, index: Index) -> PyResult<PyObject> {
         // Apply index to the Array type
         match index {

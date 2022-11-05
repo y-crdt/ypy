@@ -242,3 +242,137 @@ def test_deep_observe():
         container[0].append(txn, 4)
 
     assert events == None
+
+def test_move_to():
+    """
+    Ensure that move_to works.
+    """
+    doc = YDoc()
+    arr = doc.get_array('test')
+
+    # Move 0 to 10
+    with doc.begin_transaction() as t:
+        arr.delete_range(t, 0, len(arr))
+        arr.extend(t, [0,1,2,3,4,5,6,7,8,9])
+    doc.transact(lambda t: arr.move_to(t, 0, 10))
+    assert arr.to_json() == [1,2,3,4,5,6,7,8,9,0]
+
+    # Move 9 to 0
+    with doc.begin_transaction() as t:
+        arr.delete_range(t, 0, len(arr))
+        arr.extend(t, [0,1,2,3,4,5,6,7,8,9])
+    doc.transact(lambda t: arr.move_to(t, 9, 0))
+    assert arr.to_json() == [9,0,1,2,3,4,5,6,7,8]
+
+    # Move 6 to 5
+    with doc.begin_transaction() as t:
+        arr.delete_range(t, 0, len(arr))
+        arr.extend(t, [0,1,2,3,4,5,6,7,8,9])
+    doc.transact(lambda t: arr.move_to(t, 6, 5))
+    assert arr.to_json() == [0,1,2,3,4,6,5,7,8,9]
+
+    # Move -1 to 5
+    with doc.begin_transaction() as t:
+        arr.delete_range(t, 0, len(arr))
+        arr.extend(t, [0,1,2,3,4,5,6,7,8,9])
+    with pytest.raises(Exception):
+        doc.transact(lambda t: arr.move_to(t, -1, 5))
+
+    # Move 0 to -5
+    with doc.begin_transaction() as t:
+        arr.delete_range(t, 0, len(arr))
+        arr.extend(t, [0,1,2,3,4,5,6,7,8,9])
+    with pytest.raises(Exception):
+        doc.transact(lambda t: arr.move_to(t, 0, -5))
+
+def test_move_range_to():
+    """
+    Ensure that move_range_to works.
+    """
+    doc = YDoc()
+    arr = doc.get_array('test')
+
+    # Move 1-2 to 4
+    with doc.begin_transaction() as t:
+        arr.delete_range(t, 0, len(arr))
+        arr.extend(t, [0,1,2,3])
+    doc.transact(lambda t: arr.move_range_to(t, 1, 2, 4))
+    assert arr.to_json() == [0,3,1,2]
+
+    # Move 0-0 to 10
+    with doc.begin_transaction() as t:
+        arr.delete_range(t, 0, len(arr))
+        arr.extend(t, [0,1,2,3,4,5,6,7,8,9])
+    doc.transact(lambda t: arr.move_range_to(t, 0, 0, 10))
+    assert arr.to_json() == [1,2,3,4,5,6,7,8,9,0]
+
+    # Move 0-1 to 10
+    with doc.begin_transaction() as t:
+        arr.delete_range(t, 0, len(arr))
+        arr.extend(t, [0,1,2,3,4,5,6,7,8,9])
+    doc.transact(lambda t: arr.move_range_to(t, 0, 1, 10))
+    assert arr.to_json() == [2,3,4,5,6,7,8,9,0,1]
+
+
+    # Move 3-5 to 7
+    with doc.begin_transaction() as t:
+        arr.delete_range(t, 0, len(arr))
+        arr.extend(t, [0,1,2,3,4,5,6,7,8,9])
+    doc.transact(lambda t: arr.move_range_to(t, 3, 5, 7))
+    assert arr.to_json() == [0,1,2,6,3,4,5,7,8,9]
+
+    # Move 1-0 to 10
+    with doc.begin_transaction() as t:
+        arr.delete_range(t, 0, len(arr))
+        arr.extend(t, [0,1,2,3,4,5,6,7,8,9])
+    doc.transact(lambda t: arr.move_range_to(t, 1, 0, 10))
+    assert arr.to_json() == [0,1,2,3,4,5,6,7,8,9]
+
+    # Move 3-5 to 5
+    with doc.begin_transaction() as t:
+        arr.delete_range(t, 0, len(arr))
+        arr.extend(t, [0,1,2,3,4,5,6,7,8,9])
+    doc.transact(lambda t: arr.move_range_to(t, 3, 5, 5))
+    assert arr.to_json() == [0,1,2,3,4,5,6,7,8,9]
+
+    # Move 9-9 to 0
+    with doc.begin_transaction() as t:
+        arr.delete_range(t, 0, len(arr))
+        arr.extend(t, [0,1,2,3,4,5,6,7,8,9])
+    doc.transact(lambda t: arr.move_range_to(t, 9, 9, 0))
+    assert arr.to_json() == [9,0,1,2,3,4,5,6,7,8]
+
+    # Move 8-9 to 0
+    with doc.begin_transaction() as t:
+        arr.delete_range(t, 0, len(arr))
+        arr.extend(t, [0,1,2,3,4,5,6,7,8,9])
+    doc.transact(lambda t: arr.move_range_to(t, 8, 9, 0))
+    assert arr.to_json() == [8,9,0,1,2,3,4,5,6,7]
+
+    # Move 4-6 to 3
+    with doc.begin_transaction() as t:
+        arr.delete_range(t, 0, len(arr))
+        arr.extend(t, [0,1,2,3,4,5,6,7,8,9])
+    doc.transact(lambda t: arr.move_range_to(t, 4, 6, 3))
+    assert arr.to_json() == [0,1,2,4,5,6,3,7,8,9]
+
+    # Move 3-5 to 3
+    with doc.begin_transaction() as t:
+        arr.delete_range(t, 0, len(arr))
+        arr.extend(t, [0,1,2,3,4,5,6,7,8,9])
+    doc.transact(lambda t: arr.move_range_to(t, 3, 5, 3))
+    assert arr.to_json() == [0,1,2,3,4,5,6,7,8,9]
+
+    # Move -1-2 to 5
+    with doc.begin_transaction() as t:
+        arr.delete_range(t, 0, len(arr))
+        arr.extend(t, [0,1,2,3,4,5,6,7,8,9])
+    with pytest.raises(Exception):
+        doc.transact(lambda t: arr.move_range_to(t, -1, 2, 5))
+
+    # Move 0--1 to 3
+    with doc.begin_transaction() as t:
+        arr.delete_range(t, 0, len(arr))
+        arr.extend(t, [0,1,2,3,4,5,6,7,8,9])
+    with pytest.raises(Exception):
+        doc.transact(lambda t: arr.move_range_to(t, 0, -1, 3))
