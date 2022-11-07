@@ -39,22 +39,17 @@ assert value == "hello world!"
 
 ## Development Setup
 
-0. [Install Rust](https://www.rust-lang.org/tools/install) and [Python](https://www.python.org/downloads/) 
-  - Some alternative bootstrapping options are [pyenv](https://github.com/pyenv/pyenv) for Python, or using [mamba](https://github.com/conda-forge/miniforge) to `mamba install rust python`.
-1. Install [hatch](https://hatch.pypa.io/latest/install/) (`python -m pip install hatch`)
-2. Create a development build of the library
-
-*Make sure to `unset CONDA_PREFIX` if you are in a conda environment. If `hatch` is not found on your PATH, you can run `python -m hatch` instead*
-```
-hatch run maturin develop
-```
+0. Install [Rust](https://www.rust-lang.org/tools/install) and [Python](https://www.python.org/downloads/)
+1. Install `maturin` in order to build Ypy: `pip install maturin`
+2. Create a development build of the library: `maturin develop`
 
 ## Tests
 
-All tests are located in `/tests`. There is a `test` environment matrix defined in `pyproject.toml` that will run `pytest` against `py37` through `py311`.
+All tests are located in `/tests`. If you are using `hatch`, there is a `test` environment matrix defined in `pyproject.toml` that will run `pytest` against `py37` through `py311`. To run the tests, install `pytest` and run the command line tool from the project root:
 
 ```
-hatch run test:pytest
+pip install pytest
+pytest
 ```
 
 ## Build Ypy :
@@ -62,5 +57,5 @@ hatch run test:pytest
 Build the library as a wheel and store them in `target/wheels`:
 
 ```
-hatch run maturin build
+maturin build
 ```
