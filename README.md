@@ -1,3 +1,5 @@
+[![PyPI version](https://badge.fury.io/py/y-py.svg)](https://badge.fury.io/py/y-py)
+
 # Ypy
 
 Ypy is a Python binding for Y-CRDT. It provides distributed data types that enable real-time collaboration between devices. Ypy can sync data with any other platform that has a Y-CRDT binding, allowing for seamless cross-domain communication. The library is a thin wrapper around Yrs, taking advantage of the safety and performance of Rust.
