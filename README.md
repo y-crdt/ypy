@@ -51,7 +51,7 @@ hatch run maturin develop
 
 ## Tests
 
-All tests are located in `/tests`. There is a `test` environment matrix defined in `pyproject.toml` that will run `pytest` against `py37` through `py310`.
+All tests are located in `/tests`. There is a `test` environment matrix defined in `pyproject.toml` that will run `pytest` against `py37` through `py311`.
 
 ```
 hatch run test:pytest
