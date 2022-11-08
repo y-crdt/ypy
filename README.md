@@ -41,27 +41,22 @@ assert value == "hello world!"
 
 ## Development Setup
 
-0. Install Rust and Python
-1. Install `maturin` in order to build Ypy
-
-```
-pip install maturin
-```
-
-2. Create a development build of the library
-   `maturin develop`
+0. Install [Rust](https://www.rust-lang.org/tools/install) and [Python](https://www.python.org/downloads/)
+1. Install `maturin` in order to build Ypy: `pip install maturin`
+2. Create a development build of the library: `maturin develop`
 
 ## Tests
 
-All tests are located in `/tests`. You can run them with `pytest`.
+All tests are located in `/tests`. If you are using `hatch`, there is a `test` environment matrix defined in `pyproject.toml` that will run `pytest` against `py37` through `py311`. To run the tests, install `pytest` and run the command line tool from the project root:
 
 ```
+pip install pytest
 pytest
 ```
 
 ## Build Ypy :
 
-Build the library as a wheel and store them in `target/wheels` :
+Build the library as a wheel and store them in `target/wheels`:
 
 ```
 maturin build
