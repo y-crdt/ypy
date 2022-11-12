@@ -112,9 +112,23 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           architecture: x64
+      - name: Install Rust
+        # if this isn't here, maturin fails with error: failed to run `rustc` to learn about target-specific information
+        uses: actions-rs/toolchain@v1
+        with:
+            # maturin build will generate args -Z link-native-libraries=no which is only accepted on nightly compiler
+            toolchain: nightly
+            profile: minimal
+            override: true
       - name: Rustup add wasm32 target
         # maturin build --target wasm32-unknown-emscripten requires rust to add that target first
         run: rustup target add wasm32-unknown-emscripten
+      - name: Setup emsdk
+        uses: mymindstorm/setup-emsdk@v11
+        with: 
+          # Match the emscripten version Pyodide builds with, which is 3.1.14 since 0.21.0
+          # https://pyodide.org/en/stable/project/changelog.html#version-0-21-0
+          version: 3.1.14 
       - name: Build wheels
         uses: messense/maturin-action@v1
         with:
