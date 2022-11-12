@@ -1,8 +1,10 @@
 name: Build and Release
 
 on:
-  release:
-    types: [published]
+  push:
+    branches: [wasm_wheel]
+  # release:
+  #   types: [published]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -96,6 +98,31 @@ jobs:
         with:
           name: wheels
           path: dist
+
+  wasm:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # Match Pyodide Python version which is 3.10.2 since 0.20.0
+        # https://pyodide.org/en/stable/project/changelog.html#version-0-20-0
+        python-version: ["3.10.2"]
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+          architecture: x64
+      - name: Build wheels
+        uses: messense/maturin-action@v1
+        with:
+          target: wasm32-unknown-emscripten
+          args: --release --out dist --find-interpreter
+      - name: Upload wheels
+        uses: actions/upload-artifact@v2
+        with:
+          name: wheels
+          path: dist
+     
   release:
     name: Release
     runs-on: ubuntu-latest
@@ -108,11 +135,11 @@ jobs:
       - uses: actions/download-artifact@v2
         with:
           name: wheels
-      - uses: actions/setup-python@v2
-      - name: Publish to PyPi
-        env:
-          TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
-          TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
-        run: |
-          pip install --upgrade twine
-          twine upload --skip-existing *
+      # - uses: actions/setup-python@v2
+      # - name: Publish to PyPi
+      #   env:
+      #     TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
+      #     TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
+      #   run: |
+      #     pip install --upgrade twine
+      #     twine upload --skip-existing *
