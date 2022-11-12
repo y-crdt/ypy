@@ -112,6 +112,9 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           architecture: x64
+      - name: Rustup add wasm32 target
+        # maturin build --target wasm32-unknown-emscripten requires rust to add that target first
+        run: rustup target add wasm32-unknown-emscripten
       - name: Build wheels
         uses: messense/maturin-action@v1
         with:
