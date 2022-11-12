@@ -101,7 +101,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        # Match Python, version which is 3.10.2 since Pyodide 0.20.0
+        # Match Python version, which is 3.10.2 since Pyodide 0.20.0
         # https://pyodide.org/en/stable/project/changelog.html#version-0-20-0
         python-version: ["3.10.2"]
     steps:
@@ -124,7 +124,7 @@ jobs:
       - name: Setup emsdk
         uses: mymindstorm/setup-emsdk@v11
         with: 
-          # Match  emscripten version, which is 3.1.14 since Pyodide 0.21.0
+          # Match emscripten version, which is 3.1.14 since Pyodide 0.21.0
           # https://pyodide.org/en/stable/project/changelog.html#version-0-21-0
           version: 3.1.14 
       - name: Build wheels
