@@ -1,10 +1,8 @@
 name: Build and Release
 
 on:
-  push:
-    branches: [wasm_wheel]
-  # release:
-  #   types: [published]
+  release:
+    types: [published]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -103,7 +101,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        # Match Pyodide Python version which is 3.10.2 since 0.20.0
+        # Match Python, version which is 3.10.2 since Pyodide 0.20.0
         # https://pyodide.org/en/stable/project/changelog.html#version-0-20-0
         python-version: ["3.10.2"]
     steps:
@@ -113,7 +111,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
           architecture: x64
       - name: Install Rust
-        # if this isn't here, maturin fails with error: failed to run `rustc` to learn about target-specific information
+        # if this isn't here, wasm wheel build fails with error: failed to run `rustc` to learn about target-specific information
         uses: actions-rs/toolchain@v1
         with:
             # maturin build will generate args -Z link-native-libraries=no which is only accepted on nightly compiler
@@ -126,7 +124,7 @@ jobs:
       - name: Setup emsdk
         uses: mymindstorm/setup-emsdk@v11
         with: 
-          # Match the emscripten version Pyodide builds with, which is 3.1.14 since 0.21.0
+          # Match  emscripten version, which is 3.1.14 since Pyodide 0.21.0
           # https://pyodide.org/en/stable/project/changelog.html#version-0-21-0
           version: 3.1.14 
       - name: Build wheels
@@ -152,11 +150,11 @@ jobs:
       - uses: actions/download-artifact@v2
         with:
           name: wheels
-      # - uses: actions/setup-python@v2
-      # - name: Publish to PyPi
-      #   env:
-      #     TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
-      #     TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
-      #   run: |
-      #     pip install --upgrade twine
-      #     twine upload --skip-existing *
+      - uses: actions/setup-python@v2
+      - name: Publish to PyPi
+        env:
+          TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
+          TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
+        run: |
+          pip install --upgrade twine
+          twine upload --skip-existing *
