@@ -14,6 +14,8 @@ authors = [
 readme = "README.md"
 homepage = "https://github.com/y-crdt/ypy"
 repository = "https://github.com/y-crdt/ypy"
+
+[tool.hatch.envs.test]
 dependencies = ["pytest", "maturin"]
 
 [[tool.hatch.envs.test.matrix]]

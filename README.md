@@ -47,11 +47,20 @@ assert value == "hello world!"
 
 ## Tests
 
-All tests are located in `/tests`. If you are using `hatch`, there is a `test` environment matrix defined in `pyproject.toml` that will run `pytest` against `py37` through `py311`. To run the tests, install `pytest` and run the command line tool from the project root:
+All tests are located in `/tests`. To run the tests, install `pytest` and run the command line tool from the project root:
 
 ```
 pip install pytest
 pytest
+```
+
+## Using Hatch
+
+If you are using `hatch`, there is a `test` environment matrix defined in `pyproject.toml` that will run commands in virtualenvironments for `py37` through `py311`.
+
+```
+hatch run test:maturin develop
+hatch run test:pytest
 ```
 
 ## Build Ypy :
