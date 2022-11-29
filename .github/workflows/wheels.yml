@@ -99,11 +99,15 @@ jobs:
 
   wasm:
     runs-on: ubuntu-latest
+    # Pyodide began supporting `micropip.install` from emscripten-compiled binary wheels
+    # in Pyodide 0.21.0 (Aug 2022), so no need to build wheels for versions before then.
+    # As of Nov 2022, the matrix for emscripten/python versions since then is simple. 
+    # Update this matrix when new Pyodide versions come out that bump the Python interpreter
+    # or emscripten version. Ref: https://pyodide.org/en/stable/project/changelog.html
     strategy:
       matrix:
-        # Match Python version, which is 3.10.2 since Pyodide 0.20.0
-        # https://pyodide.org/en/stable/project/changelog.html#version-0-20-0
         python-version: ["3.10.2"]
+        emscripten-version: ["3.1.14"]
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
@@ -124,22 +128,20 @@ jobs:
       - name: Setup emsdk
         uses: mymindstorm/setup-emsdk@v11
         with: 
-          # Match emscripten version, which is 3.1.14 since Pyodide 0.21.0
-          # https://pyodide.org/en/stable/project/changelog.html#version-0-21-0
-          version: 3.1.14 
+          version: ${{ matrix.emscripten-version }}
       - name: Build wheels
         uses: messense/maturin-action@v1
         with:
           target: wasm32-unknown-emscripten
-          args: --release --out dist --find-interpreter
+          args: --release --out wasm_wheel --find-interpreter
       - name: Upload wheels
         uses: actions/upload-artifact@v2
         with:
-          name: wheels
-          path: dist
+          name: wasm_wheel
+          path: wasm_wheel
      
-  release:
-    name: Release
+  pypi-release:
+    name: Publish to Pypi on Release
     runs-on: ubuntu-latest
     needs:
       - macos
@@ -158,3 +160,27 @@ jobs:
         run: |
           pip install --upgrade twine
           twine upload --skip-existing *
+
+  # Can't upload emscripten wheels to Pypi, see https://github.com/pypi/warehouse/issues/10416.
+  # For now, this will attach the binary wheels to the Release page in Github. Users can 
+  # download those into a pyodide environment and micropip.install from there.
+  wasm-release:
+    name: Attach wasm wheel to Release
+    runs-on: ubuntu-latest
+    needs:
+      - wasm
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - uses: actions/download-artifact@v3
+        with:
+          name: wasm-wheels
+
+      - name: Attach assets to Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: '*.whl'
+          # 'name' defaults to tag name, as long as release naming is same as tag
+          # then no need to specify it here.
+          
+
+
