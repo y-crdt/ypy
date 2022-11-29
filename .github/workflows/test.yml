@@ -1,10 +1,10 @@
 name: Tests
 
-on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+on: [push]
+  # push:
+  #   branches: [main]
+  # pull_request:
+  #   branches: [main]
 env:
   CARGO_TERM_COLOR: always
 
@@ -23,7 +23,7 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v2
-        
+
       - name: Install Python
         uses: conda-incubator/setup-miniconda@v2
         with:
