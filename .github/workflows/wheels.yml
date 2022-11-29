@@ -171,7 +171,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v3
         with:
-          name: wasm-wheel
+          name: wasm_wheel
 
       - name: Attach assets to Release
         uses: softprops/action-gh-release@v1
