@@ -1,6 +1,8 @@
 name: Build and Release
 
-on: [push]
+on:
+  release:
+    types: [published]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -177,8 +179,8 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: '*.whl'
-          # 'name' defaults to tag name, as long as release naming is same as tag
-          # then no need to specify it here.
+          # 'name' (release name) defaults to the tag ref in this action.
+          # If release naming pattern changes, will need to configure 'name' here.
           
 
 
