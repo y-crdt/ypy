@@ -73,7 +73,7 @@ maturin build
 
 ## Ypy in WASM (Pyodide)
 
-As a Rust-based library, Ypy cannot build "pure Python" wheels. CI processes build and upload a number of wheels to Pypi, but Pypi does not support hosting `emscripten` / `wasm32` wheels necessary to import in Pyodide (see https://github.com/pypi/warehouse/issues/10416 for more info and updates). For now, Ypy will build `emscripten` wheels and attach the binaries as assets in the appropriate [Releases](https://github.com/y-crdt/ypy/releases) entry. Unfortunately, trying to install directly from the Github download link will result in a CORS error, so you'll need to use a proxy to pull in the binary and write / install from emscripten file system or host the binary somewhere that is CORS accessible for your application.
+As a Rust-based library, Ypy cannot build "pure Python" wheels. CI processes build and upload a number of wheels to PyPI, but PyPI does not support hosting `emscripten` / `wasm32` wheels necessary to import in Pyodide (see https://github.com/pypi/warehouse/issues/10416 for more info and updates). For now, Ypy will build `emscripten` wheels and attach the binaries as assets in the appropriate [Releases](https://github.com/y-crdt/ypy/releases) entry. Unfortunately, trying to install directly from the Github download link will result in a CORS error, so you'll need to use a proxy to pull in the binary and write / install from emscripten file system or host the binary somewhere that is CORS accessible for your application.
 
 You can try out Ypy in Pyodide using the [terminal emulator at pyodide.org](https://pyodide.org/en/stable/console.html):
 
