@@ -1,8 +1,8 @@
 use crate::shared_types::{
-    DeepSubscription, DefaultPyErr, IntegratedOperationException, PreliminaryObservationException,
-    ShallowSubscription, SharedType, SubId,
+    CompatiblePyType, DeepSubscription, DefaultPyErr, IntegratedOperationException,
+    PreliminaryObservationException, ShallowSubscription, SharedType, SubId,
 };
-use crate::type_conversions::{events_into_py, PyObjectWrapper, ToPython};
+use crate::type_conversions::{events_into_py, ToPython};
 use crate::y_transaction::YTransaction;
 use lib0::any::Any;
 use pyo3::prelude::*;
@@ -86,9 +86,7 @@ impl YText {
 
     /// Returns an underlying shared string stored in this data type.
     pub fn to_json(&self) -> String {
-        let mut json_string = String::new();
-        Any::String(self.__str__().into_boxed_str()).to_json(&mut json_string);
-        json_string
+        format!("\"{}\"", self.__str__())
     }
 
     /// Inserts a given `chunk` of text into this `YText` instance, starting at a given `index`.
@@ -136,11 +134,14 @@ impl YText {
     ) -> PyResult<()> {
         match &mut self.0 {
             SharedType::Integrated(text) => {
-                let content = PyObjectWrapper(embed).try_into()?;
+                let content: PyResult<Any> = Python::with_gil(|py| {
+                    let py_type: CompatiblePyType = embed.extract(py)?;
+                    py_type.try_into()
+                });
                 if let Some(Ok(attrs)) = attributes.map(Self::parse_attrs) {
-                    text.insert_embed_with_attributes(txn, index, content, attrs)
+                    text.insert_embed_with_attributes(txn, index, content?, attrs)
                 } else {
-                    text.insert_embed(txn, index, content)
+                    text.insert_embed(txn, index, content?)
                 }
                 Ok(())
             }
@@ -246,14 +247,16 @@ impl YText {
 
 impl YText {
     fn parse_attrs(attrs: HashMap<String, PyObject>) -> PyResult<Attrs> {
-        attrs
-            .into_iter()
-            .map(|(k, v)| {
-                let key = Rc::from(k);
-                let value = PyObjectWrapper(v).try_into()?;
-                Ok((key, value))
-            })
-            .collect()
+        Python::with_gil(|py| {
+            attrs
+                .into_iter()
+                .map(|(k, v)| {
+                    let key = Rc::from(k);
+                    let value: CompatiblePyType = v.extract(py)?;
+                    Ok((key, value.try_into()?))
+                })
+                .collect()
+        })
     }
 }
 

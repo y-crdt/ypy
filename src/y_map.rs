@@ -2,12 +2,14 @@ use pyo3::exceptions::{PyKeyError, PyTypeError};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use std::collections::HashMap;
+
 use std::mem::ManuallyDrop;
 use std::ops::DerefMut;
 use yrs::types::map::{MapEvent, MapIter};
 use yrs::types::DeepObservable;
 use yrs::{Map, SubscriptionId, Transaction};
 
+use crate::json_builder::JsonBuilder;
 use crate::shared_types::{
     DeepSubscription, DefaultPyErr, PreliminaryObservationException, ShallowSubscription,
     SharedType, SubId,
@@ -73,19 +75,13 @@ impl YMap {
     }
 
     pub fn __str__(&self) -> String {
-        return self.to_json().unwrap().to_string();
+        Python::with_gil(|py| match &self.0 {
+            SharedType::Integrated(y_map) => y_map.to_json().into_py(py).to_string(),
+            SharedType::Prelim(contents) => contents.clone().into_py(py).to_string(),
+        })
     }
 
     pub fn __dict__(&self) -> PyResult<PyObject> {
-        self.to_json()
-    }
-
-    pub fn __repr__(&self) -> String {
-        format!("YMap({})", self.__str__())
-    }
-
-    /// Converts contents of this `YMap` instance into a JSON representation.
-    pub fn to_json(&self) -> PyResult<PyObject> {
         Python::with_gil(|py| match &self.0 {
             SharedType::Integrated(v) => Ok(v.to_json().into_py(py)),
             SharedType::Prelim(v) => {
@@ -96,6 +92,20 @@ impl YMap {
                 Ok(dict.into())
             }
         })
+    }
+
+    pub fn __repr__(&self) -> String {
+        format!("YMap({})", self.__str__())
+    }
+
+    /// Converts contents of this `YMap` instance into a JSON representation.
+    pub fn to_json(&self) -> PyResult<String> {
+        let mut json_builder = JsonBuilder::new();
+        match &self.0 {
+            SharedType::Integrated(dict) => json_builder.append_json(&dict.to_json())?,
+            SharedType::Prelim(dict) => json_builder.append_json(dict)?,
+        }
+        Ok(json_builder.into())
     }
 
     /// Sets a given `key`-`value` entry within this instance of `YMap`. If another entry was

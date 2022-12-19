@@ -5,8 +5,9 @@ use crate::{
     y_xml::{YXmlElement, YXmlText},
 };
 use pyo3::create_exception;
+use pyo3::types as pytypes;
 use pyo3::{exceptions::PyException, prelude::*};
-use std::{convert::TryFrom, fmt::Display};
+use std::fmt::Display;
 use yrs::types::TYPE_REFS_XML_TEXT;
 use yrs::types::{TypeRefs, TYPE_REFS_ARRAY, TYPE_REFS_MAP, TYPE_REFS_TEXT};
 use yrs::{types::TYPE_REFS_XML_ELEMENT, SubscriptionId};
@@ -51,6 +52,18 @@ pub enum SubId {
 }
 
 #[derive(Clone)]
+pub enum CompatiblePyType<'a> {
+    Bool(&'a pytypes::PyBool),
+    Int(&'a pytypes::PyInt),
+    Float(&'a pytypes::PyFloat),
+    String(&'a pytypes::PyString),
+    List(&'a pytypes::PyList),
+    Dict(&'a pytypes::PyDict),
+    YType(YPyType<'a>),
+    None,
+}
+
+#[derive(Clone)]
 pub enum SharedType<I, P> {
     Integrated(I),
     Prelim(P),
@@ -67,68 +80,45 @@ impl<I, P> SharedType<I, P> {
         SharedType::Prelim(prelim)
     }
 }
-
-#[derive(FromPyObject)]
-pub enum Shared {
-    Text(Py<YText>),
-    Array(Py<YArray>),
-    Map(Py<YMap>),
-    XmlElement(Py<YXmlElement>),
-    XmlText(Py<YXmlText>),
+#[derive(Clone)]
+pub enum YPyType<'a> {
+    Text(&'a PyCell<YText>),
+    Array(&'a PyCell<YArray>),
+    Map(&'a PyCell<YMap>),
+    XmlElement(&'a PyCell<YXmlElement>),
+    XmlText(&'a PyCell<YXmlText>),
 }
 
-impl Shared {
+impl<'a> YPyType<'a> {
     pub fn is_prelim(&self) -> bool {
-        Python::with_gil(|py| match self {
-            Shared::Text(v) => v.borrow(py).prelim(),
-            Shared::Array(v) => v.borrow(py).prelim(),
-            Shared::Map(v) => v.borrow(py).prelim(),
-            Shared::XmlElement(_) | Shared::XmlText(_) => false,
-        })
+        match self {
+            YPyType::Text(v) => v.borrow().prelim(),
+            YPyType::Array(v) => v.borrow().prelim(),
+            YPyType::Map(v) => v.borrow().prelim(),
+            YPyType::XmlElement(_) | YPyType::XmlText(_) => false,
+        }
     }
 
     pub fn type_ref(&self) -> TypeRefs {
         match self {
-            Shared::Text(_) => TYPE_REFS_TEXT,
-            Shared::Array(_) => TYPE_REFS_ARRAY,
-            Shared::Map(_) => TYPE_REFS_MAP,
-            Shared::XmlElement(_) => TYPE_REFS_XML_ELEMENT,
-            Shared::XmlText(_) => TYPE_REFS_XML_TEXT,
+            YPyType::Text(_) => TYPE_REFS_TEXT,
+            YPyType::Array(_) => TYPE_REFS_ARRAY,
+            YPyType::Map(_) => TYPE_REFS_MAP,
+            YPyType::XmlElement(_) => TYPE_REFS_XML_ELEMENT,
+            YPyType::XmlText(_) => TYPE_REFS_XML_TEXT,
         }
     }
 }
 
-impl Display for Shared {
+impl<'a> Display for YPyType<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let info = Python::with_gil(|py| match self {
-            Shared::Text(t) => t.borrow(py).__str__(),
-            Shared::Array(a) => a.borrow(py).__str__(),
-            Shared::Map(m) => m.borrow(py).__str__(),
-            Shared::XmlElement(xml) => xml.borrow(py).__str__(),
-            Shared::XmlText(xml) => xml.borrow(py).__str__(),
-        });
+        let info = match self {
+            YPyType::Text(t) => t.borrow().__str__(),
+            YPyType::Array(a) => a.borrow().__str__(),
+            YPyType::Map(m) => m.borrow().__str__(),
+            YPyType::XmlElement(xml) => xml.borrow().__str__(),
+            YPyType::XmlText(xml) => xml.borrow().__str__(),
+        };
         write!(f, "{}", info)
-    }
-}
-
-impl TryFrom<PyObject> for Shared {
-    type Error = PyErr;
-
-    fn try_from(value: PyObject) -> Result<Self, Self::Error> {
-        Python::with_gil(|py| {
-            let value = value.as_ref(py);
-
-            if let Ok(text) = value.extract() {
-                Ok(Shared::Text(text))
-            } else if let Ok(array) = value.extract() {
-                Ok(Shared::Array(array))
-            } else if let Ok(map) = value.extract() {
-                Ok(Shared::Map(map))
-            } else {
-                Err(pyo3::exceptions::PyValueError::new_err(
-                    "Could not extract Python value into a shared type.",
-                ))
-            }
-        })
     }
 }

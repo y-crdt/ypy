@@ -1,5 +1,6 @@
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
+mod json_builder;
 mod shared_types;
 mod type_conversions;
 mod y_array;

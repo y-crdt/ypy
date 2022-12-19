@@ -2,7 +2,8 @@ from test_helper import exchange_updates
 import pytest
 
 from y_py import YDoc, YArray, YArrayEvent
-
+from copy import deepcopy
+import json
 
 def test_inserts():
     d1 = YDoc(1)
@@ -16,16 +17,14 @@ def test_inserts():
 
     expected = [1, 2.5, "hello", ["world"], True, {"key": "value"}]
 
-    value = x.to_json()
-    assert value == expected
+    assert list(x) == expected
 
     d2 = YDoc(2)
     x = d2.get_array("test")
 
     exchange_updates([d1, d2])
 
-    value = x.to_json()
-    assert value == expected
+    assert list(x) == expected
 
 
 def test_to_string():
@@ -34,28 +33,39 @@ def test_to_string():
     assert str(arr) == expected_str
     assert arr.__repr__() == f"YArray({expected_str})"
 
+def test_to_json():
+    contents = [7, "awesome", True, ["nested"], {"testing": "dicts"}]
+    doc = YDoc()
+    prelim = YArray(deepcopy(contents))
+    integrated = doc.get_array("arr")
+    with doc.begin_transaction() as txn:
+        integrated.extend(txn, contents)
+    expected_json = '[7,"awesome",true,["nested"],{"testing":"dicts"}]'
+    assert integrated.to_json() == expected_json
+    assert prelim.to_json() == expected_json
+    
+    # ensure that it works with python json
+    assert json.loads(integrated.to_json()) == contents
 
 def test_inserts_nested():
     d1 = YDoc()
     x = d1.get_array("test")
-
+    to_list = lambda arr : [list(x) if type(x) == YArray else x for x in arr]
     nested = YArray()
     d1.transact(lambda txn: nested.append(txn, "world"))
     d1.transact(lambda txn: x.insert_range(txn, 0, [1, 2, nested, 3, 4]))
     d1.transact(lambda txn: nested.insert(txn, 0, "hello"))
 
     expected = [1, 2, ["hello", "world"], 3, 4]
-
-    value = d1.transact(lambda txn: x.to_json())
-    assert value == expected
+    assert type(x[2]) == YArray
+    assert to_list(x) == expected
 
     d2 = YDoc()
     x = d2.get_array("test")
 
     exchange_updates([d1, d2])
 
-    value = x.to_json()
-    assert value == expected
+    assert to_list(x) == expected
 
 
 def test_delete():
@@ -74,13 +84,12 @@ def test_delete():
 
     expected = [1, "I'm here too!", True]
 
-    value = x.to_json()
-    assert value == expected
+    assert list(x) == expected
 
     with d1.begin_transaction() as txn:
         x.delete(txn, 1)
 
-    assert x.to_json() == [1.0, True]
+    assert list(x) == [1.0, True]
     with pytest.raises(IndexError):
         with d1.begin_transaction() as txn:
             x.delete(txn, 2)
@@ -90,8 +99,7 @@ def test_delete():
 
     exchange_updates([d1, d2])
 
-    value = x.to_json()
-    assert value == [1.0, True]
+    assert list(x) == [1.0, True]
 
 
 def test_get():
@@ -179,7 +187,7 @@ def test_observer():
     # insert initial data to an empty YArray
     with d1.begin_transaction() as txn:
         x.insert_range(txn, 0, [1, 2, 3, 4])
-    assert target.to_json() == x.to_json()
+    assert list(target) == list(x)
     assert delta == [{"insert": [1, 2, 3, 4]}]
 
     target = None
@@ -188,7 +196,7 @@ def test_observer():
     # remove 2 items from the middle
     with d1.begin_transaction() as txn:
         x.delete_range(txn, 1, 2)
-    assert target.to_json() == x.to_json()
+    assert list(target) == list(x)
     assert delta == [{"retain": 1}, {"delete": 2}]
 
     target = None
@@ -197,7 +205,7 @@ def test_observer():
     # insert item in the middle
     with d1.begin_transaction() as txn:
         x.insert(txn, 1, 5)
-    assert target.to_json() == x.to_json()
+    assert list(target) == list(x)
     assert delta == [{"retain": 1}, {"insert": [5]}]
 
     target = None
@@ -255,21 +263,21 @@ def test_move_to():
         arr.delete_range(t, 0, len(arr))
         arr.extend(t, [0,1,2,3,4,5,6,7,8,9])
     doc.transact(lambda t: arr.move_to(t, 0, 10))
-    assert arr.to_json() == [1,2,3,4,5,6,7,8,9,0]
+    assert list(arr) == [1,2,3,4,5,6,7,8,9,0]
 
     # Move 9 to 0
     with doc.begin_transaction() as t:
         arr.delete_range(t, 0, len(arr))
         arr.extend(t, [0,1,2,3,4,5,6,7,8,9])
     doc.transact(lambda t: arr.move_to(t, 9, 0))
-    assert arr.to_json() == [9,0,1,2,3,4,5,6,7,8]
+    assert list(arr) == [9,0,1,2,3,4,5,6,7,8]
 
     # Move 6 to 5
     with doc.begin_transaction() as t:
         arr.delete_range(t, 0, len(arr))
         arr.extend(t, [0,1,2,3,4,5,6,7,8,9])
     doc.transact(lambda t: arr.move_to(t, 6, 5))
-    assert arr.to_json() == [0,1,2,3,4,6,5,7,8,9]
+    assert list(arr) == [0,1,2,3,4,6,5,7,8,9]
 
     # Move -1 to 5
     with doc.begin_transaction() as t:
@@ -297,21 +305,21 @@ def test_move_range_to():
         arr.delete_range(t, 0, len(arr))
         arr.extend(t, [0,1,2,3])
     doc.transact(lambda t: arr.move_range_to(t, 1, 2, 4))
-    assert arr.to_json() == [0,3,1,2]
+    assert list(arr) == [0,3,1,2]
 
     # Move 0-0 to 10
     with doc.begin_transaction() as t:
         arr.delete_range(t, 0, len(arr))
         arr.extend(t, [0,1,2,3,4,5,6,7,8,9])
     doc.transact(lambda t: arr.move_range_to(t, 0, 0, 10))
-    assert arr.to_json() == [1,2,3,4,5,6,7,8,9,0]
+    assert list(arr) == [1,2,3,4,5,6,7,8,9,0]
 
     # Move 0-1 to 10
     with doc.begin_transaction() as t:
         arr.delete_range(t, 0, len(arr))
         arr.extend(t, [0,1,2,3,4,5,6,7,8,9])
     doc.transact(lambda t: arr.move_range_to(t, 0, 1, 10))
-    assert arr.to_json() == [2,3,4,5,6,7,8,9,0,1]
+    assert list(arr) == [2,3,4,5,6,7,8,9,0,1]
 
 
     # Move 3-5 to 7
@@ -319,49 +327,49 @@ def test_move_range_to():
         arr.delete_range(t, 0, len(arr))
         arr.extend(t, [0,1,2,3,4,5,6,7,8,9])
     doc.transact(lambda t: arr.move_range_to(t, 3, 5, 7))
-    assert arr.to_json() == [0,1,2,6,3,4,5,7,8,9]
+    assert list(arr) == [0,1,2,6,3,4,5,7,8,9]
 
     # Move 1-0 to 10
     with doc.begin_transaction() as t:
         arr.delete_range(t, 0, len(arr))
         arr.extend(t, [0,1,2,3,4,5,6,7,8,9])
     doc.transact(lambda t: arr.move_range_to(t, 1, 0, 10))
-    assert arr.to_json() == [0,1,2,3,4,5,6,7,8,9]
+    assert list(arr) == [0,1,2,3,4,5,6,7,8,9]
 
     # Move 3-5 to 5
     with doc.begin_transaction() as t:
         arr.delete_range(t, 0, len(arr))
         arr.extend(t, [0,1,2,3,4,5,6,7,8,9])
     doc.transact(lambda t: arr.move_range_to(t, 3, 5, 5))
-    assert arr.to_json() == [0,1,2,3,4,5,6,7,8,9]
+    assert list(arr) == [0,1,2,3,4,5,6,7,8,9]
 
     # Move 9-9 to 0
     with doc.begin_transaction() as t:
         arr.delete_range(t, 0, len(arr))
         arr.extend(t, [0,1,2,3,4,5,6,7,8,9])
     doc.transact(lambda t: arr.move_range_to(t, 9, 9, 0))
-    assert arr.to_json() == [9,0,1,2,3,4,5,6,7,8]
+    assert list(arr) == [9,0,1,2,3,4,5,6,7,8]
 
     # Move 8-9 to 0
     with doc.begin_transaction() as t:
         arr.delete_range(t, 0, len(arr))
         arr.extend(t, [0,1,2,3,4,5,6,7,8,9])
     doc.transact(lambda t: arr.move_range_to(t, 8, 9, 0))
-    assert arr.to_json() == [8,9,0,1,2,3,4,5,6,7]
+    assert list(arr) == [8,9,0,1,2,3,4,5,6,7]
 
     # Move 4-6 to 3
     with doc.begin_transaction() as t:
         arr.delete_range(t, 0, len(arr))
         arr.extend(t, [0,1,2,3,4,5,6,7,8,9])
     doc.transact(lambda t: arr.move_range_to(t, 4, 6, 3))
-    assert arr.to_json() == [0,1,2,4,5,6,3,7,8,9]
+    assert list(arr) == [0,1,2,4,5,6,3,7,8,9]
 
     # Move 3-5 to 3
     with doc.begin_transaction() as t:
         arr.delete_range(t, 0, len(arr))
         arr.extend(t, [0,1,2,3,4,5,6,7,8,9])
     doc.transact(lambda t: arr.move_range_to(t, 3, 5, 3))
-    assert arr.to_json() == [0,1,2,3,4,5,6,7,8,9]
+    assert list(arr) == [0,1,2,3,4,5,6,7,8,9]
 
     # Move -1-2 to 5
     with doc.begin_transaction() as t:
