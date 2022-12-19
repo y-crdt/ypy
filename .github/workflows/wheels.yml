@@ -98,7 +98,7 @@ jobs:
           path: dist
 
   wasm:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     # Pyodide began supporting `micropip.install` from emscripten-compiled binary wheels
     # in Pyodide 0.21.0 (Aug 2022), so no need to build wheels for versions before then.
     # As of Nov 2022, the matrix for emscripten/python versions since then is simple. 
