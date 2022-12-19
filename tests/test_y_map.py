@@ -1,3 +1,5 @@
+from copy import deepcopy
+import json
 import pytest
 import y_py as Y
 from y_py import YMap, YMapEvent
@@ -41,6 +43,20 @@ def test_set():
     assert value == "value2"
 
 
+def test_to_json():
+    contents = {"emojis": [
+        {"icon":"👍", "description": "thumbs up", "positive":True},
+        {"icon":"👎", "description": "thumbs down", "positive":False},
+        ]}
+    doc = Y.YDoc()
+    prelim = Y.YMap(deepcopy(contents))
+    integrated = doc.get_map("map")
+    with doc.begin_transaction() as txn:
+        integrated.update(txn, contents)
+    # ensure that it works with python json
+    assert json.loads(integrated.to_json()) == contents
+
+
 def test_update():
     doc = Y.YDoc()
     ymap = doc.get_map("dict")
@@ -50,13 +66,13 @@ def test_update():
     # Test updating with a dictionary
     with doc.begin_transaction() as txn:
         ymap.update(txn, dict_vals)
-    assert ymap.to_json() == dict_vals
+    assert dict(ymap) == dict_vals
 
     # Test updating with an iterator
     ymap = doc.get_map("tuples")
     with doc.begin_transaction() as txn:
         ymap.update(txn, tuple_vals)
-    assert ymap.to_json() == dict_vals
+    assert dict(ymap) == dict_vals
 
     # Test non-string key error
     with pytest.raises(Exception) as e:
@@ -74,13 +90,11 @@ def test_set_nested():
     x = d1.get_map("test")
     nested = Y.YMap({"a": "A"})
 
-    # check out to_json(), setting a nested map in set(), adding to an integrated value
-
     d1.transact(lambda txn: x.set(txn, "key", nested))
     d1.transact(lambda txn: nested.set(txn, "b", "B"))
 
-    json = x.to_json()
-    assert json == {"key": {"a": "A", "b": "B"}}
+    assert type(x["key"]) == Y.YMap
+    assert {k : dict(v) for k, v in x.items()} == {"key": {"a": "A", "b": "B"}}
 
 
 def test_pop():
@@ -179,9 +193,6 @@ def test_observer():
     target = None
     entries = None
 
-    def get_value(x):
-        return x.to_json()
-
     def callback(e: YMapEvent):
         nonlocal target
         nonlocal entries
@@ -195,7 +206,7 @@ def test_observer():
         x.set(txn, "key1", "value1")
         x.set(txn, "key2", 2)
 
-    assert get_value(target) == get_value(x)
+    assert dict(target) == dict(x)
     assert entries == {
         "key1": {"action": "add", "newValue": "value1"},
         "key2": {"action": "add", "newValue": 2},
@@ -209,7 +220,7 @@ def test_observer():
         x.pop(txn, "key1")
         x.set(txn, "key2", "value2")
 
-    assert get_value(target) == get_value(x)
+    assert dict(target) == dict(x)
     assert entries == {
         "key1": {"action": "delete", "oldValue": "value1"},
         "key2": {"action": "update", "oldValue": 2, "newValue": "value2"},

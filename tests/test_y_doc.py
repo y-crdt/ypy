@@ -41,7 +41,7 @@ def test_encoding():
     state_vec = Y.encode_state_vector(receiver)
     update = Y.encode_state_as_update(doc, state_vec)
     Y.apply_update(receiver, update)
-    value = receiver.get_array("test").to_json()
+    value = list(receiver.get_array("test"))
     assert value == contents
 
 
@@ -59,7 +59,7 @@ def test_boolean_encoding():
     state_vec = Y.encode_state_vector(receiver)
     update = Y.encode_state_as_update(doc, state_vec)
     Y.apply_update(receiver, update)
-    value = receiver.get_array("test").to_json()
+    value = list(receiver.get_array("test"))
     assert type(value[0]) == type(True)
 
 

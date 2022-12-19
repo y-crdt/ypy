@@ -552,7 +552,7 @@ class YArray:
         Returns:
             The string representation of YArray wrapped in `YArray()`
         """
-    def to_json(self) -> List[Any]:
+    def to_json(self) -> str:
         """
         Converts an underlying contents of this `YArray` instance into their JSON representation.
         """
@@ -725,12 +725,19 @@ class YMap:
         Returns:
             The string representation of the `YMap`.
         """
+
+    def __dict__(self) -> dict:
+         """
+        Returns:
+            Contents of the `YMap` inside a Python dictionary.
+        """
+
     def __repr__(self) -> str:
         """
         Returns:
             The string representation of the `YMap` wrapped in 'YMap()'
         """
-    def to_json(self) -> dict:
+    def to_json(self) -> str:
         """
         Converts contents of this `YMap` instance into a JSON representation.
         """
