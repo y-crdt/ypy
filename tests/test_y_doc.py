@@ -113,7 +113,6 @@ def test_get_update():
     """
     d = Y.YDoc()
     m = d.get_map("foo")
-    r = d.get_map("foo")
     update: bytes = None
 
     def get_update(event: AfterTransactionEvent) -> None:
@@ -126,3 +125,35 @@ def test_get_update():
         m.set(txn, "hi", "there")
 
     assert type(update) == bytes
+
+
+def test_empty_updates_observe_after_transaction():
+    """
+    Transactions should be observable only when they are used to update the CRDT state.
+    If a transaction does not differ between its before and after state, it should be ignored.
+    """
+    doc = Y.YDoc()
+    items = doc.get_array("items")
+    
+    def handle_update(e: Y.AfterTransactionEvent):
+        update = e.get_update()
+        # Ensures observe_after_transaction is only called on contentful updates.
+        assert update != b'\x00\x00'
+    
+    doc.observe_after_transaction(handle_update)
+    # Updating the document state should result in a non empty update.
+    with doc.begin_transaction() as txn:
+        items.append(txn, "This triggers an AfterTransactionEvent")
+
+    # The following methods create an empty transaction in order to perform their operation.
+    # Check that none of these yield an empty update.
+    Y.encode_state_vector(doc)
+    update = Y.encode_state_as_update(doc)
+    Y.apply_update(doc, update)
+    doc.get_array("array")
+    doc.get_map("map")
+    doc.get_text("text")
+    doc.get_xml_element("xml_el")
+    doc.get_xml_text("xml_text")
+
+

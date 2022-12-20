@@ -168,12 +168,14 @@ impl YDoc {
     pub fn observe_after_transaction(&mut self, callback: PyObject) -> SubscriptionId {
         self.0
             .observe_transaction_cleanup(move |txn, event| {
-                Python::with_gil(|py| {
-                    let event = AfterTransactionEvent::new(event, txn);
-                    if let Err(err) = callback.call1(py, (event,)) {
-                        err.restore(py)
-                    }
-                })
+                if event.before_state != event.after_state {
+                    Python::with_gil(|py| {
+                        let event = AfterTransactionEvent::new(event, txn);
+                        if let Err(err) = callback.call1(py, (event,)) {
+                            err.restore(py)
+                        }
+                    })
+                }
             })
             .into()
     }
