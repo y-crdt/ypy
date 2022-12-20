@@ -25,10 +25,7 @@ class YDocWSClient:
 
     def send_updates(self, txn_event: Y.AfterTransactionEvent):
         update = txn_event.get_update()
-        # Sometimes transactions don't write, which means updates are empty.
-        # We only care about updates with meaningful mutations.
-        if update != b'\x00\x00':
-            self.send_q.put_nowait(update)
+        self.send_q.put_nowait(update)
 
     def apply_updates(self, doc: Y.YDoc):
         while not self.recv_q.empty():
