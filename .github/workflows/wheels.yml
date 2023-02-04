@@ -1,6 +1,9 @@
 name: Build and Release
 
 on:
+  push:
+    branches:
+      - build_aarch64
   release:
     types: [published]
 
