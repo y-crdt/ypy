@@ -1,6 +1,9 @@
 name: Build and Release
 
 on:
+  push:
+    branches:
+      - build_aarch64
   release:
     types: [published]
 
@@ -16,7 +19,12 @@ jobs:
     runs-on: macos-latest
     strategy:
       matrix:
-        python-version: ["3.7", "3.11"]
+        python-version:
+          - '3.7'
+          - '3.8'
+          - '3.9'
+          - '3.10'
+          - '3.11'
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
@@ -49,7 +57,12 @@ jobs:
     strategy:
       matrix:
         target: [x64, x86]
-        python-version: ["3.7", "3.11"]
+        python-version:
+          - '3.7'
+          - '3.8'
+          - '3.9'
+          - '3.10'
+          - '3.11'
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
@@ -78,7 +91,12 @@ jobs:
     strategy:
       matrix:
         target: [x86_64, i686]
-        python-version: ["3.7", "3.11"]
+        python-version:
+          - '3.7'
+          - '3.8'
+          - '3.9'
+          - '3.10'
+          - '3.11'
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
@@ -96,6 +114,33 @@ jobs:
         with:
           name: wheels
           path: dist
+
+  linux-cross:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version:
+          - '3.7'
+          - '3.8'
+          - '3.9'
+          - '3.10'
+          - '3.11'
+        target: [aarch64, armv7, s390x, ppc64le]
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Build Wheels
+      uses: PyO3/maturin-action@v1
+      with:
+        target: ${{ matrix.target }}
+        manylinux: auto
+        args: -i ${{ matrix.python-version }} --release --out dist
+
+    - name: Upload wheels
+      uses: actions/upload-artifact@v3
+      with:
+        name: wheels
+        path: dist
 
   wasm:
     runs-on: ubuntu-20.04
