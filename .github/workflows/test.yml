@@ -22,14 +22,14 @@ jobs:
         shell: bash -l {0}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
-      - name: Install Python
-        uses: conda-incubator/setup-miniconda@v2
+      - name: Install micromamba
+        uses: mamba-org/provision-with-micromamba@main
         with:
-          mamba-version: "*"
-          channels: conda-forge
-          python-version: ${{ matrix.python-version }}
+          environment-file: environment-dev.yml
+          environment-name: ypy
+          extra-specs: python=${{ matrix.python-version }}
 
       - name: Install Rust
         uses: actions-rs/toolchain@v1
