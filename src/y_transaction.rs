@@ -3,13 +3,15 @@ use pyo3::exceptions::PyException;
 use pyo3::types::PyBytes;
 use pyo3::{create_exception, prelude::*};
 use std::collections::HashMap;
+use std::mem::ManuallyDrop;
 use std::ops::{Deref, DerefMut};
 use yrs::updates::decoder::Decode;
 use yrs::updates::encoder::{Encode, Encoder};
 use yrs::{
     updates::{decoder::DecoderV1, encoder::EncoderV1},
-    StateVector, Transaction, Update,
+    StateVector, Update,
 };
+use yrs::{ReadTxn, TransactionMut};
 
 create_exception!(
     y_py,
@@ -36,12 +38,19 @@ create_exception!(
 /// ```
 #[pyclass(unsendable)]
 pub struct YTransaction {
-    pub inner: Transaction,
+    pub inner: ManuallyDrop<TransactionMut<'static>>,
     pub cached_before_state: Option<PyObject>,
+    committed: bool,
+}
+
+impl ReadTxn for YTransaction {
+    fn store(&self) -> &yrs::Store {
+        &self.deref().store()
+    }
 }
 
 impl Deref for YTransaction {
-    type Target = Transaction;
+    type Target = TransactionMut<'static>;
 
     fn deref(&self) -> &Self::Target {
         &self.inner
@@ -54,11 +63,20 @@ impl DerefMut for YTransaction {
     }
 }
 
+impl Drop for YTransaction {
+    fn drop(&mut self) {
+        if !self.committed {
+            self.commit();
+        }
+    }
+}
+
 impl YTransaction {
-    pub fn new(txn: Transaction) -> Self {
+    pub fn new(txn: TransactionMut<'static>) -> Self {
         YTransaction {
-            inner: txn,
+            inner: ManuallyDrop::new(txn),
             cached_before_state: None,
+            committed: false,
         }
     }
 }
@@ -69,8 +87,9 @@ impl YTransaction {
     pub fn before_state(&mut self) -> PyObject {
         if self.cached_before_state.is_none() {
             let before_state = Python::with_gil(|py| {
+                let txn = (*self).deref();
                 let state_map: HashMap<u64, u32> =
-                    self.before_state.iter().map(|(x, y)| (*x, *y)).collect();
+                    txn.before_state().iter().map(|(x, y)| (*x, *y)).collect();
                 state_map.into_py(py)
             });
             self.cached_before_state = Some(before_state);
@@ -86,7 +105,7 @@ impl YTransaction {
     /// If there was an instance with this name, but it was of different type, it will be projected
     /// onto `YText` instance.
     pub fn get_text(&mut self, name: &str) -> YText {
-        self.deref_mut().get_text(name).into()
+        self.deref().get_text(name).unwrap().into()
     }
 
     /// Returns a `YArray` shared data type, that's accessible for subsequent accesses using given
@@ -97,7 +116,7 @@ impl YTransaction {
     /// If there was an instance with this name, but it was of different type, it will be projected
     /// onto `YArray` instance.
     pub fn get_array(&mut self, name: &str) -> YArray {
-        self.deref_mut().get_array(name).into()
+        self.deref().get_array(name).unwrap().into()
     }
 
     /// Returns a `YMap` shared data type, that's accessible for subsequent accesses using given
@@ -108,14 +127,20 @@ impl YTransaction {
     /// If there was an instance with this name, but it was of different type, it will be projected
     /// onto `YMap` instance.
     pub fn get_map(&mut self, name: &str) -> YMap {
-        self.deref_mut().get_map(name).into()
+        self.deref().get_map(name).unwrap().into()
     }
 
     /// Triggers a post-update series of operations without `free`ing the transaction. This includes
     /// compaction and optimization of internal representation of updates, triggering events etc.
     /// Ypy transactions are auto-committed when they are `free`d.
     pub fn commit(&mut self) {
-        self.deref_mut().commit()
+        if !self.committed {
+            self.deref_mut().commit();
+            self.committed = true;
+            unsafe { ManuallyDrop::drop(&mut self.inner) }
+        } else {
+            panic!("Transaction already committed!");
+        }
     }
 
     /// Encodes a state vector of a given transaction document into its binary representation using
@@ -146,7 +171,7 @@ impl YTransaction {
     ///
     /// ```
     pub fn state_vector_v1(&self) -> PyObject {
-        let sv = self.state_vector();
+        let sv = self.deref().state_vector();
         let payload = sv.encode_v1();
         Python::with_gil(|py| PyBytes::new(py, &payload).into())
     }
@@ -185,7 +210,7 @@ impl YTransaction {
         } else {
             StateVector::default()
         };
-        self.encode_diff(&sv, &mut encoder);
+        self.deref().store().encode_diff(&sv, &mut encoder);
         let bytes: PyObject = Python::with_gil(|py| PyBytes::new(py, &encoder.to_vec()).into());
         Ok(bytes)
     }
@@ -219,7 +244,7 @@ impl YTransaction {
         let mut decoder = DecoderV1::from(diff.as_slice());
         let update =
             Update::decode(&mut decoder).map_err(|e| EncodingException::new_err(e.to_string()))?;
-        self.apply_update(update);
+        self.deref_mut().apply_update(update);
         Ok(())
     }
 

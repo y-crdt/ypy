@@ -1,3 +1,7 @@
+use std::cell::RefCell;
+use std::rc::Rc;
+use std::rc::Weak;
+
 use crate::y_array::YArray;
 use crate::y_map::YMap;
 use crate::y_text::YText;
@@ -15,6 +19,75 @@ use yrs::SubscriptionId;
 use yrs::Transact;
 use yrs::TransactionCleanupEvent;
 use yrs::TransactionMut;
+
+pub trait WithDoc<T> {
+    fn with_doc(self, doc: Rc<RefCell<YDocInner>>) -> T;
+}
+pub trait WithTransaction {
+    fn get_doc(&self) -> Rc<RefCell<YDocInner>>;
+
+    fn with_transaction<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(&YTransaction) -> R,
+    {
+        let doc = self.get_doc();
+        let txn = doc.borrow_mut().begin_transaction();
+        let mut txn = txn.borrow_mut();
+        let result = f(&mut txn);
+        result
+    }
+
+    fn get_transaction(&self) -> Rc<RefCell<YTransaction>> {
+        let doc = self.get_doc();
+        let txn = doc.borrow_mut().begin_transaction();
+        txn
+    }
+}
+
+pub struct YDocInner {
+    doc: Doc,
+    txn: Option<Weak<RefCell<YTransaction>>>,
+}
+
+impl YDocInner {
+    pub fn begin_transaction(&mut self) -> Rc<RefCell<YTransaction>> {
+        // Check if we think we still have a transaction
+        if let Some(weak_txn) = &self.txn {
+            // And if it's actually around
+            if let Some(txn) = weak_txn.upgrade() {
+                return txn;
+            }
+        }
+        // HACK: get rid of lifetime
+        let txn = unsafe {
+            std::mem::transmute::<TransactionMut, TransactionMut<'static>>(self.doc.transact_mut())
+        };
+        let txn = YTransaction::new(txn);
+        let txn = Rc::new(RefCell::new(txn));
+        self.txn = Some(Rc::downgrade(&txn));
+        txn
+    }
+
+    pub fn get_new_transaction(&mut self) -> YTransaction {
+        // HACK: get rid of lifetime
+        let txn = unsafe {
+            std::mem::transmute::<TransactionMut, TransactionMut<'static>>(self.doc.transact_mut())
+        };
+        YTransaction::new(txn)
+    }
+
+    pub fn transact_mut<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(&mut YTransaction) -> R,
+    {
+        // HACK: get rid of lifetime
+        let txn = unsafe {
+            std::mem::transmute::<TransactionMut, TransactionMut<'static>>(self.doc.transact_mut())
+        };
+        let mut txn = YTransaction::new(txn);
+        f(&mut txn)
+    }
+}
 
 /// A Ypy document type. Documents are most important units of collaborative resources management.
 /// All shared collections live within a scope of their corresponding documents. All updates are
@@ -37,7 +110,9 @@ use yrs::TransactionMut;
 ///     print(output)
 /// ```
 #[pyclass(unsendable, subclass)]
-pub struct YDoc(pub Doc);
+pub struct YDoc {
+    pub inner: Rc<RefCell<YDocInner>>,
+}
 
 #[pymethods]
 impl YDoc {
@@ -73,13 +148,20 @@ impl YDoc {
             options.skip_gc = skip_gc;
         }
 
-        Ok(YDoc(Doc::with_options(options)))
+        let inner = YDocInner {
+            doc: Doc::with_options(options),
+            txn: None,
+        };
+
+        Ok(YDoc {
+            inner: Rc::new(RefCell::new(inner)),
+        })
     }
 
     /// Gets globally unique identifier of this `YDoc` instance.
     #[getter]
     pub fn client_id(&self) -> u64 {
-        self.0.client_id as u64
+        self.inner.borrow().doc.client_id()
     }
 
     /// Returns a new transaction for this document. Ypy shared data types execute their
@@ -99,15 +181,18 @@ impl YDoc {
     ///     text.insert(txn, 0, 'hello world')
     /// ```
     pub fn begin_transaction(&self) -> YTransaction {
-        YTransaction::new(self.0.transact())
+        self.inner.borrow_mut().get_new_transaction()
     }
 
     pub fn transact(&mut self, callback: PyObject) -> PyResult<PyObject> {
-        let txn = self.begin_transaction();
-        Python::with_gil(|py| {
-            let args = PyTuple::new(py, std::iter::once(txn.into_py(py)));
-            callback.call(py, args, None)
-        })
+        let txn = self.inner.borrow_mut().get_new_transaction();
+        let result = Python::with_gil(|py| {
+            let args = PyTuple::new(py, vec![txn.into_py(py)]);
+            let result = callback.call(py, args, None);
+            result
+        });
+        self.inner.borrow_mut().txn = None;
+        result
     }
 
     /// Returns a `YMap` shared data type, that's accessible for subsequent accesses using given
@@ -118,7 +203,7 @@ impl YDoc {
     /// If there was an instance with this name, but it was of different type, it will be projected
     /// onto `YMap` instance.
     pub fn get_map(&mut self, name: &str) -> YMap {
-        self.begin_transaction().get_map(name)
+        self.inner.borrow().doc.get_or_insert_map(name).into()
     }
 
     /// Returns a `YXmlElement` shared data type, that's accessible for subsequent accesses using
@@ -129,7 +214,11 @@ impl YDoc {
     /// If there was an instance with this name, but it was of different type, it will be projected
     /// onto `YXmlElement` instance.
     pub fn get_xml_element(&mut self, name: &str) -> YXmlElement {
-        YXmlElement(self.begin_transaction().get_xml_element(name))
+        self.inner
+            .borrow()
+            .doc
+            .get_or_insert_xml_element(name)
+            .into()
     }
 
     /// Returns a `YXmlText` shared data type, that's accessible for subsequent accesses using given
@@ -140,7 +229,7 @@ impl YDoc {
     /// If there was an instance with this name, but it was of different type, it will be projected
     /// onto `YXmlText` instance.
     pub fn get_xml_text(&mut self, name: &str) -> YXmlText {
-        YXmlText(self.begin_transaction().get_xml_text(name))
+        self.inner.borrow().doc.get_or_insert_xml_text(name).into()
     }
 
     /// Returns a `YArray` shared data type, that's accessible for subsequent accesses using given
@@ -151,7 +240,11 @@ impl YDoc {
     /// If there was an instance with this name, but it was of different type, it will be projected
     /// onto `YArray` instance.
     pub fn get_array(&mut self, name: &str) -> YArray {
-        self.begin_transaction().get_array(name)
+        self.inner
+            .borrow()
+            .doc
+            .get_or_insert_array(&name)
+            .with_doc(self.inner.clone())
     }
 
     /// Returns a `YText` shared data type, that's accessible for subsequent accesses using given
@@ -162,12 +255,14 @@ impl YDoc {
     /// If there was an instance with this name, but it was of different type, it will be projected
     /// onto `YText` instance.
     pub fn get_text(&mut self, name: &str) -> YText {
-        self.begin_transaction().get_text(name)
+        self.inner.borrow().doc.get_or_insert_text(&name).into()
     }
 
     /// Subscribes a callback to a `YDoc` lifecycle event.
     pub fn observe_after_transaction(&mut self, callback: PyObject) -> SubscriptionId {
-        self.0
+        self.inner
+            .borrow()
+            .doc
             .observe_transaction_cleanup(move |txn, event| {
                 Python::with_gil(|py| {
                     let event = AfterTransactionEvent::new(event, txn);
@@ -176,6 +271,7 @@ impl YDoc {
                     }
                 })
             })
+            .unwrap()
             .into()
     }
 }
@@ -202,7 +298,11 @@ impl YDoc {
 /// ```
 #[pyfunction]
 pub fn encode_state_vector(doc: &mut YDoc) -> PyObject {
-    doc.begin_transaction().state_vector_v1()
+    doc.inner
+        .borrow_mut()
+        .begin_transaction()
+        .borrow_mut()
+        .state_vector_v1()
 }
 
 /// Encodes all updates that have happened since a given version `vector` into a compact delta
@@ -226,8 +326,12 @@ pub fn encode_state_vector(doc: &mut YDoc) -> PyObject {
 /// apply_update(local_doc, remote_delta)
 /// ```
 #[pyfunction]
-pub fn encode_state_as_update(doc: &YDoc, vector: Option<Vec<u8>>) -> PyResult<PyObject> {
-    doc.begin_transaction().diff_v1(vector)
+pub fn encode_state_as_update(doc: &mut YDoc, vector: Option<Vec<u8>>) -> PyResult<PyObject> {
+    doc.inner
+        .borrow_mut()
+        .begin_transaction()
+        .borrow_mut()
+        .diff_v1(vector)
 }
 
 /// Applies delta update generated by the remote document replica to a current document. This
@@ -250,7 +354,9 @@ pub fn encode_state_as_update(doc: &YDoc, vector: Option<Vec<u8>>) -> PyResult<P
 /// ```
 #[pyfunction]
 pub fn apply_update(doc: &mut YDoc, diff: Vec<u8>) -> PyResult<()> {
-    doc.begin_transaction().apply_v1(diff)?;
+    let inner_doc = doc.inner.borrow_mut();
+    inner_doc.transact_mut(|txn| txn.apply_v1(diff))?;
+
     Ok(())
 }
 
