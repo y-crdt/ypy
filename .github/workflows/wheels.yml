@@ -198,6 +198,7 @@ jobs:
       - macos
       - windows
       - linux
+      - linux-cross
     if: startsWith(github.ref, 'refs/tags/')
     steps:
       - uses: actions/download-artifact@v2
