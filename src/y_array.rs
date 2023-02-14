@@ -147,6 +147,7 @@ impl YArray {
         Ok(json_builder.into())
     }
 
+    /// Adds a single item to the provided index in the array.
     pub fn insert(&mut self, txn: &mut YTransaction, index: u32, item: PyObject) -> PyResult<()> {
         match &mut self.inner {
             SharedType::Integrated(array) if array.len(txn) >= index => {
