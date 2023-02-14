@@ -2,9 +2,11 @@ use crate::{y_array::YArray, y_map::YMap, y_text::YText};
 use pyo3::exceptions::PyException;
 use pyo3::types::PyBytes;
 use pyo3::{create_exception, prelude::*};
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::mem::ManuallyDrop;
 use std::ops::{Deref, DerefMut};
+use std::rc::Rc;
 use yrs::updates::decoder::Decode;
 use yrs::updates::encoder::{Encode, Encoder};
 use yrs::{
@@ -40,7 +42,7 @@ create_exception!(
 pub struct YTransaction {
     pub inner: ManuallyDrop<TransactionMut<'static>>,
     pub cached_before_state: Option<PyObject>,
-    committed: bool,
+    pub committed: bool,
 }
 
 impl ReadTxn for YTransaction {
@@ -83,7 +85,6 @@ impl YTransaction {
 
 #[pymethods]
 impl YTransaction {
-    #[getter]
     pub fn before_state(&mut self) -> PyObject {
         if self.cached_before_state.is_none() {
             let before_state = Python::with_gil(|py| {
@@ -142,7 +143,41 @@ impl YTransaction {
             panic!("Transaction already committed!");
         }
     }
+}
 
+#[pyclass(unsendable)]
+pub struct YTransactionWrapper {
+    inner: Rc<RefCell<YTransaction>>,
+    committed: bool,
+}
+
+impl YTransactionWrapper {
+    pub fn new(txn: Rc<RefCell<YTransaction>>) -> Self {
+        YTransactionWrapper {
+            inner: txn.clone(),
+            committed: txn.borrow().committed,
+        }
+    }
+    pub fn get_inner(&self) -> Rc<RefCell<YTransaction>> {
+        self.inner.clone()
+    }
+    pub fn commit(&mut self) {
+        if !self.committed {
+            self.get_inner().borrow_mut().commit();
+            self.committed = true;
+        } else {
+            panic!("Transaction already committed!");
+        }
+    }
+}
+
+
+#[pymethods]
+impl YTransactionWrapper {
+    #[getter]
+    pub fn before_state(&mut self) -> PyObject {
+        self.get_inner().borrow_mut().before_state()
+    }
     /// Encodes a state vector of a given transaction document into its binary representation using
     /// lib0 v1 encoding. State vector is a compact representation of updates performed on a given
     /// document and can be used by `encode_state_as_update` on remote peer to generate a delta
@@ -170,8 +205,9 @@ impl YTransaction {
     ///     del remote_txn
     ///
     /// ```
+
     pub fn state_vector_v1(&self) -> PyObject {
-        let sv = self.deref().state_vector();
+        let sv = self.get_inner().borrow().state_vector();
         let payload = sv.encode_v1();
         Python::with_gil(|py| PyBytes::new(py, &payload).into())
     }
@@ -210,7 +246,7 @@ impl YTransaction {
         } else {
             StateVector::default()
         };
-        self.deref().store().encode_diff(&sv, &mut encoder);
+        self.get_inner().borrow_mut().encode_diff(&sv, &mut encoder);
         let bytes: PyObject = Python::with_gil(|py| PyBytes::new(py, &encoder.to_vec()).into());
         Ok(bytes)
     }
@@ -244,7 +280,7 @@ impl YTransaction {
         let mut decoder = DecoderV1::from(diff.as_slice());
         let update =
             Update::decode(&mut decoder).map_err(|e| EncodingException::new_err(e.to_string()))?;
-        self.deref_mut().apply_update(update);
+        self.get_inner().borrow_mut().apply_update(update);
         Ok(())
     }
 
