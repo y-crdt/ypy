@@ -3,7 +3,7 @@ name: Build and Release
 on:
   push:
     branches:
-      - build_aarch64
+      - build_aarch64_take_2
   release:
     types: [published]
   pull_request:
