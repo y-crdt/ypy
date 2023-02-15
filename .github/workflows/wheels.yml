@@ -3,6 +3,7 @@ name: Build and Release
 on:
   release:
     types: [published]
+  pull_request:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -14,35 +15,31 @@ env:
 jobs:
   macos:
     runs-on: macos-latest
-    strategy:
-      matrix:
-        python-version:
-          - '3.7'
-          - '3.8'
-          - '3.9'
-          - '3.10'
-          - '3.11'
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-python@v2
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: '3.11'
           architecture: x64
-      - name: Install Rust toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          profile: minimal
-          default: true
+      - uses: dtolnay/rust-toolchain@stable
       - name: Build wheels - x86_64
-        uses: messense/maturin-action@v1
+        uses: PyO3/maturin-action@v1
         with:
           target: x86_64
-          args: --release --out dist --sdist --find-interpreter
+          args: --release --out dist --sdist -i 3.7 3.8 3.9 3.10 3.11 pypy3.8 pypy3.9
+      - name: Test built wheel - x86_64
+        run: |
+          pip install y-py --no-index --find-links dist --force-reinstall
+          pip install pytest
+          pytest
       - name: Build wheels - universal2
-        uses: messense/maturin-action@v1
+        uses: PyO3/maturin-action@v1
         with:
-          args: --release --universal2 --out dist --find-interpreter
+          args: --release --universal2 --out dist -i 3.8 3.9 3.10 3.11 pypy3.8 pypy3.9
+      - name: Test built wheel - universal2
+        run: |
+          pip install y-py --no-index --find-links dist --force-reinstall
+          pytest
       - name: Upload wheels
         uses: actions/upload-artifact@v2
         with:
@@ -51,32 +48,31 @@ jobs:
 
   windows:
     runs-on: windows-latest
+    name: windows (${{ matrix.platform.target }})
     strategy:
       matrix:
-        target: [x64, x86]
-        python-version:
-          - '3.7'
-          - '3.8'
-          - '3.9'
-          - '3.10'
-          - '3.11'
+        platform:
+          - target: x64
+            interpreter: 3.7 3.8 3.9 3.10 3.11
+          - target: x86
+            interpreter: 3.7 3.8 3.9 3.10 3.11
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-python@v2
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
         with:
-          python-version: ${{ matrix.python-version }}
-          architecture: ${{ matrix.target }}
-      - name: Install Rust toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          profile: minimal
-          default: true
+          python-version: '3.11'
+          architecture: ${{ matrix.platform.target }}
+      - uses: dtolnay/rust-toolchain@stable
       - name: Build wheels
-        uses: messense/maturin-action@v1
+        uses: PyO3/maturin-action@v1
         with:
-          target: ${{ matrix.target }}
-          args: --release --out dist --find-interpreter
+          target: ${{ matrix.platform.target }}
+          args: --release --out dist -i ${{ matrix.platform.interpreter }}
+      - name: Test built wheel
+        run: |
+          pip install y-py --no-index --find-links dist --force-reinstall
+          pip install pytest
+          pytest
       - name: Upload wheels
         uses: actions/upload-artifact@v2
         with:
@@ -88,24 +84,25 @@ jobs:
     strategy:
       matrix:
         target: [x86_64, i686]
-        python-version:
-          - '3.7'
-          - '3.8'
-          - '3.9'
-          - '3.10'
-          - '3.11'
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-python@v2
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
         with:
-          python-version: ${{ matrix.python-version }}
-          architecture: ${{ matrix.target }}
+          python-version: '3.11'
+          architecture: x64
       - name: Build wheels
-        uses: messense/maturin-action@v1
+        uses: PyO3/maturin-action@v1
         with:
+          rust-toolchain: stable
           target: ${{ matrix.target }}
           manylinux: auto
-          args: --release --out dist --find-interpreter
+          args: --release --out dist -i 3.7 3.8 3.9 3.10 3.11 pypy3.8 pypy3.9
+      - name: Test built wheel
+        if: matrix.target == 'x86_64'
+        run: |
+          pip install y-py --no-index --find-links dist --force-reinstall
+          pip install pytest
+          pytest
       - name: Upload wheels
         uses: actions/upload-artifact@v2
         with:
@@ -116,28 +113,40 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version:
-          - '3.7'
-          - '3.8'
-          - '3.9'
-          - '3.10'
-          - '3.11'
         target: [aarch64, armv7, s390x, ppc64le]
-
     steps:
-    - uses: actions/checkout@v3
-    - name: Build Wheels
-      uses: PyO3/maturin-action@v1
-      with:
-        target: ${{ matrix.target }}
-        manylinux: auto
-        args: -i ${{ matrix.python-version }} --release --out dist
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          rust-toolchain: stable
+          target: ${{ matrix.target }}
+          manylinux: auto
+          args: --release --out dist -i 3.7 3.8 3.9 3.10 3.11 pypy3.8 pypy3.9
 
-    - name: Upload wheels
-      uses: actions/upload-artifact@v3
-      with:
-        name: wheels
-        path: dist
+      - uses: uraimo/run-on-arch-action@v2.3.0
+        if: matrix.target != 'ppc64'
+        name: Test built wheel
+        with:
+          arch: ${{ matrix.target }}
+          distro: ubuntu20.04
+          githubToken: ${{ github.token }}
+          install: |
+            apt-get update
+            apt-get install -y --no-install-recommends python3 python3-pip
+            pip3 install -U pip pytest
+          run: |
+            pip3 install y-py --no-index --find-links dist/ --force-reinstall
+            pytest
+
+      - name: Upload wheels
+        uses: actions/upload-artifact@v3
+        with:
+          name: wheels
+          path: dist
 
   wasm:
     runs-on: ubuntu-20.04
@@ -189,6 +198,7 @@ jobs:
       - macos
       - windows
       - linux
+      - linux-cross
     if: startsWith(github.ref, 'refs/tags/')
     steps:
       - uses: actions/download-artifact@v2
