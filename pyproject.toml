@@ -4,7 +4,6 @@ build-backend = "maturin"
 
 [project]
 name = "y-py"
-version = "0.6.0"
 description = "Python bindings for the Y-CRDT built from yrs (Rust)"
 license = { file = "LICENSE" }
 authors = [
