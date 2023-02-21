@@ -1,0 +1,5 @@
+name: ypy
+channels:
+  - conda-forge
+dependencies:
+  - pip

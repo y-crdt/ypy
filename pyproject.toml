@@ -1,19 +1,38 @@
 [build-system]
-requires = ["maturin>=0.13,<0.14"]
+requires = ["maturin>=0.14,<0.15"]
 build-backend = "maturin"
 
 [project]
 name = "y-py"
-version = "0.5.5"
 description = "Python bindings for the Y-CRDT built from yrs (Rust)"
+license = { file = "LICENSE" }
 authors = [
     { name = "John Waidhofer", email = "waidhoferj@gmail.com" },
     { name = "Kevin Jahns", email = "kevin.jahns@protonmail.com" },
     { name = "Pierre-Olivier Simonard", email = "pierre.olivier.simonard@gmail.com" }
 ]
 readme = "README.md"
-homepage = "https://github.com/y-crdt/ypy"
-repository = "https://github.com/y-crdt/ypy"
+keywords = [
+    "crdt",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Rust",
+]
+
+[project.urls]
+Homepage = "https://github.com/y-crdt/ypy"
+Source = "https://github.com/y-crdt/ypy"
+Issues = "https://github.com/y-crdt/ypy/issues"
+Pypi = "https://pypi.org/project/y-py"
 
 [tool.hatch.envs.test]
 dependencies = ["pytest", "maturin"]
