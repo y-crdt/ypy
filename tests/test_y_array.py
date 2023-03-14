@@ -26,6 +26,18 @@ def test_inserts():
 
     assert list(x) == expected
 
+    # Ensure that preliminary types can be inserted
+    integrated_array = d1.get_array("prelim_container")
+    inserted_prelim = YArray(["insert"])
+    extended_prelim = YArray(["extend"])
+
+    with d1.begin_transaction() as txn:
+        integrated_array.insert(txn,0,inserted_prelim)
+        integrated_array.extend(txn, [extended_prelim])
+    values = [list(a) for a in integrated_array]
+    assert values == [["insert"], ["extend"]]
+
+
 
 def test_to_string():
     arr = YArray([7, "awesome", True, ["nested"], {"testing": "dicts"}])

@@ -278,7 +278,7 @@ impl<'a> Prelim for CompatiblePyType<'a> {
                         let mut y_array = v.borrow_mut();
                         if let SharedType::Prelim(items) = y_array.0.to_owned() {
                             let len = array.len();
-                            YArray::insert_multiple_at(&array, txn, len, items);
+                            YArray::insert_multiple_at(&array, txn, len, items).unwrap();
                         }
                         y_array.0 = SharedType::Integrated(array.clone());
                     }
