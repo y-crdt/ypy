@@ -133,7 +133,7 @@ impl YArray {
         let items = Self::py_iter(items)?;
         match &mut self.0 {
             SharedType::Integrated(array) if array.len() >= index => {
-                Self::insert_multiple_at(array, txn, index, items);
+                Self::insert_multiple_at(array, txn, index, items)?;
                 Ok(())
             }
             SharedType::Prelim(vec) if vec.len() >= index as usize => {
@@ -437,35 +437,42 @@ impl YArray {
         }
     }
 
-    pub fn insert_multiple_at(dst: &Array, txn: &mut Transaction, index: u32, src: Vec<PyObject>) {
-        let mut j = index;
-        let mut i = 0;
+    pub fn insert_multiple_at(
+        dst: &Array,
+        txn: &mut Transaction,
+        index: u32,
+        src: Vec<PyObject>,
+    ) -> PyResult<()> {
+        let mut index = index;
+
         Python::with_gil(|py| {
-            while i < src.len() {
+            let mut iter = src
+                .iter()
+                .map(|element| CompatiblePyType::try_from(element.as_ref(py)))
+                .peekable();
+            while iter.peek().is_some() {
                 let mut anys: Vec<Any> = Vec::default();
-                while i < src.len() {
-                    let converted_item: PyResult<Any> =
-                        CompatiblePyType::try_from(src[i].as_ref(py)).and_then(Any::try_from);
-                    if let Ok(any) = converted_item {
-                        anys.push(any);
-                        i += 1;
-                    } else {
-                        println!("{converted_item:?}");
-                        break;
-                    }
+                while let Some(py_type) =
+                    iter.next_if(|element| !matches!(element, Ok(CompatiblePyType::YType(_))))
+                {
+                    let any = Any::try_from(py_type?)?;
+                    anys.push(any)
                 }
 
                 if !anys.is_empty() {
                     let len = anys.len() as u32;
-                    dst.insert_range(txn, j, anys);
-                    j += len;
-                } else {
-                    let wrapper = PyObjectWrapper(src[i].clone());
-                    dst.insert(txn, j, wrapper);
-                    i += 1;
-                    j += 1;
+                    dst.insert_range(txn, index, anys);
+                    index += len;
+                }
+
+                while let Some(y_type) =
+                    iter.next_if(|element| matches!(element, Ok(CompatiblePyType::YType(_))))
+                {
+                    dst.insert(txn, index, y_type?);
+                    index += 1
                 }
             }
+            Ok(())
         })
     }
 
