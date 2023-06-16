@@ -38,8 +38,8 @@ class YDoc:
         with doc.begin_transaction() as txn:
             text = txn.get_text('name')
             text.extend(txn, 'hello world')
-            output = text.to_string(txn)
-            print(output)
+
+        print(str(text))
     """
 
     client_id: int
