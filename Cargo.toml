@@ -15,5 +15,5 @@ lib0 = "0.12.2"
 yrs = "0.12.2"
 
 [dependencies.pyo3]
-version = "0.16.5"
+version = "0.19.2"
 features = ["extension-module"]
