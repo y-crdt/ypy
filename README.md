@@ -56,7 +56,7 @@ pytest
 
 ## Using Hatch
 
-If you are using `hatch`, there is a `test` environment matrix defined in `pyproject.toml` that will run commands in virtual environments for `py37` through `py311`.
+If you are using `hatch`, there is a `test` environment matrix defined in `pyproject.toml` that will run commands in virtual environments for `py37` through `py312`.
 
 ```
 hatch run test:maturin develop
