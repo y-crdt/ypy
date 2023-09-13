@@ -31,13 +31,6 @@ jobs:
           environment-name: ypy
           create-args: python=${{ matrix.python-version }}
 
-      - name: Install Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          profile: minimal
-          default: true
-
       - name: Install Dependencies
         run: pip install pytest maturin
 
