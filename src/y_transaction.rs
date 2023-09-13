@@ -260,7 +260,6 @@ impl YTransaction {
         _traceback: Option<&'p PyAny>,
     ) -> PyResult<bool> {
         self.commit();
-        drop(self);
         Ok(exception_type.is_none())
     }
 }
