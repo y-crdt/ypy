@@ -280,10 +280,10 @@ impl<'a> Prelim for CompatiblePyType<'a> {
                         let text = TextRef::from(inner_ref);
                         let mut y_text = v.borrow_mut();
 
-                        if let SharedType::Prelim(v) = y_text.0.to_owned() {
+                        if let SharedType::Prelim(v) = y_text.inner.to_owned() {
                             text.push(txn, v.as_str());
                         }
-                        y_text.0 = SharedType::Integrated(text.clone());
+                        y_text.inner = SharedType::Integrated(text.clone());
                     }
                     YPyType::Array(v) => {
                         let array = ArrayRef::from(inner_ref);
@@ -450,7 +450,7 @@ impl ToPython for Value {
 pub(crate) fn events_into_py(txn: &TransactionMut, events: &Events, doc: Option<Rc<RefCell<YDocInner>>>) -> PyObject {
     Python::with_gil(|py| {
         let py_events = events.iter().map(|event| match event {
-            yrs::types::Event::Text(e_txt) => YTextEvent::new(e_txt, txn).into_py(py),
+            yrs::types::Event::Text(e_txt) => YTextEvent::new(e_txt, txn, doc.as_ref().unwrap().clone()).into_py(py),
             yrs::types::Event::Array(e_arr) => YArrayEvent::new(e_arr, txn, doc.as_ref().unwrap().clone()).into_py(py),
             yrs::types::Event::Map(e_map) => YMapEvent::new(e_map, txn).into_py(py),
             // TODO: check YXmlFragment Event

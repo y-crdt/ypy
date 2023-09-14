@@ -249,7 +249,11 @@ impl YDoc {
     /// If there was an instance with this name, but it was of different type, it will be projected
     /// onto `YText` instance.
     pub fn get_text(&mut self, name: &str) -> YText {
-        self.inner.borrow().doc.get_or_insert_text(&name).into()
+        self.inner
+            .borrow()
+            .doc
+            .get_or_insert_text(&name)
+            .with_doc(self.inner.clone())
     }
 
     /// Subscribes a callback to a `YDoc` lifecycle event.
