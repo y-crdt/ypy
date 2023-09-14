@@ -8,9 +8,8 @@ use pyo3::create_exception;
 use pyo3::types as pytypes;
 use pyo3::{exceptions::PyException, prelude::*};
 use std::fmt::Display;
-use yrs::types::TYPE_REFS_XML_TEXT;
-use yrs::types::{TypeRefs, TYPE_REFS_ARRAY, TYPE_REFS_MAP, TYPE_REFS_TEXT};
-use yrs::{types::TYPE_REFS_XML_ELEMENT, SubscriptionId};
+use yrs::types::TypeRef;
+use yrs::SubscriptionId;
 
 // Common errors
 create_exception!(y_py, PreliminaryObservationException, PyException, "Occurs when an observer is attached to a Y type that is not integrated into a YDoc. Y types can only be observed once they have been added to a YDoc.");
@@ -99,13 +98,13 @@ impl<'a> YPyType<'a> {
         }
     }
 
-    pub fn type_ref(&self) -> TypeRefs {
-        match self {
-            YPyType::Text(_) => TYPE_REFS_TEXT,
-            YPyType::Array(_) => TYPE_REFS_ARRAY,
-            YPyType::Map(_) => TYPE_REFS_MAP,
-            YPyType::XmlElement(_) => TYPE_REFS_XML_ELEMENT,
-            YPyType::XmlText(_) => TYPE_REFS_XML_TEXT,
+    pub fn type_ref(&self) -> TypeRef {
+        match &self {
+            YPyType::Text(_) => TypeRef::Text,
+            YPyType::Array(_) => TypeRef::Array,
+            YPyType::Map(_) => TypeRef::Map,
+            YPyType::XmlElement(py_xml_element) => TypeRef::XmlElement(py_xml_element.borrow().0.tag().clone()),
+            YPyType::XmlText(_) => TypeRef::XmlText,
         }
     }
 }

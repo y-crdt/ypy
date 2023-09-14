@@ -252,7 +252,7 @@ impl<'a> Prelim for CompatiblePyType<'a> {
     fn into_content(self, _txn: &mut TransactionMut) -> (ItemContent, Option<Self>) {
         let content = match self.clone() {
             CompatiblePyType::YType(y_type) if y_type.is_prelim() => {
-                let branch = Branch::new(y_type.type_ref(), None);
+                let branch = Branch::new(y_type.type_ref());
                 Ok(ItemContent::Type(branch))
             }
             py_value => Any::try_from(py_value).map(|any| ItemContent::Any(vec![any])),
