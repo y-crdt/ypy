@@ -70,14 +70,6 @@ impl YDocInner {
         txn
     }
 
-    pub fn get_new_transaction(&mut self) -> YTransaction {
-        // HACK: get rid of lifetime
-        let txn = unsafe {
-            std::mem::transmute::<TransactionMut, TransactionMut<'static>>(self.doc.transact_mut())
-        };
-        YTransaction::new(txn)
-    }
-
     pub fn transact_mut<F, R>(&self, f: F) -> R
     where
         F: FnOnce(&mut YTransaction) -> R,
