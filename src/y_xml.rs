@@ -1,17 +1,21 @@
 use crate::shared_types::SubId;
+use crate::y_doc::{YDocInner, WithDoc, WithTransaction};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
+use std::cell::RefCell;
+use std::mem::ManuallyDrop;
 use std::ops::Deref;
-use yrs::types::xml::{Xml, XmlEvent, XmlTextEvent};
+use std::rc::Rc;
+use yrs::types::xml::{Xml, XmlEvent, XmlTextEvent, TreeWalker};
 use yrs::types::{DeepObservable, EntryChange, Path, PathSegment};
-use yrs::XmlElementRef;
+use yrs::{XmlElementRef, XmlElementPrelim, XmlTextPrelim, GetString};
 use yrs::XmlFragmentRef;
 use yrs::XmlTextRef;
 use yrs::{Observable, SubscriptionId, Text, TransactionMut, XmlFragment, XmlNode};
 
 use crate::shared_types::{DeepSubscription, ShallowSubscription};
 use crate::type_conversions::{events_into_py, ToPython};
-use crate::y_transaction::YTransaction;
+use crate::y_transaction::{YTransaction, YTransactionWrapper};
 
 /// XML element data type. It represents an XML node, which can contain key-value attributes
 /// (interpreted as strings) as well as other nested XML elements or rich text (represented by
@@ -27,11 +31,42 @@ use crate::y_transaction::YTransaction;
 ///   using interleave-resistant algorithm, where order of concurrent inserts at the same index
 ///   is established using peer's document id seniority.
 #[pyclass(unsendable)]
-pub struct YXmlElement(pub XmlElementRef);
+pub struct YXmlElement {
+    pub inner: XmlElementRef,
+    doc: Option<Rc<RefCell<YDocInner>>>,
+}
 
 impl From<XmlElementRef> for YXmlElement {
     fn from(v: XmlElementRef) -> Self {
-        YXmlElement(v)
+        YXmlElement{
+            inner: v,
+            doc: None
+        }
+    }
+}
+
+
+impl WithDoc<YXmlElement> for XmlElementRef {
+    fn with_doc(self, doc: Rc<RefCell<YDocInner>>) -> YXmlElement {
+        YXmlElement {
+            inner: self,
+            doc: Some(doc),
+        }
+    }
+}
+
+impl WithTransaction for YXmlElement {
+    fn get_doc(&self) -> Rc<RefCell<YDocInner>> {
+        self.doc.as_ref().unwrap().clone()
+    }
+}
+
+impl YXmlElement {
+    fn new(v: XmlElementRef, doc: Rc<RefCell<YDocInner>>) -> Self {
+        YXmlElement{
+            inner: v,
+            doc: Some(doc)
+        }
     }
 }
 
@@ -40,85 +75,142 @@ impl YXmlElement {
     /// Returns a tag name of this XML node.
     #[getter]
     pub fn name(&self) -> String {
-        self.0.tag().to_string()
+        self.inner.tag().to_string()
     }
 
-    // FIXME: bring this back
+    pub fn __len__(&self) -> usize {
+        self.with_transaction(|txn| self._len(txn))
+    }
+
+    fn _len(&self, txn: &YTransaction) -> usize {
+        self.inner.len(txn) as usize
+    }
+
     /// Inserts a new instance of `YXmlElement` as a child of this XML node and returns it.
-    // pub fn insert_xml_element(
-    //     &self,
-    //     txn: &mut YTransaction,
-    //     index: u32,
-    //     name: &str,
-    // ) -> YXmlElement {
-    //     YXmlElement(self.0.insert_elem(txn, index, name))
-    // }
+    pub fn insert_xml_element(
+        &self,
+        txn: &mut YTransactionWrapper,
+        index: u32,
+        name: &str,
+    ) -> YXmlElement {
+        let inner = txn.get_inner();
+        let mut txn = inner.borrow_mut();
+        self._insert_xml_element(&mut txn, index, name)
+    }
+
+    fn _insert_xml_element(
+        &self,
+        txn: &mut YTransaction,
+        index: u32,
+        name: &str,
+    ) -> YXmlElement {
+        let inner_node = self.inner.insert(txn, index, XmlElementPrelim::empty(name));
+        YXmlElement {
+            inner: inner_node,
+            doc: self.doc.clone(),
+        }
+    }
 
     // /// Inserts a new instance of `YXmlText` as a child of this XML node and returns it.
-    // pub fn insert_xml_text(&self, txn: &mut YTransaction, index: u32) -> YXmlText {
-    //     YXmlText(self.0.insert_text(txn, index))
-    // }
+    pub fn insert_xml_text(&self, txn: &mut YTransactionWrapper, index: u32) -> YXmlText {
+        let inner = txn.get_inner();
+        let mut txn = inner.borrow_mut();
+        self._insert_xml_text(&mut txn, index)
+    }
+
+    fn _insert_xml_text(&self, txn: &mut YTransaction, index: u32) -> YXmlText {
+        let inner_node = self.inner.insert(txn, index, XmlTextPrelim::new(""));
+        YXmlText {
+            inner: inner_node,
+            doc: self.doc.clone(),
+        }
+    }
 
     /// Removes a range of children XML nodes from this `YXmlElement` instance,
     /// starting at given `index`.
-    pub fn delete(&self, txn: &mut YTransaction, index: u32, length: u32) {
-        self.0.remove_range(txn, index, length)
+    pub fn delete(&self, txn: &mut YTransactionWrapper, index: u32, length: u32) {
+        let inner = txn.get_inner();
+        let mut txn = inner.borrow_mut();
+        self._delete(&mut txn, index, length)
+    }
+
+    fn _delete(&self, txn: &mut YTransaction, index: u32, length: u32) {
+        self.inner.remove_range(txn, index, length)
     }
 
     /// Appends a new instance of `YXmlElement` as the last child of this XML node and returns it.
-    // pub fn push_xml_element(&self, txn: &mut YTransaction, name: &str) -> YXmlElement {
-    //     YXmlElement(self.0.push_elem_back(txn, name))
-    // }
+    pub fn push_xml_element(&self, txn: &mut YTransactionWrapper, name: &str) -> YXmlElement {
+        let inner = txn.get_inner();
+        let mut txn = inner.borrow_mut();
+        self._push_xml_element(&mut txn, name)
+    }
+    fn _push_xml_element(&self, txn: &mut YTransaction, name: &str) -> YXmlElement {
+        let index = self._len(txn) as u32;
+        self._insert_xml_element(txn, index, name)
+    }
 
     /// Appends a new instance of `YXmlText` as the last child of this XML node and returns it.
-    // pub fn push_xml_text(&self, txn: &mut YTransaction) -> YXmlText {
-    //     YXmlText(self.0.push_text_back(txn))
-    // }
+    pub fn push_xml_text(&self, txn: &mut YTransactionWrapper) -> YXmlText {
+        let inner = txn.get_inner();
+        let mut txn = inner.borrow_mut();
+        self._push_xml_text(&mut txn)
+    }
+    fn _push_xml_text(&self, txn: &mut YTransaction) -> YXmlText {
+        let index = self._len(txn) as u32;
+        self._insert_xml_text(txn, index)
+    }
 
     /// Returns a first child of this XML node.
     /// It can be either `YXmlElement`, `YXmlText` or `undefined` if current node has not children.
     #[getter]
     pub fn first_child(&self) -> PyObject {
+        let doc = self.get_doc();
         Python::with_gil(|py| {
-            self.0
+            self.inner
                 .first_child()
-                .map_or(py.None(), |xml| xml.into_py(py))
+                .map_or(py.None(), |xml| xml.with_doc_into_py(doc.clone(), py))
         })
     }
 
     /// Returns a next XML sibling node of this XMl node.
     /// It can be either `YXmlElement`, `YXmlText` or `undefined` if current node is a last child of
     /// parent XML node.
-    // #[getter]
-    // pub fn next_sibling(&self) -> PyObject {
-    //     Python::with_gil(|py| {
-    //         self.0
-    //             .next_sibling()
-    //             .map_or(py.None(), |xml| xml.into_py(py))
-    //     })
-    // }
+    #[getter]
+    pub fn next_sibling(&self) -> PyObject {
+        let doc = self.get_doc();
+        Python::with_gil(|py| {
+            self.with_transaction(|txn| {
+                self.inner.siblings(txn).next().map_or(py.None(), |xml| xml.with_doc_into_py(doc.clone(), py))
+            })
+        })
+    }
 
     /// Returns a previous XML sibling node of this XMl node.
     /// It can be either `YXmlElement`, `YXmlText` or `undefined` if current node is a first child
     /// of parent XML node.
-    // #[getter]
-    // pub fn prev_sibling(&self) -> PyObject {
-    //     Python::with_gil(|py| {
-    //         self.0
-    //             .prev_sibling()
-    //             .map_or(py.None(), |xml| xml.into_py(py))
-    //     })
-    // }
+    #[getter]
+    pub fn prev_sibling(&self) -> PyObject {
+        let doc = self.get_doc();
+        Python::with_gil(|py| {
+            self.with_transaction(|txn| {
+                self.inner
+                    .siblings(txn)
+                    .next_back()
+                    .map_or(py.None(), |xml| xml.with_doc_into_py(doc.clone(), py))
+            })
+        })
+    }
 
     /// Returns a parent `YXmlElement` node or `undefined` if current node has no parent assigned.
     #[getter]
     pub fn parent(&self) -> PyObject {
-        Python::with_gil(|py| self.0.parent().map_or(py.None(), |xml| xml.into_py(py)))
+        let doc = self.get_doc();
+        Python::with_gil(|py| self.inner.parent().map_or(py.None(), |xml| xml.with_doc_into_py(doc.clone(), py)))
     }
 
     /// Returns a string representation of this XML node.
     pub fn __str__(&self) -> String {
-        self.0.tag().to_string()
+        self.with_transaction(|txn| self.inner.get_string(txn))
     }
 
     pub fn __repr__(&self) -> String {
@@ -127,35 +219,50 @@ impl YXmlElement {
 
     /// Sets a `name` and `value` as new attribute for this XML node. If an attribute with the same
     /// `name` already existed on that node, its value with be overridden with a provided one.
-    pub fn set_attribute(&self, txn: &mut YTransaction, name: &str, value: &str) {
-        self.0.insert_attribute(txn, name, value)
+    pub fn set_attribute(&self, txn: &mut YTransactionWrapper, name: &str, value: &str) {
+        let inner = txn.get_inner();
+        let mut txn = inner.borrow_mut();
+        self.inner.insert_attribute(&mut txn, name, value)
     }
 
     /// Returns a value of an attribute given its `name`. If no attribute with such name existed,
     /// `null` will be returned.
-    pub fn get_attribute(&self, txn: &YTransaction, name: &str) -> Option<String> {
-        self.0.get_attribute(txn, name)
+    pub fn get_attribute(&self, name: &str) -> Option<String> {
+        self.with_transaction(|txn| self.inner.get_attribute(txn, name))
     }
 
-    /// Returns an iterator that enables to traverse over all attributes of this XML node in
-    /// unspecified order.
-    // pub fn attributes(&self, txn: &YTransaction) -> YXmlAttributes {
-    //     unsafe {
-    //         let this: *const XmlElementRef = &self.0;
-    //         let static_iter: ManuallyDrop<Attributes<'static>> =
-    //             ManuallyDrop::new((*this).attributes(txn));
-    //         YXmlAttributes(static_iter)
-    //     }
-    // }
+    pub fn remove_attribute(&self, txn: &mut YTransactionWrapper, name: &str) {
+        let inner = txn.get_inner();
+        let mut txn = inner.borrow_mut();
+        self.inner.remove_attribute(&mut txn, &name);
+    }
+
+    /// Returns the attributes of this XML node as a Python list of tuples
+    pub fn attributes(&self) -> PyObject {
+        Python::with_gil(|py| {
+            self.with_transaction(|txn| {
+                let attributes = self.inner.attributes(txn);
+                attributes
+                    .map(|(k, v)| (k.to_string(), v))
+                    .collect::<Vec<_>>()
+            }).into_py(py)
+        })
+    }
 
     /// Returns an iterator that enables a deep traversal of this XML node - starting from first
     /// child over this XML node successors using depth-first strategy.
     // pub fn tree_walker(&self) -> YXmlTreeWalker {
-    //     unsafe {
-    //         let this: *const XmlElementRef = &self.0;
-    //         let static_iter: ManuallyDrop<TreeWalker<'static>> =
-    //             ManuallyDrop::new((*this).successors());
-    //         YXmlTreeWalker(static_iter)
+    //     let doc = self.get_doc();
+    //     // let borrowed_doc = doc.borrow_mut();
+    //     // let txn = borrowed_doc.begin_transaction();
+    //     // let static_iter = self.inner.successors(&txn);
+    //     let txn = YTransactionWrapper::new(doc.borrow_mut().begin_transaction());
+    //     let walker = self.inner.successors(&txn.get_inner());
+    //     // let walker = unsafe { std::mem::transmute::<&TreeWalker<YTransaction, YTransaction>, &TreeWalker<'static, YTransaction, YTransaction>>(&walker) };
+            
+    //     YXmlTreeWalker {
+    //         inner: walker,
+    //         doc: doc.clone()
     //     }
     // }
 
@@ -163,11 +270,12 @@ impl YXmlElement {
     /// batched and eventually triggered during transaction commit phase.
     /// Returns an `SubscriptionId` which, can be used to unsubscribe the observer.
     pub fn observe(&mut self, f: PyObject) -> ShallowSubscription {
+        let doc = self.get_doc();
         let sub_id = self
-            .0
+            .inner
             .observe(move |txn, e| {
                 Python::with_gil(|py| {
-                    let event = YXmlEvent::new(e, txn);
+                    let event = YXmlEvent::new(e, txn, doc.clone());
                     if let Err(err) = f.call1(py, (event,)) {
                         err.restore(py)
                     }
@@ -182,11 +290,12 @@ impl YXmlElement {
     /// All changes are batched and eventually triggered during transaction commit phase.
     /// Returns an `SubscriptionId` which, can be used to unsubscribe the observer.
     pub fn observe_deep(&mut self, f: PyObject) -> DeepSubscription {
+        let doc = self.get_doc();
         let sub_id = self
-            .0
+            .inner
             .observe_deep(move |txn, events| {
                 Python::with_gil(|py| {
-                    let events = events_into_py(txn, events, None);
+                    let events = events_into_py(txn, events, Some(doc.clone()));
                     if let Err(err) = f.call1(py, (events,)) {
                         err.restore(py)
                     }
@@ -199,8 +308,8 @@ impl YXmlElement {
     /// Cancels the observer callback associated with the `subscripton_id`.
     pub fn unobserve(&mut self, subscription_id: SubId) {
         match subscription_id {
-            SubId::Shallow(ShallowSubscription(id)) => self.0.unobserve(id),
-            SubId::Deep(DeepSubscription(id)) => self.0.unobserve_deep(id),
+            SubId::Shallow(ShallowSubscription(id)) => self.inner.unobserve(id),
+            SubId::Deep(DeepSubscription(id)) => self.inner.unobserve_deep(id),
         }
     }
 }
@@ -222,11 +331,41 @@ impl YXmlElement {
 /// after merging all updates together). In case of Yrs conflict resolution is solved by using
 /// unique document id to determine correct and consistent ordering.
 #[pyclass(unsendable)]
-pub struct YXmlText(pub XmlTextRef);
+pub struct YXmlText {
+    pub inner: XmlTextRef,
+    doc: Option<Rc<RefCell<YDocInner>>>
+}
 
 impl From<XmlTextRef> for YXmlText {
     fn from(v: XmlTextRef) -> Self {
-        YXmlText(v)
+        YXmlText {
+            inner: v,
+            doc: None
+        }
+    }
+}
+
+impl WithDoc<YXmlText> for XmlTextRef {
+    fn with_doc(self, doc: Rc<RefCell<YDocInner>>) -> YXmlText {
+        YXmlText {
+            inner: self,
+            doc: Some(doc),
+        }
+    }
+}
+
+impl WithTransaction for YXmlText {
+    fn get_doc(&self) -> Rc<RefCell<YDocInner>> {
+        self.doc.as_ref().unwrap().clone()
+    }
+}
+
+impl YXmlText {
+    fn new(v: XmlTextRef, doc: Rc<RefCell<YDocInner>>) -> Self {
+        YXmlText{
+            inner: v,
+            doc: Some(doc)
+        }
     }
 }
 
@@ -234,59 +373,85 @@ impl From<XmlTextRef> for YXmlText {
 impl YXmlText {
     /// Returns length of an underlying string stored in this `YXmlText` instance,
     /// understood as a number of UTF-8 encoded bytes.
-    pub fn len(&self, txn: &YTransaction) -> usize {
-        self.0.len(txn) as usize
+    pub fn __len__(&self) -> usize {
+        self.with_transaction(|txn| self._len(txn))
+    }
+
+    fn _len(&self, txn: &YTransaction) -> usize {
+        self.inner.len(txn) as usize
     }
 
     /// Inserts a given `chunk` of text into this `YXmlText` instance, starting at a given `index`.
-    pub fn insert(&self, txn: &mut YTransaction, index: i32, chunk: &str) {
-        self.0.insert(txn, index as u32, chunk)
+    pub fn insert(&self, txn: &mut YTransactionWrapper, index: i32, chunk: &str) {
+        let inner = txn.get_inner();
+        let mut txn = inner.borrow_mut();
+        self._insert(&mut txn, index, chunk)
+    }
+    fn _insert(&self, txn: &mut YTransaction, index: i32, chunk: &str) {
+        self.inner.insert(txn, index as u32, chunk)
     }
 
     /// Appends a given `chunk` of text at the end of `YXmlText` instance.
-    pub fn push(&self, txn: &mut YTransaction, chunk: &str) {
-        self.0.push(txn, chunk)
+    pub fn push(&self, txn: &mut YTransactionWrapper, chunk: &str) {
+        let inner = txn.get_inner();
+        let mut txn = inner.borrow_mut();
+        self._push(&mut txn, chunk)
+    }
+
+    fn _push(&self, txn: &mut YTransaction, chunk: &str) {
+        self.inner.push(txn, chunk)
     }
 
     /// Deletes a specified range of of characters, starting at a given `index`.
     /// Both `index` and `length` are counted in terms of a number of UTF-8 character bytes.
-    pub fn delete(&self, txn: &mut YTransaction, index: u32, length: u32) {
-        self.0.remove_range(txn, index, length)
+    pub fn delete(&self, txn: &mut YTransactionWrapper, index: u32, length: u32) {
+        let inner = txn.get_inner();
+        let mut txn = inner.borrow_mut();
+        self._delete(&mut txn, index, length)
+    }
+    fn _delete(&self, txn: &mut YTransaction, index: u32, length: u32) {
+        self.inner.remove_range(txn, index, length)
     }
 
     /// Returns a next XML sibling node of this XMl node.
     /// It can be either `YXmlElement`, `YXmlText` or `undefined` if current node is a last child of
     /// parent XML node.
-    // #[getter]
-    // pub fn next_sibling(&self) -> PyObject {
-    //     Python::with_gil(|py| {
-    //         self.0
-    //             .next_sibling()
-    //             .map_or(py.None(), |xml| xml.into_py(py))
-    //     })
-    // }
+    #[getter]
+    pub fn next_sibling(&self) -> PyObject {
+        let doc = self.get_doc();
+        Python::with_gil(|py| {
+            self.with_transaction(|txn| {
+                self.inner.siblings(txn).next().map_or(py.None(), |xml| xml.with_doc_into_py(doc.clone(), py))
+            })
+        })
+    }
 
     /// Returns a previous XML sibling node of this XMl node.
     /// It can be either `YXmlElement`, `YXmlText` or `undefined` if current node is a first child
     /// of parent XML node.
-    // #[getter]
-    // pub fn prev_sibling(&self) -> PyObject {
-    //     Python::with_gil(|py| {
-    //         self.0
-    //             .prev_sibling()
-    //             .map_or(py.None(), |xml| xml.into_py(py))
-    //     })
-    // }
+    #[getter]
+    pub fn prev_sibling(&self) -> PyObject {
+        let doc = self.get_doc();
+        Python::with_gil(|py| {
+            self.with_transaction(|txn| {
+                self.inner
+                    .siblings(txn)
+                    .next_back()
+                    .map_or(py.None(), |xml| xml.with_doc_into_py(doc.clone(), py))
+            })
+        })
+    }
 
     /// Returns a parent `YXmlElement` node or `undefined` if current node has no parent assigned.
     #[getter]
     pub fn parent(&self) -> PyObject {
-        Python::with_gil(|py| self.0.parent().map_or(py.None(), |xml| xml.into_py(py)))
+        let doc = self.get_doc();
+        Python::with_gil(|py| self.inner.parent().map_or(py.None(), |xml| xml.with_doc_into_py(doc.clone(), py)))
     }
 
     /// Returns an underlying string stored in this `YXmlText` instance.
     pub fn __str__(&self) -> String {
-        format!("...")
+        self.with_transaction(|txn| self.inner.get_string(txn))
     }
 
     pub fn __repr__(&self) -> String {
@@ -295,41 +460,48 @@ impl YXmlText {
 
     /// Sets a `name` and `value` as new attribute for this XML node. If an attribute with the same
     /// `name` already existed on that node, its value with be overridden with a provided one.
-    pub fn set_attribute(&self, txn: &mut YTransaction, name: &str, value: &str) {
-        self.0.insert_attribute(txn, name, value);
+    pub fn set_attribute(&self, txn: &mut YTransactionWrapper, name: &str, value: &str) {
+        let inner = txn.get_inner();
+        let mut txn = inner.borrow_mut();
+        self.inner.insert_attribute(&mut txn, name, value)
     }
 
     /// Returns a value of an attribute given its `name`. If no attribute with such name existed,
     /// `null` will be returned.
-    pub fn get_attribute(&self, txn: &YTransaction, name: &str) -> Option<String> {
-        self.0.get_attribute(txn, name)
+    pub fn get_attribute(&self, name: &str) -> Option<String> {
+        self.with_transaction(|txn| self.inner.get_attribute(txn, name))
     }
 
     /// Removes an attribute from this XML node, given its `name`.
-    pub fn remove_attribute(&self, txn: &mut YTransaction, name: &str) {
-        self.0.remove_attribute(txn, &name);
+    pub fn remove_attribute(&self, txn: &mut YTransactionWrapper, name: &str) {
+        let inner = txn.get_inner();
+        let mut txn = inner.borrow_mut();
+        self.inner.remove_attribute(&mut txn, &name);
     }
 
     /// Returns an iterator that enables to traverse over all attributes of this XML node in
     /// unspecified order.
-    // pub fn attributes(&self, txn: &YTransaction) -> YXmlAttributes {
-    //     unsafe {
-    //         let this: *const XmlTextRef = &self.0;
-    //         let static_iter: ManuallyDrop<Attributes<'static>> =
-    //             ManuallyDrop::new((*this).attributes(txn));
-    //         YXmlAttributes(static_iter)
-    //     }
-    // }
+    pub fn attributes(&self) -> PyObject {
+        Python::with_gil(|py| {
+            self.with_transaction(|txn| {
+                let attributes = self.inner.attributes(txn);
+                attributes
+                    .map(|(k, v)| (k.to_string(), v))
+                    .collect::<Vec<_>>()
+            }).into_py(py)
+        })
+    }
 
     /// Subscribes to all operations happening over this instance of `YXmlText`. All changes are
     /// batched and eventually triggered during transaction commit phase.
     /// Returns an `SubscriptionId` which, which can be used to unsubscribe the callback function.
     pub fn observe(&mut self, f: PyObject) -> ShallowSubscription {
+        let doc = self.get_doc();
         let sub_id: SubscriptionId = self
-            .0
+            .inner
             .observe(move |txn, e| {
                 Python::with_gil(|py| {
-                    let e = YXmlTextEvent::new(e, txn);
+                    let e = YXmlTextEvent::new(e, txn, doc.clone());
                     if let Err(err) = f.call1(py, (e,)) {
                         err.restore(py)
                     }
@@ -343,11 +515,12 @@ impl YXmlText {
     /// batched and eventually triggered during transaction commit phase.
     /// Returns an `SubscriptionId` which, which can be used to unsubscribe the callback function.
     pub fn observe_deep(&mut self, f: PyObject) -> DeepSubscription {
+        let doc = self.get_doc();
         let sub_id: SubscriptionId = self
-            .0
+            .inner
             .observe_deep(move |txn, events| {
                 Python::with_gil(|py| {
-                    let e = events_into_py(txn, events, None);
+                    let e = events_into_py(txn, events, Some(doc.clone()));
                     if let Err(err) = f.call1(py, (e,)) {
                         err.restore(py)
                     }
@@ -360,98 +533,142 @@ impl YXmlText {
     /// Cancels the observer callback associated with the `subscripton_id`.
     pub fn unobserve(&mut self, subscription_id: SubId) {
         match subscription_id {
-            SubId::Shallow(ShallowSubscription(id)) => self.0.unobserve(id),
-            SubId::Deep(DeepSubscription(id)) => self.0.unobserve_deep(id),
+            SubId::Shallow(ShallowSubscription(id)) => self.inner.unobserve(id),
+            SubId::Deep(DeepSubscription(id)) => self.inner.unobserve_deep(id),
         }
     }
 }
 
 #[pyclass(unsendable)]
-pub struct YXmlFragment(pub XmlFragmentRef);
+pub struct YXmlFragment {
+    pub inner: XmlFragmentRef,
+    doc: Option<Rc<RefCell<YDocInner>>>
+}
+
+
+impl From<XmlFragmentRef> for YXmlFragment {
+    fn from(v: XmlFragmentRef) -> Self {
+        YXmlFragment{
+            inner: v,
+            doc: None
+        }
+    }
+}
+
+
+impl WithDoc<YXmlFragment> for XmlFragmentRef {
+    fn with_doc(self, doc: Rc<RefCell<YDocInner>>) -> YXmlFragment {
+        YXmlFragment {
+            inner: self,
+            doc: Some(doc),
+        }
+    }
+}
+
+impl WithTransaction for YXmlFragment {
+    fn get_doc(&self) -> Rc<RefCell<YDocInner>> {
+        self.doc.as_ref().unwrap().clone()
+    }
+}
+
+impl YXmlFragment {
+    fn new(v: XmlFragmentRef, doc: Rc<RefCell<YDocInner>>) -> Self {
+        YXmlFragment{
+            inner: v,
+            doc: Some(doc)
+        }
+    }
+}
 
 #[pymethods]
 impl YXmlFragment {
     /// Returns a number of child XML nodes stored within this `YXMlElement` instance.
-    pub fn len(&self, txn: &YTransaction) -> usize {
-        self.0.len(txn) as usize
+    pub fn __len__(&self) -> usize {
+        self.with_transaction(|txn| self._len(txn))
+    }
+
+    fn _len(&self, txn: &YTransaction) -> usize {
+        self.inner.len(txn) as usize
+    }
+
+    pub fn __str__(&self) -> String {
+        self.with_transaction(|txn| self.inner.get_string(txn))
+    }
+
+    pub fn __repr__(&self) -> String {
+        format!("YXmlElement({})", self.__str__())
+    }
+
+    /// Returns a first child of this XML node.
+    /// It can be either `YXmlElement`, `YXmlText` or `undefined` if current node has not children.
+    #[getter]
+    pub fn first_child(&self) -> PyObject {
+        let doc = self.get_doc();
+        Python::with_gil(|py| {
+            self.inner
+                .first_child()
+                .map_or(py.None(), |xml| xml.with_doc_into_py(doc.clone(), py))
+        })
+    }
+
+}
+
+#[pyclass(unsendable)]
+pub struct YXmlTreeWalker {
+    inner: ManuallyDrop<TreeWalker<'static, YTransaction, YTransaction>>,
+    doc: Rc<RefCell<YDocInner>>
+}
+
+impl Drop for YXmlTreeWalker {
+    fn drop(&mut self) {
+        unsafe { ManuallyDrop::drop(&mut self.inner) }
     }
 }
 
-// #[pyclass(unsendable)]
-// pub struct YXmlAttributes(ManuallyDrop<Attributes<'static, dyn Borrow<YTransaction>, YTransaction>>);
-
-// impl Drop for YXmlAttributes {
-//     fn drop(&mut self) {
-//         unsafe { ManuallyDrop::drop(&mut self.0) }
-//     }
-// }
-
-// #[pymethods]
-// impl YXmlAttributes {
-//     fn __iter__(slf: PyRef<Self>) -> PyRef<Self> {
-//         slf
-//     }
-//     fn __next__(mut slf: PyRefMut<Self>) -> Option<(String, String)> {
-//         slf.0.next().map(|(attr, val)| (attr.to_string(), val))
-//     }
-// }
-
-// #[pyclass(unsendable)]
-// pub struct YXmlTreeWalker(ManuallyDrop<TreeWalker<'static, dyn Borrow<YTransaction>, YTransaction>>);
-
-// impl Drop for YXmlTreeWalker {
-//     fn drop(&mut self) {
-//         unsafe { ManuallyDrop::drop(&mut self.0) }
-//     }
-// }
-
-// #[pymethods]
-// impl YXmlTreeWalker {
-//     pub fn __iter__(slf: PyRef<Self>) -> PyRef<Self> {
-//         slf
-//     }
-//     pub fn __next__(mut slf: PyRefMut<Self>) -> Option<PyObject> {
-//         Python::with_gil(|py| {
-//             slf.0.next().map(|v| match v {
-//                 Xml::Element(el) => YXmlElement(el).into_py(py),
-//                 Xml::Text(text) => YXmlText(text).into_py(py),
-//             })
-//         })
-//     }
-// }
+#[pymethods]
+impl YXmlTreeWalker {
+    pub fn __iter__(slf: PyRef<Self>) -> PyRef<Self> {
+        slf
+    }
+    pub fn __next__(mut slf: PyRefMut<Self>) -> Option<PyObject> {
+        Python::with_gil(|py| {
+            slf.inner.next().map(|v| v.with_doc_into_py(slf.doc.clone(), py))
+        })
+    }
+}
 
 #[pyclass(unsendable)]
 pub struct YXmlEvent {
-    target: PyObject,
-    delta: PyObject,
-    keys: PyObject,
-    path: PyObject,
+    inner: *const XmlEvent,
+    doc: Rc<RefCell<YDocInner>>,
+    txn: *const TransactionMut<'static>,
+
+    target: Option<PyObject>,
+    delta: Option<PyObject>,
+    keys: Option<PyObject>,
 }
 impl YXmlEvent {
-    pub fn new(event: &XmlEvent, txn: &TransactionMut) -> Self {
-        let target = Python::with_gil(|py| event.target().clone().into_py(py));
-        let delta = Python::with_gil(|py| {
-            let delta = event
-                .delta(txn)
-                .into_iter()
-                .map(|d| Python::with_gil(|py| d.clone().into_py(py)));
-            let result = pyo3::types::PyList::new(py, delta);
-            result.into()
-        });
-        let keys = Python::with_gil(|py| {
-            let keys = event.keys(txn);
-            let result = PyDict::new(py);
-            for (key, value) in keys.iter() {
-                result.set_item(key.deref(), value.into_py(py)).unwrap();
-            }
-            PyObject::from(result)
-        });
+    pub fn new(event: &XmlEvent, txn: &TransactionMut, doc: Rc<RefCell<YDocInner>>) -> Self {
+        let inner = event as *const XmlEvent;
+        // HACK: get rid of lifetime
+        let txn = unsafe { std::mem::transmute::<&TransactionMut, &TransactionMut<'static>>(txn) };
+        let txn = txn as *const TransactionMut;
         YXmlEvent {
-            target,
-            delta,
-            keys,
-            path: Python::with_gil(|py| event.path().into_py(py)),
+            inner,
+            doc,
+            txn,
+            target: None,
+            delta: None,
+            keys: None,
         }
+    }
+
+    fn inner(&self) -> &XmlEvent {
+        unsafe { self.inner.as_ref().unwrap() }
+    }
+
+    fn txn(&self) -> &TransactionMut {
+        unsafe { self.txn.as_ref().unwrap() }
     }
 }
 
@@ -459,11 +676,24 @@ impl YXmlEvent {
 impl YXmlEvent {
     /// Returns a current shared type instance, that current event changes refer to.
     #[getter]
-    pub fn target(&self) -> PyObject {
-        self.target.clone()
+    pub fn target(&mut self) -> PyObject {
+        if let Some(target) = self.target.as_ref() {
+            target.clone()
+        } else {
+            let target: PyObject = Python::with_gil(|py| {
+                let target = self.inner().target().clone();
+                match target {
+                    XmlNode::Element(v) => YXmlElement::new(v, self.doc.clone()).into_py(py),
+                    XmlNode::Text(v) => YXmlText::new(v, self.doc.clone()).into_py(py),
+                    XmlNode::Fragment(v) => YXmlFragment::new(v, self.doc.clone()).into_py(py),
+                }
+            });
+            self.target = Some(target.clone());
+            target
+        }
     }
 
-    fn __repr__(&self) -> String {
+    fn __repr__(&mut self) -> String {
         let target = self.target();
         let delta = self.delta();
         let keys = self.keys();
@@ -475,7 +705,7 @@ impl YXmlEvent {
     /// Returns an array of keys and indexes creating a path from root type down to current instance
     /// of shared type (accessible via `target` getter).
     pub fn path(&self) -> PyObject {
-        self.path.clone()
+        Python::with_gil(|py| self.inner().path().into_py(py))
     }
 
     /// Returns all changes done upon map component of a current shared data type (which can be
@@ -483,8 +713,21 @@ impl YXmlEvent {
     /// changes are done in result of operations made on `YMap` data type or attribute changes of
     /// `YXmlElement` and `YXmlText` types.
     #[getter]
-    pub fn keys(&self) -> PyObject {
-        self.keys.clone()
+    pub fn keys(&mut self) -> PyObject {
+        if let Some(keys) = &self.keys {
+            keys.clone()
+        } else {
+            Python::with_gil(|py| {
+                let keys = self.inner().keys(self.txn());
+                let result = PyDict::new(py);
+                for (key, value) in keys.iter() {
+                    result.set_item(key.deref(), value.into_py(py)).unwrap();
+                }
+                let keys = PyObject::from(result);
+                self.keys = Some(keys.clone());
+                keys
+            })
+        }
     }
 
     /// Returns collection of all changes done over an array component of a current shared data
@@ -492,44 +735,58 @@ impl YXmlEvent {
     /// of operations done on `YArray` and `YText`/`XmlText` types, but also whenever `XmlElement`
     /// children nodes list is modified.
     #[getter]
-    pub fn delta(&self) -> PyObject {
-        self.delta.clone()
+    pub fn delta(&mut self) -> PyObject {
+        if let Some(delta) = &self.delta {
+            delta.clone()
+        } else {
+            Python::with_gil(|py| {
+                let delta = self
+                    .inner()
+                    .delta(self.txn())
+                    .into_iter()
+                    .map(|d| Python::with_gil(|py| d.into_py(py)));
+                let result = pyo3::types::PyList::new(py, delta);
+                let delta: PyObject = result.into();
+                self.delta = Some(delta.clone());
+                delta
+            })
+        }
     }
 }
 
 #[pyclass(unsendable)]
 pub struct YXmlTextEvent {
-    target: PyObject,
-    delta: PyObject,
-    keys: PyObject,
-    path: PyObject,
+    inner: *const XmlTextEvent,
+    doc: Rc<RefCell<YDocInner>>,
+    txn: *const TransactionMut<'static>,
+  
+    target: Option<PyObject>,
+    delta: Option<PyObject>,
+    keys: Option<PyObject>,
 }
 
 impl YXmlTextEvent {
-    pub fn new(event: &XmlTextEvent, txn: &TransactionMut) -> Self {
-        let target = Python::with_gil(|py| YXmlText(event.target().clone()).into_py(py));
-        let delta = Python::with_gil(|py| {
-            let delta = event
-                .delta(txn)
-                .into_iter()
-                .map(|d| Python::with_gil(|py| d.clone().into_py(py)));
-            let result = pyo3::types::PyList::new(py, delta);
-            result.into()
-        });
-        let keys = Python::with_gil(|py| {
-            let keys = event.keys(txn);
-            let result = PyDict::new(py);
-            for (key, value) in keys.iter() {
-                result.set_item(key.deref(), value.into_py(py)).unwrap();
-            }
-            PyObject::from(result)
-        });
+    pub fn new(event: &XmlTextEvent, txn: &TransactionMut, doc: Rc<RefCell<YDocInner>>) -> Self {
+        let inner = event as *const XmlTextEvent;
+        // HACK: get rid of lifetime
+        let txn = unsafe { std::mem::transmute::<&TransactionMut, &TransactionMut<'static>>(txn) };
+        let txn = txn as *const TransactionMut;
         YXmlTextEvent {
-            target,
-            delta,
-            keys,
-            path: Python::with_gil(|py| event.path().into_py(py)),
+            inner,
+            doc,
+            txn,
+            target: None,
+            delta: None,
+            keys: None,
         }
+    }
+
+    fn inner(&self) -> &XmlTextEvent {
+        unsafe { self.inner.as_ref().unwrap() }
+    }
+
+    fn txn(&self) -> &TransactionMut {
+        unsafe { self.txn.as_ref().unwrap() }
     }
 }
 
@@ -537,11 +794,20 @@ impl YXmlTextEvent {
 impl YXmlTextEvent {
     /// Returns a current shared type instance, that current event changes refer to.
     #[getter]
-    pub fn target(&self) -> PyObject {
-        self.target.clone()
+    pub fn target(&mut self) -> PyObject {
+        if let Some(target) = self.target.as_ref() {
+            target.clone()
+        } else {
+            let target = Python::with_gil(|py| {
+                let target = self.inner().target().clone();
+                target.with_doc(self.doc.clone()).into_py(py)
+            });
+            self.target = Some(target.clone());
+            target
+        }
     }
 
-    fn __repr__(&self) -> String {
+    fn __repr__(&mut self) -> String {
         let target = self.target();
         let delta = self.delta();
         let keys = self.keys();
@@ -552,7 +818,7 @@ impl YXmlTextEvent {
 
     /// Returns a current shared type instance, that current event changes refer to.
     pub fn path(&self) -> PyObject {
-        self.path.clone()
+        Python::with_gil(|py| self.inner().path().into_py(py))
     }
 
     /// Returns all changes done upon map component of a current shared data type (which can be
@@ -560,8 +826,21 @@ impl YXmlTextEvent {
     /// changes are done in result of operations made on `YMap` data type or attribute changes of
     /// `YXmlElement` and `YXmlText` types.
     #[getter]
-    pub fn keys(&self) -> PyObject {
-        self.keys.clone()
+    pub fn keys(&mut self) -> PyObject {
+        if let Some(keys) = &self.keys {
+            keys.clone()
+        } else {
+            Python::with_gil(|py| {
+                let keys = self.inner().keys(self.txn());
+                let result = PyDict::new(py);
+                for (key, value) in keys.iter() {
+                    result.set_item(key.deref(), value.into_py(py)).unwrap();
+                }
+                let keys = PyObject::from(result);
+                self.keys = Some(keys.clone());
+                keys
+            })
+        }
     }
 
     /// Returns a list of text changes made over corresponding `YXmlText` collection within
@@ -571,8 +850,22 @@ impl YXmlTextEvent {
     /// - { delete: number }
     /// - { retain: number, attributes: any|undefined }
     #[getter]
-    pub fn delta(&self) -> PyObject {
-        self.delta.clone()
+    pub fn delta(&mut self) -> PyObject {
+        if let Some(delta) = &self.delta {
+            delta.clone()
+        } else {
+            Python::with_gil(|py| {
+                let delta = self
+                    .inner()
+                    .delta(self.txn())
+                    .into_iter()
+                    .map(|d| Python::with_gil(|py| d.clone().into_py(py)));
+                let result = pyo3::types::PyList::new(py, delta);
+                let delta: PyObject = result.into();
+                self.delta = Some(delta.clone());
+                delta
+            })
+        }
     }
 }
 
@@ -581,9 +874,23 @@ impl YXmlTextEvent {
 impl ToPython for XmlNode {
     fn into_py(self, py: Python) -> PyObject {
         match self {
-            XmlNode::Element(v) => YXmlElement(v).into_py(py),
-            XmlNode::Text(v) => YXmlText(v).into_py(py),
-            XmlNode::Fragment(v) => YXmlFragment(v).into_py(py),
+            XmlNode::Element(v) => YXmlElement::from(v).into_py(py),
+            XmlNode::Text(v) => YXmlText::from(v).into_py(py),
+            XmlNode::Fragment(v) => YXmlFragment::from(v).into_py(py),
+        }
+    }
+}
+
+trait WithDocToPython {
+    fn with_doc_into_py(self, doc: Rc<RefCell<YDocInner>>, py: Python) -> PyObject;
+}
+
+impl WithDocToPython for XmlNode {
+    fn with_doc_into_py(self,  doc: Rc<RefCell<YDocInner>>, py: Python) -> PyObject {
+        match self {
+            XmlNode::Element(v) => v.with_doc(doc).into_py(py),
+            XmlNode::Text(v) => v.with_doc(doc).into_py(py),
+            XmlNode::Fragment(v) => v.with_doc(doc).into_py(py),
         }
     }
 }

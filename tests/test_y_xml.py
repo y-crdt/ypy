@@ -15,7 +15,7 @@ def test_insert():
         b.push(txn, "world")
 
     s = str(root)
-    assert s == "<UNDEFINED><p>hello</p>world</UNDEFINED>"
+    assert s == "<test><p>hello</p>world</test>"
 
 
 def test_attributes():

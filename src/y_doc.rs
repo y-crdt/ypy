@@ -212,7 +212,7 @@ impl YDoc {
             .borrow()
             .doc
             .get_or_insert_xml_element(name)
-            .into()
+            .with_doc(self.inner.clone())
     }
 
     /// Returns a `YXmlText` shared data type, that's accessible for subsequent accesses using given
@@ -223,7 +223,7 @@ impl YDoc {
     /// If there was an instance with this name, but it was of different type, it will be projected
     /// onto `YXmlText` instance.
     pub fn get_xml_text(&mut self, name: &str) -> YXmlText {
-        self.inner.borrow().doc.get_or_insert_xml_text(name).into()
+        self.inner.borrow().doc.get_or_insert_xml_text(name).with_doc(self.inner.clone())
     }
 
     /// Returns a `YArray` shared data type, that's accessible for subsequent accesses using given
