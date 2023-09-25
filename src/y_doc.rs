@@ -197,7 +197,7 @@ impl YDoc {
     /// If there was an instance with this name, but it was of different type, it will be projected
     /// onto `YMap` instance.
     pub fn get_map(&mut self, name: &str) -> YMap {
-        self.inner.borrow().doc.get_or_insert_map(name).into()
+        self.inner.borrow().doc.get_or_insert_map(name).with_doc(self.inner.clone())
     }
 
     /// Returns a `YXmlElement` shared data type, that's accessible for subsequent accesses using
