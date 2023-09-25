@@ -2,12 +2,12 @@ use crate::{
     y_array::YArray,
     y_map::YMap,
     y_text::YText,
-    y_xml::{YXmlElement, YXmlText},
+    y_xml::{YXmlElement, YXmlText}, y_doc::YDocInner,
 };
 use pyo3::create_exception;
 use pyo3::types as pytypes;
 use pyo3::{exceptions::PyException, prelude::*};
-use std::fmt::Display;
+use std::{fmt::Display, rc::Rc, cell::RefCell};
 use yrs::types::TypeRef;
 use yrs::SubscriptionId;
 
@@ -62,6 +62,14 @@ pub enum CompatiblePyType<'a> {
     None,
 }
 
+impl<'a> CompatiblePyType<'a> {
+    pub fn set_doc(&self, doc: Rc<RefCell<YDocInner>>) {
+        if let CompatiblePyType::YType(v) = self {
+            v.set_doc(doc)
+        }
+    }
+}
+
 #[derive(Clone)]
 pub enum SharedType<I, P> {
     Integrated(I),
@@ -103,8 +111,26 @@ impl<'a> YPyType<'a> {
             YPyType::Text(_) => TypeRef::Text,
             YPyType::Array(_) => TypeRef::Array,
             YPyType::Map(_) => TypeRef::Map,
-            YPyType::XmlElement(py_xml_element) => TypeRef::XmlElement(py_xml_element.borrow().0.tag().clone()),
+            YPyType::XmlElement(py_xml_element) => TypeRef::XmlElement(py_xml_element.borrow().inner.tag().clone()),
             YPyType::XmlText(_) => TypeRef::XmlText,
+        }
+    }
+
+    pub fn set_doc(&self, doc: Rc<RefCell<YDocInner>> ) {
+        match &self {
+            YPyType::Text(v) => {
+                let mut y_text = v.borrow_mut();
+                y_text.set_doc(doc)
+            },
+            YPyType::Array(v) => {
+                let mut y_array = v.borrow_mut();
+                y_array.set_doc(doc)
+            },
+            YPyType::Map(v) => {
+                let mut y_array = v.borrow_mut();
+                y_array.set_doc(doc)
+            },
+            _ => {}
         }
     }
 }

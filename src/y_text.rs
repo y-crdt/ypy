@@ -62,6 +62,13 @@ impl WithTransaction for YText {
     }
 }
 
+impl YText {
+    pub fn set_doc(&mut self, doc: Rc<RefCell<YDocInner>>) {
+        assert!(self.doc.is_none());
+        self.doc = Some(doc);
+    }
+}
+
 #[pymethods]
 impl YText {
     /// Creates a new preliminary instance of a `YText` shared data type, with its state initialized

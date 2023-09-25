@@ -71,6 +71,13 @@ impl WithTransaction for YArray {
     }
 }
 
+impl YArray {
+    pub fn set_doc(&mut self, doc: Rc<RefCell<YDocInner>>) {
+        assert!(self.doc.is_none());
+        self.doc = Some(doc);
+    }
+}
+
 #[pymethods]
 impl YArray {
     /// Creates a new preliminary instance of a `YArray` shared data type, with its state
@@ -110,7 +117,7 @@ impl YArray {
     }
 
     /// Returns a number of elements stored within this instance of `YArray` using a provided transaction.
-    pub fn _len(&self, txn: &YTransaction) -> usize {
+    fn _len(&self, txn: &YTransaction) -> usize {
         match &self.inner {
             SharedType::Integrated(v) => v.len(txn) as usize,
             SharedType::Prelim(v) => v.len() as usize,
@@ -160,9 +167,10 @@ impl YArray {
     }
 
     fn _insert(&mut self, txn: &mut YTransaction, index: u32, item: PyObject) -> PyResult<()> {
+        let doc = self.get_doc();
         match &mut self.inner {
             SharedType::Integrated(array) if array.len(txn) >= index => {
-                array.insert(txn, index, PyObjectWrapper(item));
+                array.insert(txn, index, PyObjectWrapper::new(item, doc));
                 Ok(())
             }
             SharedType::Prelim(vec) if vec.len() >= index as usize => {
@@ -227,10 +235,10 @@ impl YArray {
     }
 
     fn _append(&mut self, txn: &mut YTransaction, item: PyObject) {
+        let doc = self.get_doc();
         match &mut self.inner {
             SharedType::Integrated(array) => {
-                array.push_back(txn, PyObjectWrapper(item));
-                ()
+                array.push_back(txn, PyObjectWrapper::new(item, doc));
             }
             SharedType::Prelim(vec) => vec.push(item),
         }

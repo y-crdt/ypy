@@ -31,6 +31,7 @@ use crate::y_map::YMapEvent;
 use crate::y_text::YText;
 use crate::y_text::YTextEvent;
 use crate::y_xml::YXmlEvent;
+use crate::y_xml::YXmlFragment;
 use crate::y_xml::YXmlTextEvent;
 use crate::y_xml::{YXmlElement, YXmlText};
 
@@ -188,12 +189,14 @@ impl<'a> IntoPy<PyObject> for EntryChangeWrapper<'a> {
     }
 }
 
-#[repr(transparent)]
-pub(crate) struct PyObjectWrapper(pub PyObject);
+pub(crate) struct PyObjectWrapper {
+    pub inner: PyObject,
+    doc: Rc<RefCell<YDocInner>>
+}
 
-impl From<PyObject> for PyObjectWrapper {
-    fn from(value: PyObject) -> Self {
-        PyObjectWrapper(value)
+impl PyObjectWrapper {
+    pub fn new(inner: PyObject, doc: Rc<RefCell<YDocInner>>) -> Self {
+        Self { inner, doc }
     }
 }
 
@@ -201,7 +204,7 @@ impl Deref for PyObjectWrapper {
     type Target = PyObject;
 
     fn deref(&self) -> &Self::Target {
-        &self.0
+        &self.inner
     }
 }
 
@@ -210,22 +213,23 @@ impl Prelim for PyObjectWrapper {
 
     fn into_content(self, txn: &mut TransactionMut) -> (ItemContent, Option<Self>) {
         Python::with_gil(|py| {
-            let valid_type: CompatiblePyType = self.0.extract(py).unwrap_or_else(|err| {
+            let valid_type: CompatiblePyType = self.inner.extract(py).unwrap_or_else(|err| {
                 err.restore(py);
                 CompatiblePyType::None
             });
             let (item_content, py_any) = valid_type.into_content(txn);
-            let wrapper: Option<Self> = py_any.map(|py_type| PyObjectWrapper(py_type.into()));
+            let wrapper: Option<Self> = py_any.map(|py_type| PyObjectWrapper::new(py_type.into(), self.doc));
             (item_content, wrapper)
         })
     }
 
     fn integrate(self, txn: &mut TransactionMut, inner_ref: BranchPtr) {
         Python::with_gil(|py| {
-            let valid_type: CompatiblePyType = self.0.extract(py).unwrap_or_else(|err| {
+            let valid_type: CompatiblePyType = self.inner.extract(py).unwrap_or_else(|err| {
                 err.restore(py);
                 CompatiblePyType::None
             });
+            valid_type.set_doc(self.doc.clone());
             valid_type.integrate(txn, inner_ref);
         })
     }
@@ -298,7 +302,7 @@ impl<'a> Prelim for CompatiblePyType<'a> {
                         let map = MapRef::from(inner_ref);
                         let mut y_map = v.borrow_mut();
                         Python::with_gil(|py| {
-                            if let SharedType::Prelim(ref entries) = y_map.0 {
+                            if let SharedType::Prelim(ref entries) = y_map.inner {
                                 for (k, v) in entries {
                                     let x: CompatiblePyType = v.extract(py).unwrap_or_else(|err| {
                                         err.restore(py);
@@ -309,7 +313,7 @@ impl<'a> Prelim for CompatiblePyType<'a> {
                             }
                         });
                         
-                        y_map.0 = SharedType::Integrated(map.clone());
+                        y_map.inner = SharedType::Integrated(map.clone());
                     }
                     YPyType::XmlElement(_) | YPyType::XmlText(_) => unreachable!("As defined in Shared::is_prelim(), neither XML type can ever exist outside a YDoc"),
                 }
@@ -437,12 +441,12 @@ impl ToPython for Value {
             Value::YText(v) => YText::from(v).into_py(py),
             Value::YArray(v) => YArray::from(v).into_py(py),
             Value::YMap(v) => YMap::from(v).into_py(py),
-            Value::YXmlElement(v) => YXmlElement(v).into_py(py),
-            Value::YXmlText(v) => YXmlText(v).into_py(py),
+            Value::YXmlElement(v) => YXmlElement::from(v).into_py(py),
+            Value::YXmlText(v) => YXmlText::from(v).into_py(py),
             // FIXME: YDoc not implemented
             Value::YDoc(_v) => py.None(),
             // FIXME: YXmlFragment not implemented
-            Value::YXmlFragment(_v) => py.None(),
+            Value::YXmlFragment(v) => YXmlFragment::from(v).into_py(py),
         }
     }
 }
@@ -452,10 +456,10 @@ pub(crate) fn events_into_py(txn: &TransactionMut, events: &Events, doc: Option<
         let py_events = events.iter().map(|event| match event {
             yrs::types::Event::Text(e_txt) => YTextEvent::new(e_txt, txn, doc.as_ref().unwrap().clone()).into_py(py),
             yrs::types::Event::Array(e_arr) => YArrayEvent::new(e_arr, txn, doc.as_ref().unwrap().clone()).into_py(py),
-            yrs::types::Event::Map(e_map) => YMapEvent::new(e_map, txn).into_py(py),
+            yrs::types::Event::Map(e_map) => YMapEvent::new(e_map, txn, doc.as_ref().unwrap().clone()).into_py(py),
             // TODO: check YXmlFragment Event
-            yrs::types::Event::XmlFragment(e_xml) => YXmlEvent::new(e_xml, txn).into_py(py),
-            yrs::types::Event::XmlText(e_xml) => YXmlTextEvent::new(e_xml, txn).into_py(py),
+            yrs::types::Event::XmlFragment(e_xml) => YXmlEvent::new(e_xml, txn, doc.as_ref().unwrap().clone()).into_py(py),
+            yrs::types::Event::XmlText(e_xml) => YXmlTextEvent::new(e_xml, txn, doc.as_ref().unwrap().clone()).into_py(py),
         });
         PyList::new(py, py_events).into()
     })
