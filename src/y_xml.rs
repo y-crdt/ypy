@@ -881,10 +881,6 @@ impl ToPython for XmlNode {
     }
 }
 
-trait WithDocToPython {
-    fn with_doc_into_py(self, doc: Rc<RefCell<YDocInner>>, py: Python) -> PyObject;
-}
-
 impl WithDocToPython for XmlNode {
     fn with_doc_into_py(self,  doc: Rc<RefCell<YDocInner>>, py: Python) -> PyObject {
         match self {

@@ -25,15 +25,12 @@ use crate::shared_types::CompatiblePyType;
 use crate::shared_types::{SharedType, YPyType};
 use crate::y_array::YArray;
 use crate::y_array::YArrayEvent;
+use crate::y_doc::WithDoc;
 use crate::y_doc::YDocInner;
 use crate::y_map::YMap;
 use crate::y_map::YMapEvent;
-use crate::y_text::YText;
-use crate::y_text::YTextEvent;
-use crate::y_xml::YXmlEvent;
-use crate::y_xml::YXmlFragment;
-use crate::y_xml::YXmlTextEvent;
-use crate::y_xml::{YXmlElement, YXmlText};
+use crate::y_text::{YText, YTextEvent};
+use crate::y_xml::{YXmlElement, YXmlText, YXmlFragment, YXmlEvent, YXmlTextEvent};
 
 create_exception!(y_py, MultipleIntegrationError, PyException, "A Ypy data type instance cannot be integrated into multiple YDocs or the same YDoc multiple times");
 
@@ -447,11 +444,31 @@ impl ToPython for Value {
             Value::YXmlText(v) => YXmlText::from(v).into_py(py),
             // FIXME: YDoc not implemented
             Value::YDoc(_v) => py.None(),
-            // FIXME: YXmlFragment not implemented
             Value::YXmlFragment(v) => YXmlFragment::from(v).into_py(py),
         }
     }
 }
+
+pub trait WithDocToPython {
+    fn with_doc_into_py(self, doc: Rc<RefCell<YDocInner>>, py: Python) -> PyObject;
+}
+
+impl WithDocToPython for Value {
+    fn with_doc_into_py(self, doc: Rc<RefCell<YDocInner>>, py: Python) -> PyObject {
+        match self {
+            Value::Any(v) => v.into_py(py),
+            Value::YText(v) => v.with_doc(doc).into_py(py),
+            Value::YArray(v) => v.with_doc(doc).into_py(py),
+            Value::YMap(v) => v.with_doc(doc).into_py(py),
+            Value::YXmlElement(v) => v.with_doc(doc).into_py(py),
+            Value::YXmlText(v) => v.with_doc(doc).into_py(py),
+            Value::YXmlFragment(v) => v.with_doc(doc).into_py(py),
+            Value::YDoc(_) => py.None(),
+        }
+    }
+}
+
+
 
 pub(crate) fn events_into_py(txn: &TransactionMut, events: &Events, doc: Option<Rc<RefCell<YDocInner>>>) -> PyObject {
     Python::with_gil(|py| {
