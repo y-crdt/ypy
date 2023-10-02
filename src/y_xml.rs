@@ -14,7 +14,7 @@ use yrs::XmlTextRef;
 use yrs::{Observable, SubscriptionId, Text, TransactionMut, XmlFragment, XmlNode};
 
 use crate::shared_types::{DeepSubscription, ShallowSubscription};
-use crate::type_conversions::{events_into_py, ToPython};
+use crate::type_conversions::{events_into_py, ToPython, WithDocToPython};
 use crate::y_transaction::{YTransaction, YTransactionWrapper};
 
 /// XML element data type. It represents an XML node, which can contain key-value attributes
@@ -251,20 +251,9 @@ impl YXmlElement {
 
     /// Returns an iterator that enables a deep traversal of this XML node - starting from first
     /// child over this XML node successors using depth-first strategy.
-    // pub fn tree_walker(&self) -> YXmlTreeWalker {
-    //     let doc = self.get_doc();
-    //     // let borrowed_doc = doc.borrow_mut();
-    //     // let txn = borrowed_doc.begin_transaction();
-    //     // let static_iter = self.inner.successors(&txn);
-    //     let txn = YTransactionWrapper::new(doc.borrow_mut().begin_transaction());
-    //     let walker = self.inner.successors(&txn.get_inner());
-    //     // let walker = unsafe { std::mem::transmute::<&TreeWalker<YTransaction, YTransaction>, &TreeWalker<'static, YTransaction, YTransaction>>(&walker) };
-            
-    //     YXmlTreeWalker {
-    //         inner: walker,
-    //         doc: doc.clone()
-    //     }
-    // }
+    pub fn tree_walker(&self) -> YXmlTreeWalker {
+        YXmlTreeWalker::from(self)
+    }
 
     /// Subscribes to all operations happening over this instance of `YXmlElement`. All changes are
     /// batched and eventually triggered during transaction commit phase.
@@ -615,13 +604,34 @@ impl YXmlFragment {
 
 #[pyclass(unsendable)]
 pub struct YXmlTreeWalker {
-    inner: ManuallyDrop<TreeWalker<'static, YTransaction, YTransaction>>,
-    doc: Rc<RefCell<YDocInner>>
+    walker: ManuallyDrop<TreeWalker<'static, &'static YTransaction, YTransaction>>,
+    doc: Rc<RefCell<YDocInner>>,
+}
+
+impl From<&YXmlElement> for YXmlTreeWalker {
+    fn from(xml_element: &YXmlElement) -> Self {
+        // HACK: get rid of lifetime
+        let xml_element = xml_element as *const YXmlElement;
+        let xml_element = unsafe { &*xml_element };
+
+        let walker = xml_element.with_transaction(|txn| {
+            // HACK: get rid of lifetime
+            let txn = txn as *const YTransaction;
+            unsafe { 
+                xml_element.inner.successors(&*txn)
+            }
+        });
+        YXmlTreeWalker {
+            walker: ManuallyDrop::new(walker),
+            doc: xml_element.get_doc(),
+        }
+    }
+}
 }
 
 impl Drop for YXmlTreeWalker {
     fn drop(&mut self) {
-        unsafe { ManuallyDrop::drop(&mut self.inner) }
+        unsafe { ManuallyDrop::drop(&mut self.walker) }
     }
 }
 
@@ -632,7 +642,7 @@ impl YXmlTreeWalker {
     }
     pub fn __next__(mut slf: PyRefMut<Self>) -> Option<PyObject> {
         Python::with_gil(|py| {
-            slf.inner.next().map(|v| v.with_doc_into_py(slf.doc.clone(), py))
+            slf.walker.next().map(|v| v.with_doc_into_py(slf.doc.clone(), py))
         })
     }
 }
