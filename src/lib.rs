@@ -18,7 +18,7 @@ pub fn y_py(_py: Python, m: &PyModule) -> PyResult<()> {
 
     // Data Types
     m.add_class::<y_doc::YDoc>()?;
-    m.add_class::<y_transaction::YTransactionWrapper>()?;
+    m.add_class::<y_transaction::YTransaction>()?;
     m.add_class::<y_text::YText>()?;
     m.add_class::<y_array::YArray>()?;
     m.add_class::<y_map::YMap>()?;

@@ -9,7 +9,7 @@ use crate::shared_types::{
 };
 use crate::type_conversions::events_into_py;
 use crate::y_doc::{WithDoc, WithTransaction, YDocInner};
-use crate::y_transaction::{YTransaction, YTransactionWrapper};
+use crate::y_transaction::{YTransactionInner, YTransaction};
 
 use super::shared_types::SharedType;
 use crate::type_conversions::ToPython;
@@ -117,7 +117,7 @@ impl YArray {
     }
 
     /// Returns a number of elements stored within this instance of `YArray` using a provided transaction.
-    fn _len(&self, txn: &YTransaction) -> usize {
+    fn _len(&self, txn: &YTransactionInner) -> usize {
         match &self.inner {
             SharedType::Integrated(v) => v.len(txn) as usize,
             SharedType::Prelim(v) => v.len() as usize,
@@ -157,7 +157,7 @@ impl YArray {
     /// Adds a single item to the provided index in the array.
     pub fn insert(
         &mut self,
-        txn: &mut YTransactionWrapper,
+        txn: &mut YTransaction,
         index: u32,
         item: PyObject,
     ) -> PyResult<()> {
@@ -166,7 +166,7 @@ impl YArray {
         self._insert(&mut txn, index, item)
     }
 
-    fn _insert(&mut self, txn: &mut YTransaction, index: u32, item: PyObject) -> PyResult<()> {
+    fn _insert(&mut self, txn: &mut YTransactionInner, index: u32, item: PyObject) -> PyResult<()> {
         match &mut self.inner {
             SharedType::Integrated(array) if array.len(txn) >= index => {
                 array.insert(txn, index, PyObjectWrapper::new(item, self.doc.clone()));
@@ -182,7 +182,7 @@ impl YArray {
     /// Inserts a given range of `items` into this `YArray` instance, starting at given `index`.
     pub fn insert_range(
         &mut self,
-        txn: &mut YTransactionWrapper,
+        txn: &mut YTransaction,
         index: u32,
         items: PyObject,
     ) -> PyResult<()> {
@@ -193,7 +193,7 @@ impl YArray {
 
     fn _insert_range(
         &mut self,
-        txn: &mut YTransaction,
+        txn: &mut YTransactionInner,
         index: u32,
         items: PyObject,
     ) -> PyResult<()> {
@@ -216,24 +216,24 @@ impl YArray {
     }
 
     /// Appends a range of `items` at the end of this `YArray` instance.
-    pub fn extend(&mut self, txn: &mut YTransactionWrapper, items: PyObject) -> PyResult<()> {
+    pub fn extend(&mut self, txn: &mut YTransaction, items: PyObject) -> PyResult<()> {
         let inner = txn.get_inner();
         let mut txn = inner.borrow_mut();
         self._extend(&mut txn, items)
     }
-    fn _extend(&mut self, txn: &mut YTransaction, items: PyObject) -> PyResult<()> {
+    fn _extend(&mut self, txn: &mut YTransactionInner, items: PyObject) -> PyResult<()> {
         let index = self._len(txn) as u32;
         self._insert_range(txn, index, items)
     }
 
     /// Adds a single item to the end of the array
-    pub fn append(&mut self, txn: &mut YTransactionWrapper, item: PyObject) {
+    pub fn append(&mut self, txn: &mut YTransaction, item: PyObject) {
         let inner = txn.get_inner();
         let mut txn = inner.borrow_mut();
         self._append(&mut txn, item)
     }
 
-    fn _append(&mut self, txn: &mut YTransaction, item: PyObject) {
+    fn _append(&mut self, txn: &mut YTransactionInner, item: PyObject) {
         match &mut self.inner {
             SharedType::Integrated(array) => {
                 array.push_back(txn, PyObjectWrapper::new(item, self.doc.clone()));
@@ -242,13 +242,13 @@ impl YArray {
         }
     }
     /// Removes the element that the given index from the list.
-    pub fn delete(&mut self, txn: &mut YTransactionWrapper, index: u32) -> PyResult<()> {
+    pub fn delete(&mut self, txn: &mut YTransaction, index: u32) -> PyResult<()> {
         let inner = txn.get_inner();
         let mut txn = inner.borrow_mut();
         self._delete(&mut txn, index)
     }
 
-    fn _delete(&mut self, txn: &mut YTransaction, index: u32) -> PyResult<()> {
+    fn _delete(&mut self, txn: &mut YTransactionInner, index: u32) -> PyResult<()> {
         match &mut self.inner {
             SharedType::Integrated(v) if index < v.len(txn) => Ok(v.remove(txn, index)),
             SharedType::Prelim(v) if index < v.len() as u32 => {
@@ -261,13 +261,13 @@ impl YArray {
 
     /// Deletes a range of items of given `length` from current `YArray` instance,
     /// starting from given `index`.
-    pub fn delete_range(&mut self, txn: &mut YTransactionWrapper, index: u32, length: u32) {
+    pub fn delete_range(&mut self, txn: &mut YTransaction, index: u32, length: u32) {
         let inner = txn.get_inner();
         let mut txn = inner.borrow_mut();
         self._delete_range(&mut txn, index, length)
     }
 
-    fn _delete_range(&mut self, txn: &mut YTransaction, index: u32, length: u32) {
+    fn _delete_range(&mut self, txn: &mut YTransactionInner, index: u32, length: u32) {
         match &mut self.inner {
             SharedType::Integrated(v) => v.remove_range(txn, index, length),
             SharedType::Prelim(v) => {
@@ -279,7 +279,7 @@ impl YArray {
     /// Moves the element from the index source to target.
     pub fn move_to(
         &mut self,
-        txn: &mut YTransactionWrapper,
+        txn: &mut YTransaction,
         source: u32,
         target: u32,
     ) -> PyResult<()> {
@@ -288,7 +288,7 @@ impl YArray {
         self._move_to(&mut txn, source, target)
     }
 
-    fn _move_to(&mut self, txn: &mut YTransaction, source: u32, target: u32) -> PyResult<()> {
+    fn _move_to(&mut self, txn: &mut YTransactionInner, source: u32, target: u32) -> PyResult<()> {
         match &mut self.inner {
             SharedType::Integrated(v) => {
                 v.move_to(txn, source, target);
@@ -330,7 +330,7 @@ impl YArray {
     /// ```
     pub fn move_range_to(
         &mut self,
-        txn: &mut YTransactionWrapper,
+        txn: &mut YTransaction,
         start: u32,
         end: u32,
         target: u32,
@@ -342,7 +342,7 @@ impl YArray {
 
     fn _move_range_to(
         &mut self,
-        txn: &mut YTransaction,
+        txn: &mut YTransactionInner,
         start: u32,
         end: u32,
         target: u32,

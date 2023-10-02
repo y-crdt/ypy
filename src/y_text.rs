@@ -4,7 +4,7 @@ use crate::shared_types::{
 };
 use crate::type_conversions::{events_into_py, ToPython};
 use crate::y_doc::{WithDoc, WithTransaction, YDocInner};
-use crate::y_transaction::{YTransaction, YTransactionWrapper};
+use crate::y_transaction::{YTransactionInner, YTransaction};
 use lib0::any::Any;
 use pyo3::prelude::*;
 use pyo3::types::PyList;
@@ -119,7 +119,7 @@ impl YText {
         }
     }
 
-    pub fn _len(&self, txn: &YTransaction) -> usize {
+    pub fn _len(&self, txn: &YTransactionInner) -> usize {
         match &self.inner {
             SharedType::Integrated(v) => v.len(txn) as usize,
             SharedType::Prelim(v) => v.len() as usize,
@@ -133,7 +133,7 @@ impl YText {
 
     pub fn insert(
         &mut self,
-        txn: &mut YTransactionWrapper,
+        txn: &mut YTransaction,
         index: u32,
         chunk: &str,
         attributes: Option<HashMap<String, PyObject>>,
@@ -146,7 +146,7 @@ impl YText {
     /// Inserts a given `chunk` of text into this `YText` instance, starting at a given `index`.
     fn _insert(
         &mut self,
-        txn: &mut YTransaction,
+        txn: &mut YTransactionInner,
         index: u32,
         chunk: &str,
         attributes: Option<HashMap<String, PyObject>>,
@@ -181,7 +181,7 @@ impl YText {
     /// already has been integrated into document store.
     pub fn insert_embed(
         &mut self,
-        txn: &mut YTransactionWrapper,
+        txn: &mut YTransaction,
         index: u32,
         embed: PyObject,
         attributes: Option<HashMap<String, PyObject>>,
@@ -193,7 +193,7 @@ impl YText {
 
     fn _insert_embed(
         &mut self,
-        txn: &mut YTransaction,
+        txn: &mut YTransactionInner,
         index: u32,
         embed: PyObject,
         attributes: Option<HashMap<String, PyObject>>,
@@ -220,7 +220,7 @@ impl YText {
     /// `YText` instances that already have been integrated into document store.
     pub fn format(
         &mut self,
-        txn: &mut YTransactionWrapper,
+        txn: &mut YTransaction,
         index: u32,
         length: u32,
         attributes: HashMap<String, PyObject>,
@@ -232,7 +232,7 @@ impl YText {
 
     fn _format(
         &mut self,
-        txn: &mut YTransaction,
+        txn: &mut YTransactionInner,
         index: u32,
         length: u32,
         attributes: HashMap<String, PyObject>,
@@ -250,31 +250,31 @@ impl YText {
     }
 
     /// Appends a given `chunk` of text at the end of current `YText` instance.
-    pub fn extend(&mut self, txn: &mut YTransactionWrapper, chunk: &str) {
+    pub fn extend(&mut self, txn: &mut YTransaction, chunk: &str) {
         let inner = txn.get_inner();
         let mut txn = inner.borrow_mut();
         self._extend(&mut txn, chunk)
     }
-    fn _extend(&mut self, txn: &mut YTransaction, chunk: &str) {
+    fn _extend(&mut self, txn: &mut YTransactionInner, chunk: &str) {
         match &mut self.inner {
             SharedType::Integrated(v) => v.push(txn, chunk),
             SharedType::Prelim(v) => v.push_str(chunk),
         }
     }
     /// Deletes character at the specified index.
-    pub fn delete(&mut self, txn: &mut YTransactionWrapper, index: u32) {
+    pub fn delete(&mut self, txn: &mut YTransaction, index: u32) {
         self.delete_range(txn, index, 1);
     }
 
     /// Deletes a specified range of of characters, starting at a given `index`.
     /// Both `index` and `length` are counted in terms of a number of UTF-8 character bytes.
-    pub fn delete_range(&mut self, txn: &mut YTransactionWrapper, index: u32, length: u32) {
+    pub fn delete_range(&mut self, txn: &mut YTransaction, index: u32, length: u32) {
         let inner = txn.get_inner();
         let mut txn = inner.borrow_mut();
         self._delete_range(&mut txn, index, length);
     }
 
-    fn _delete_range(&mut self, txn: &mut YTransaction, index: u32, length: u32) {
+    fn _delete_range(&mut self, txn: &mut YTransactionInner, index: u32, length: u32) {
         match &mut self.inner {
             SharedType::Integrated(v) => v.remove_range(txn, index, length),
             SharedType::Prelim(v) => {

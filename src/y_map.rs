@@ -20,7 +20,7 @@ use crate::shared_types::{
 };
 use crate::type_conversions::{events_into_py, PyObjectWrapper, ToPython, WithDocToPython};
 use crate::y_doc::{YDocInner, WithDoc, WithTransaction};
-use crate::y_transaction::{YTransaction, YTransactionWrapper};
+use crate::y_transaction::{YTransactionInner, YTransaction};
 
 /// Collection used to store key-value entries in an unordered manner. Keys are always represented
 /// as UTF-8 strings. Values can be any value type supported by Yrs: JSON-like primitives as well as
@@ -113,7 +113,7 @@ impl YMap {
     }
 
     /// Returns a number of elements stored within this instance of `YArray` using a provided transaction.
-    fn _len(&self, txn: &YTransaction) -> usize {
+    fn _len(&self, txn: &YTransactionInner) -> usize {
         match &self.inner {
             SharedType::Integrated(v) => v.len(txn) as usize,
             SharedType::Prelim(v) => v.len() as usize,
@@ -168,13 +168,13 @@ impl YMap {
 
     /// Sets a given `key`-`value` entry within this instance of `YMap`. If another entry was
     /// already stored under given `key`, it will be overridden with new `value`.
-    pub fn set(&mut self, txn: &mut YTransactionWrapper, key: &str, value: PyObject) {
+    pub fn set(&mut self, txn: &mut YTransaction, key: &str, value: PyObject) {
         let inner = txn.get_inner();
         let mut txn = inner.borrow_mut();
         self._set(&mut txn, key, value);
     }
 
-    fn _set(&mut self, txn: &mut YTransaction, key: &str, value: PyObject) {
+    fn _set(&mut self, txn: &mut YTransactionInner, key: &str, value: PyObject) {
         match &mut self.inner {
             SharedType::Integrated(v) => {
                 v.insert(txn, key.to_string(), PyObjectWrapper::new(value, self.doc.clone()));
@@ -185,13 +185,13 @@ impl YMap {
         }
     }
     /// Updates `YMap` with the key value pairs in the `items` object.
-    pub fn update(&mut self, txn: &mut YTransactionWrapper, items: PyObject) -> PyResult<()> {
+    pub fn update(&mut self, txn: &mut YTransaction, items: PyObject) -> PyResult<()> {
         let inner = txn.get_inner();
         let mut txn = inner.borrow_mut();
         self._update(&mut txn, items)
     }
     
-    fn _update(&mut self, txn: &mut YTransaction, items: PyObject) -> PyResult<()> {
+    fn _update(&mut self, txn: &mut YTransactionInner, items: PyObject) -> PyResult<()> {
         Python::with_gil(|py| {
             // Handle collection types
             if let Ok(dict) = items.extract::<HashMap<String, PyObject>>(py) {
@@ -223,7 +223,7 @@ impl YMap {
     /// Removes an entry identified by a given `key` from this instance of `YMap`, if such exists.
     pub fn pop(
         &mut self,
-        txn: &mut YTransactionWrapper,
+        txn: &mut YTransaction,
         key: &str,
         fallback: Option<PyObject>,
     ) -> PyResult<PyObject> {
@@ -234,7 +234,7 @@ impl YMap {
 
     fn _pop(
         &mut self,
-        txn: &mut YTransaction,
+        txn: &mut YTransactionInner,
         key: &str,
         fallback: Option<PyObject>,
     ) -> PyResult<PyObject> {
@@ -257,7 +257,7 @@ impl YMap {
     pub fn get(&self, key: &str, fallback: Option<PyObject>) -> PyObject {
         self.with_transaction(|txn| self._get(txn, key, fallback))
     }
-    fn _get(&self, txn: &YTransaction, key: &str, fallback: Option<PyObject>) -> PyObject {
+    fn _get(&self, txn: &YTransactionInner, key: &str, fallback: Option<PyObject>) -> PyObject {
         self._getitem(txn, key)
             .ok()
             .unwrap_or_else(|| fallback.unwrap_or_else(|| Python::with_gil(|py| py.None())))
@@ -268,7 +268,7 @@ impl YMap {
     pub fn __getitem__(&self, key: &str) -> PyResult<PyObject> {
         self.with_transaction(|txn| self._getitem(txn, key))
     }
-    fn _getitem(&self, txn: &YTransaction, key: &str) -> PyResult<PyObject> {
+    fn _getitem(&self, txn: &YTransactionInner, key: &str) -> PyResult<PyObject> {
         let entry = match &self.inner {
             SharedType::Integrated(y_map) => y_map
                 .get(txn, key)
@@ -402,7 +402,7 @@ impl ItemView {
         format!("ItemView({data})")
     }
 
-    fn contains(&self, txn: &YTransaction, el: PyObject) -> bool {
+    fn contains(&self, txn: &YTransactionInner, el: PyObject) -> bool {
         let ymap = unsafe { &*self.0 };
         let kv: Result<(String, PyObject), _> = Python::with_gil(|py| el.extract(py));
         kv.ok()
@@ -512,7 +512,7 @@ impl ValueView {
 }
 
 pub enum InnerYMapIterator {
-    Integrated(MapIter<'static, &'static YTransaction, YTransaction>),
+    Integrated(MapIter<'static, &'static YTransactionInner, YTransactionInner>),
     Prelim(std::collections::hash_map::Iter<'static, String, PyObject>),
 }
 
@@ -541,7 +541,7 @@ impl From<*const YMap> for YMapIterator {
         match &map.inner {
             SharedType::Integrated(val) => {
                 let iter = map.with_transaction(|txn| {
-                    let txn = txn as *const YTransaction;
+                    let txn = txn as *const YTransactionInner;
                     unsafe { 
                         val.iter(&*txn)
                     }

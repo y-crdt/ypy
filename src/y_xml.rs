@@ -15,7 +15,7 @@ use yrs::{Observable, SubscriptionId, Text, TransactionMut, XmlFragment, XmlNode
 
 use crate::shared_types::{DeepSubscription, ShallowSubscription};
 use crate::type_conversions::{events_into_py, ToPython, WithDocToPython};
-use crate::y_transaction::{YTransaction, YTransactionWrapper};
+use crate::y_transaction::{YTransactionInner, YTransaction};
 
 /// XML element data type. It represents an XML node, which can contain key-value attributes
 /// (interpreted as strings) as well as other nested XML elements or rich text (represented by
@@ -82,14 +82,14 @@ impl YXmlElement {
         self.with_transaction(|txn| self._len(txn))
     }
 
-    fn _len(&self, txn: &YTransaction) -> usize {
+    fn _len(&self, txn: &YTransactionInner) -> usize {
         self.inner.len(txn) as usize
     }
 
     /// Inserts a new instance of `YXmlElement` as a child of this XML node and returns it.
     pub fn insert_xml_element(
         &self,
-        txn: &mut YTransactionWrapper,
+        txn: &mut YTransaction,
         index: u32,
         name: &str,
     ) -> YXmlElement {
@@ -100,7 +100,7 @@ impl YXmlElement {
 
     fn _insert_xml_element(
         &self,
-        txn: &mut YTransaction,
+        txn: &mut YTransactionInner,
         index: u32,
         name: &str,
     ) -> YXmlElement {
@@ -112,13 +112,13 @@ impl YXmlElement {
     }
 
     // /// Inserts a new instance of `YXmlText` as a child of this XML node and returns it.
-    pub fn insert_xml_text(&self, txn: &mut YTransactionWrapper, index: u32) -> YXmlText {
+    pub fn insert_xml_text(&self, txn: &mut YTransaction, index: u32) -> YXmlText {
         let inner = txn.get_inner();
         let mut txn = inner.borrow_mut();
         self._insert_xml_text(&mut txn, index)
     }
 
-    fn _insert_xml_text(&self, txn: &mut YTransaction, index: u32) -> YXmlText {
+    fn _insert_xml_text(&self, txn: &mut YTransactionInner, index: u32) -> YXmlText {
         let inner_node = self.inner.insert(txn, index, XmlTextPrelim::new(""));
         YXmlText {
             inner: inner_node,
@@ -128,34 +128,34 @@ impl YXmlElement {
 
     /// Removes a range of children XML nodes from this `YXmlElement` instance,
     /// starting at given `index`.
-    pub fn delete(&self, txn: &mut YTransactionWrapper, index: u32, length: u32) {
+    pub fn delete(&self, txn: &mut YTransaction, index: u32, length: u32) {
         let inner = txn.get_inner();
         let mut txn = inner.borrow_mut();
         self._delete(&mut txn, index, length)
     }
 
-    fn _delete(&self, txn: &mut YTransaction, index: u32, length: u32) {
+    fn _delete(&self, txn: &mut YTransactionInner, index: u32, length: u32) {
         self.inner.remove_range(txn, index, length)
     }
 
     /// Appends a new instance of `YXmlElement` as the last child of this XML node and returns it.
-    pub fn push_xml_element(&self, txn: &mut YTransactionWrapper, name: &str) -> YXmlElement {
+    pub fn push_xml_element(&self, txn: &mut YTransaction, name: &str) -> YXmlElement {
         let inner = txn.get_inner();
         let mut txn = inner.borrow_mut();
         self._push_xml_element(&mut txn, name)
     }
-    fn _push_xml_element(&self, txn: &mut YTransaction, name: &str) -> YXmlElement {
+    fn _push_xml_element(&self, txn: &mut YTransactionInner, name: &str) -> YXmlElement {
         let index = self._len(txn) as u32;
         self._insert_xml_element(txn, index, name)
     }
 
     /// Appends a new instance of `YXmlText` as the last child of this XML node and returns it.
-    pub fn push_xml_text(&self, txn: &mut YTransactionWrapper) -> YXmlText {
+    pub fn push_xml_text(&self, txn: &mut YTransaction) -> YXmlText {
         let inner = txn.get_inner();
         let mut txn = inner.borrow_mut();
         self._push_xml_text(&mut txn)
     }
-    fn _push_xml_text(&self, txn: &mut YTransaction) -> YXmlText {
+    fn _push_xml_text(&self, txn: &mut YTransactionInner) -> YXmlText {
         let index = self._len(txn) as u32;
         self._insert_xml_text(txn, index)
     }
@@ -219,7 +219,7 @@ impl YXmlElement {
 
     /// Sets a `name` and `value` as new attribute for this XML node. If an attribute with the same
     /// `name` already existed on that node, its value with be overridden with a provided one.
-    pub fn set_attribute(&self, txn: &mut YTransactionWrapper, name: &str, value: &str) {
+    pub fn set_attribute(&self, txn: &mut YTransaction, name: &str, value: &str) {
         let inner = txn.get_inner();
         let mut txn = inner.borrow_mut();
         self.inner.insert_attribute(&mut txn, name, value)
@@ -231,7 +231,7 @@ impl YXmlElement {
         self.with_transaction(|txn| self.inner.get_attribute(txn, name))
     }
 
-    pub fn remove_attribute(&self, txn: &mut YTransactionWrapper, name: &str) {
+    pub fn remove_attribute(&self, txn: &mut YTransaction, name: &str) {
         let inner = txn.get_inner();
         let mut txn = inner.borrow_mut();
         self.inner.remove_attribute(&mut txn, &name);
@@ -366,39 +366,39 @@ impl YXmlText {
         self.with_transaction(|txn| self._len(txn))
     }
 
-    fn _len(&self, txn: &YTransaction) -> usize {
+    fn _len(&self, txn: &YTransactionInner) -> usize {
         self.inner.len(txn) as usize
     }
 
     /// Inserts a given `chunk` of text into this `YXmlText` instance, starting at a given `index`.
-    pub fn insert(&self, txn: &mut YTransactionWrapper, index: i32, chunk: &str) {
+    pub fn insert(&self, txn: &mut YTransaction, index: i32, chunk: &str) {
         let inner = txn.get_inner();
         let mut txn = inner.borrow_mut();
         self._insert(&mut txn, index, chunk)
     }
-    fn _insert(&self, txn: &mut YTransaction, index: i32, chunk: &str) {
+    fn _insert(&self, txn: &mut YTransactionInner, index: i32, chunk: &str) {
         self.inner.insert(txn, index as u32, chunk)
     }
 
     /// Appends a given `chunk` of text at the end of `YXmlText` instance.
-    pub fn push(&self, txn: &mut YTransactionWrapper, chunk: &str) {
+    pub fn push(&self, txn: &mut YTransaction, chunk: &str) {
         let inner = txn.get_inner();
         let mut txn = inner.borrow_mut();
         self._push(&mut txn, chunk)
     }
 
-    fn _push(&self, txn: &mut YTransaction, chunk: &str) {
+    fn _push(&self, txn: &mut YTransactionInner, chunk: &str) {
         self.inner.push(txn, chunk)
     }
 
     /// Deletes a specified range of of characters, starting at a given `index`.
     /// Both `index` and `length` are counted in terms of a number of UTF-8 character bytes.
-    pub fn delete(&self, txn: &mut YTransactionWrapper, index: u32, length: u32) {
+    pub fn delete(&self, txn: &mut YTransaction, index: u32, length: u32) {
         let inner = txn.get_inner();
         let mut txn = inner.borrow_mut();
         self._delete(&mut txn, index, length)
     }
-    fn _delete(&self, txn: &mut YTransaction, index: u32, length: u32) {
+    fn _delete(&self, txn: &mut YTransactionInner, index: u32, length: u32) {
         self.inner.remove_range(txn, index, length)
     }
 
@@ -449,7 +449,7 @@ impl YXmlText {
 
     /// Sets a `name` and `value` as new attribute for this XML node. If an attribute with the same
     /// `name` already existed on that node, its value with be overridden with a provided one.
-    pub fn set_attribute(&self, txn: &mut YTransactionWrapper, name: &str, value: &str) {
+    pub fn set_attribute(&self, txn: &mut YTransaction, name: &str, value: &str) {
         let inner = txn.get_inner();
         let mut txn = inner.borrow_mut();
         self.inner.insert_attribute(&mut txn, name, value)
@@ -462,7 +462,7 @@ impl YXmlText {
     }
 
     /// Removes an attribute from this XML node, given its `name`.
-    pub fn remove_attribute(&self, txn: &mut YTransactionWrapper, name: &str) {
+    pub fn remove_attribute(&self, txn: &mut YTransaction, name: &str) {
         let inner = txn.get_inner();
         let mut txn = inner.borrow_mut();
         self.inner.remove_attribute(&mut txn, &name);
@@ -576,7 +576,7 @@ impl YXmlFragment {
         self.with_transaction(|txn| self._len(txn))
     }
 
-    fn _len(&self, txn: &YTransaction) -> usize {
+    fn _len(&self, txn: &YTransactionInner) -> usize {
         self.inner.len(txn) as usize
     }
 
@@ -609,7 +609,7 @@ impl YXmlFragment {
     /// Inserts a new instance of `YXmlElement` as a child of this XML node and returns it.
     pub fn insert_xml_element(
         &self,
-        txn: &mut YTransactionWrapper,
+        txn: &mut YTransaction,
         index: u32,
         name: &str,
     ) -> YXmlElement {
@@ -620,7 +620,7 @@ impl YXmlFragment {
 
     fn _insert_xml_element(
         &self,
-        txn: &mut YTransaction,
+        txn: &mut YTransactionInner,
         index: u32,
         name: &str,
     ) -> YXmlElement {
@@ -632,13 +632,13 @@ impl YXmlFragment {
     }
 
     /// Removes a single element at provided `index`.
-    pub fn remove(&self, txn: &mut YTransactionWrapper, index: u32) {
+    pub fn remove(&self, txn: &mut YTransaction, index: u32) {
         let inner = txn.get_inner();
         let mut txn = inner.borrow_mut();
         self._remove(&mut txn, index)
     }
 
-    fn _remove(&self, txn: &mut YTransaction, index: u32) {
+    fn _remove(&self, txn: &mut YTransactionInner, index: u32) {
         self.inner.remove_range(txn, index, 1)
     }
 
@@ -660,7 +660,7 @@ impl YXmlFragment {
 
 #[pyclass(unsendable)]
 pub struct YXmlTreeWalker {
-    walker: ManuallyDrop<TreeWalker<'static, &'static YTransaction, YTransaction>>,
+    walker: ManuallyDrop<TreeWalker<'static, &'static YTransactionInner, YTransactionInner>>,
     doc: Rc<RefCell<YDocInner>>,
 }
 
@@ -672,7 +672,7 @@ impl From<&YXmlElement> for YXmlTreeWalker {
 
         let walker = xml_element.with_transaction(|txn| {
             // HACK: get rid of lifetime
-            let txn = txn as *const YTransaction;
+            let txn = txn as *const YTransactionInner;
             unsafe { 
                 xml_element.inner.successors(&*txn)
             }
@@ -693,7 +693,7 @@ impl From<&YXmlFragment> for YXmlTreeWalker {
 
         let walker = xml_fragment.with_transaction(|txn| {
             // HACK: get rid of lifetime
-            let txn = txn as *const YTransaction;
+            let txn = txn as *const YTransactionInner;
             unsafe { 
                 xml_fragment.inner.successors(&*txn)
             }

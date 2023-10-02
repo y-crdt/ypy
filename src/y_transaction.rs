@@ -39,19 +39,19 @@ create_exception!(
 ///     text.insert(txn, 0, 'hello world')
 /// ```
 #[pyclass(unsendable)]
-pub struct YTransaction {
+pub struct YTransactionInner {
     pub inner: ManuallyDrop<TransactionMut<'static>>,
     pub cached_before_state: Option<PyObject>,
     pub committed: bool,
 }
 
-impl ReadTxn for YTransaction {
+impl ReadTxn for YTransactionInner {
     fn store(&self) -> &yrs::Store {
-        &self.deref().store()
+        self.deref().store()
     }
 }
 
-impl Deref for YTransaction {
+impl Deref for YTransactionInner {
     type Target = TransactionMut<'static>;
 
     fn deref(&self) -> &Self::Target {
@@ -59,13 +59,13 @@ impl Deref for YTransaction {
     }
 }
 
-impl DerefMut for YTransaction {
+impl DerefMut for YTransactionInner {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.inner
     }
 }
 
-impl Drop for YTransaction {
+impl Drop for YTransactionInner {
     fn drop(&mut self) {
         if !self.committed {
             self.commit();
@@ -73,9 +73,9 @@ impl Drop for YTransaction {
     }
 }
 
-impl YTransaction {
+impl YTransactionInner {
     pub fn new(txn: TransactionMut<'static>) -> Self {
-        YTransaction {
+        YTransactionInner {
             inner: ManuallyDrop::new(txn),
             cached_before_state: None,
             committed: false,
@@ -83,8 +83,7 @@ impl YTransaction {
     }
 }
 
-#[pymethods]
-impl YTransaction {
+impl YTransactionInner {
     pub fn before_state(&mut self) -> PyObject {
         if self.cached_before_state.is_none() {
             let before_state = Python::with_gil(|py| {
@@ -146,19 +145,19 @@ impl YTransaction {
 }
 
 #[pyclass(unsendable)]
-pub struct YTransactionWrapper {
-    inner: Rc<RefCell<YTransaction>>,
+pub struct YTransaction {
+    inner: Rc<RefCell<YTransactionInner>>,
     committed: bool,
 }
 
-impl YTransactionWrapper {
-    pub fn new(txn: Rc<RefCell<YTransaction>>) -> Self {
-        YTransactionWrapper {
+impl YTransaction {
+    pub fn new(txn: Rc<RefCell<YTransactionInner>>) -> Self {
+        YTransaction {
             inner: txn.clone(),
             committed: txn.borrow().committed,
         }
     }
-    pub fn get_inner(&self) -> Rc<RefCell<YTransaction>> {
+    pub fn get_inner(&self) -> Rc<RefCell<YTransactionInner>> {
         self.inner.clone()
     }
     pub fn commit(&mut self) {
@@ -173,7 +172,7 @@ impl YTransactionWrapper {
 
 
 #[pymethods]
-impl YTransactionWrapper {
+impl YTransaction {
     #[getter]
     pub fn before_state(&mut self) -> PyObject {
         self.get_inner().borrow_mut().before_state()
