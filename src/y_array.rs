@@ -167,10 +167,9 @@ impl YArray {
     }
 
     fn _insert(&mut self, txn: &mut YTransaction, index: u32, item: PyObject) -> PyResult<()> {
-        let doc = self.get_doc();
         match &mut self.inner {
             SharedType::Integrated(array) if array.len(txn) >= index => {
-                array.insert(txn, index, PyObjectWrapper::new(item, doc));
+                array.insert(txn, index, PyObjectWrapper::new(item, self.doc.clone()));
                 Ok(())
             }
             SharedType::Prelim(vec) if vec.len() >= index as usize => {
@@ -235,10 +234,9 @@ impl YArray {
     }
 
     fn _append(&mut self, txn: &mut YTransaction, item: PyObject) {
-        let doc = self.get_doc();
         match &mut self.inner {
             SharedType::Integrated(array) => {
-                array.push_back(txn, PyObjectWrapper::new(item, doc));
+                array.push_back(txn, PyObjectWrapper::new(item, self.doc.clone()));
             }
             SharedType::Prelim(vec) => vec.push(item),
         }

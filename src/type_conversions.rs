@@ -191,11 +191,11 @@ impl<'a> IntoPy<PyObject> for EntryChangeWrapper<'a> {
 
 pub(crate) struct PyObjectWrapper {
     pub inner: PyObject,
-    doc: Rc<RefCell<YDocInner>>
+    doc: Option<Rc<RefCell<YDocInner>>>
 }
 
 impl PyObjectWrapper {
-    pub fn new(inner: PyObject, doc: Rc<RefCell<YDocInner>>) -> Self {
+    pub fn new(inner: PyObject, doc: Option<Rc<RefCell<YDocInner>>>) -> Self {
         Self { inner, doc }
     }
 }
@@ -229,7 +229,9 @@ impl Prelim for PyObjectWrapper {
                 err.restore(py);
                 CompatiblePyType::None
             });
-            valid_type.set_doc(self.doc.clone());
+            if let Some(doc) = self.doc {
+                valid_type.set_doc(doc.clone());
+            }
             valid_type.integrate(txn, inner_ref);
         })
     }

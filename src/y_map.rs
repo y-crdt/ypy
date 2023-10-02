@@ -173,10 +173,9 @@ impl YMap {
     }
 
     fn _set(&mut self, txn: &mut YTransaction, key: &str, value: PyObject) {
-        let doc = self.get_doc();
         match &mut self.inner {
             SharedType::Integrated(v) => {
-                v.insert(txn, key.to_string(), PyObjectWrapper::new(value, doc));
+                v.insert(txn, key.to_string(), PyObjectWrapper::new(value, self.doc.clone()));
             }
             SharedType::Prelim(v) => {
                 v.insert(key.to_string(), value);
