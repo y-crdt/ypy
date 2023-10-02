@@ -1,6 +1,7 @@
-from test_helper import exchange_updates
 import unittest
+
 import y_py as Y
+from test_helper import exchange_updates
 
 
 def test_insert():
@@ -273,3 +274,31 @@ def test_deep_observe():
         container.first_child.push(txn, "nested")
 
     assert events != None
+
+
+def test_xml_fragment():
+    ydoc = Y.YDoc()
+    fragment = ydoc.get_xml_fragment("fragment")
+    with ydoc.begin_transaction() as txn:
+        fragment.insert_xml_element(txn, 0, "a")
+        fragment.insert_xml_element(txn, 1, "b")
+        fragment.insert_xml_element(txn, 2, "c")
+
+    assert len(fragment) == 3
+    assert str(fragment) == "<a></a><b></b><c></c>"
+    first_child = fragment.first_child
+    with ydoc.begin_transaction() as txn:
+        first_child.set_attribute(txn, "key", "value")
+        fragment.remove(txn, 1)
+
+    assert str(fragment) == '<a key="value"></a><c></c>'
+
+    assert fragment.get(2) is None
+
+    c_node = fragment.get(1)
+    with ydoc.begin_transaction() as txn:
+        c_node.insert_xml_element(txn, 0, "d")
+
+    actual = [str(child) for child in fragment.tree_walker()]
+    expected = ['<a key="value"></a>', "<c><d></d></c>", "<d></d>"]
+    assert actual == expected

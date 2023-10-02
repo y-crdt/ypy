@@ -600,6 +600,62 @@ impl YXmlFragment {
         })
     }
 
+    #[getter]
+    pub fn parent(&self) -> PyObject {
+        let doc = self.get_doc();
+        Python::with_gil(|py| self.inner.parent().map_or(py.None(), |xml| xml.with_doc_into_py(doc.clone(), py)))
+    }
+
+    /// Inserts a new instance of `YXmlElement` as a child of this XML node and returns it.
+    pub fn insert_xml_element(
+        &self,
+        txn: &mut YTransactionWrapper,
+        index: u32,
+        name: &str,
+    ) -> YXmlElement {
+        let inner = txn.get_inner();
+        let mut txn = inner.borrow_mut();
+        self._insert_xml_element(&mut txn, index, name)
+    }
+
+    fn _insert_xml_element(
+        &self,
+        txn: &mut YTransaction,
+        index: u32,
+        name: &str,
+    ) -> YXmlElement {
+        let inner_node = self.inner.insert(txn, index, XmlElementPrelim::empty(name));
+        YXmlElement {
+            inner: inner_node,
+            doc: self.doc.clone(),
+        }
+    }
+
+    /// Removes a single element at provided `index`.
+    pub fn remove(&self, txn: &mut YTransactionWrapper, index: u32) {
+        let inner = txn.get_inner();
+        let mut txn = inner.borrow_mut();
+        self._remove(&mut txn, index)
+    }
+
+    fn _remove(&self, txn: &mut YTransaction, index: u32) {
+        self.inner.remove_range(txn, index, 1)
+    }
+
+    /// Retrieves a value stored at a given `index`. Returns `None` when provided index was out
+    /// of the range of a current array.
+    pub fn get(&self, index: u32) -> Option<PyObject> {
+        Python::with_gil(|py| {
+            self.with_transaction(|txn| {
+                self.inner.get(txn, index).map(|xml| xml.with_doc_into_py(self.get_doc(), py))
+            })
+        })
+    }
+
+    pub fn tree_walker(&self) -> YXmlTreeWalker {
+        YXmlTreeWalker::from(self)
+    }
+
 }
 
 #[pyclass(unsendable)]
@@ -627,6 +683,26 @@ impl From<&YXmlElement> for YXmlTreeWalker {
         }
     }
 }
+
+
+impl From<&YXmlFragment> for YXmlTreeWalker {
+    fn from(xml_fragment: &YXmlFragment) -> Self {
+        // HACK: get rid of lifetime
+        let xml_fragment = xml_fragment as *const YXmlFragment;
+        let xml_fragment = unsafe { &*xml_fragment };
+
+        let walker = xml_fragment.with_transaction(|txn| {
+            // HACK: get rid of lifetime
+            let txn = txn as *const YTransaction;
+            unsafe { 
+                xml_fragment.inner.successors(&*txn)
+            }
+        });
+        YXmlTreeWalker {
+            walker: ManuallyDrop::new(walker),
+            doc: xml_fragment.get_doc(),
+        }
+    }
 }
 
 impl Drop for YXmlTreeWalker {

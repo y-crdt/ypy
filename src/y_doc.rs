@@ -8,6 +8,7 @@ use crate::y_text::YText;
 use crate::y_transaction::YTransaction;
 use crate::y_transaction::YTransactionWrapper;
 use crate::y_xml::YXmlElement;
+use crate::y_xml::YXmlFragment;
 use crate::y_xml::YXmlText;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
@@ -224,6 +225,21 @@ impl YDoc {
     /// onto `YXmlText` instance.
     pub fn get_xml_text(&mut self, name: &str) -> YXmlText {
         self.inner.borrow().doc.get_or_insert_xml_text(name).with_doc(self.inner.clone())
+    }
+
+    /// Returns a `YXmlFragment` shared data type, that's accessible for subsequent accesses using
+    /// given `name`.
+    ///
+    /// If there was no instance with this name before, it will be created and then returned.
+    ///
+    /// If there was an instance with this name, but it was of different type, it will be projected
+    /// onto `YXmlFragment` instance.
+    pub fn get_xml_fragment(&mut self, name: &str) -> YXmlFragment {
+        self.inner
+            .borrow()
+            .doc
+            .get_or_insert_xml_fragment(name)
+            .with_doc(self.inner.clone())
     }
 
     /// Returns a `YArray` shared data type, that's accessible for subsequent accesses using given
