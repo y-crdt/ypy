@@ -314,7 +314,7 @@ impl<'a> Prelim for CompatiblePyType<'a> {
                         
                         y_map.inner = SharedType::Integrated(map.clone());
                     }
-                    YPyType::XmlElement(_) | YPyType::XmlText(_) => unreachable!("As defined in Shared::is_prelim(), neither XML type can ever exist outside a YDoc"),
+                    YPyType::XmlElement(_) | YPyType::XmlText(_) | YPyType::XmlFragment(_) => unreachable!("As defined in Shared::is_prelim(), neither XML type can ever exist outside a YDoc"),
                 }
             }
             _ => ()
@@ -379,6 +379,7 @@ impl<'a> From<YPyType<'a>> for PyObject {
             YPyType::Map(map) => map.into(),
             YPyType::XmlElement(xml) => xml.into(),
             YPyType::XmlText(xml) => xml.into(),
+            YPyType::XmlFragment(xml) => xml.into()
         }
     }
 }

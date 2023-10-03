@@ -2,7 +2,7 @@ use crate::{
     y_array::YArray,
     y_map::YMap,
     y_text::YText,
-    y_xml::{YXmlElement, YXmlText}, y_doc::YDocInner,
+    y_xml::{YXmlElement, YXmlText, YXmlFragment}, y_doc::YDocInner,
 };
 use pyo3::create_exception;
 use pyo3::types as pytypes;
@@ -87,6 +87,9 @@ impl<I, P> SharedType<I, P> {
         SharedType::Prelim(prelim)
     }
 }
+
+
+
 #[derive(Clone)]
 pub enum YPyType<'a> {
     Text(&'a PyCell<YText>),
@@ -94,6 +97,7 @@ pub enum YPyType<'a> {
     Map(&'a PyCell<YMap>),
     XmlElement(&'a PyCell<YXmlElement>),
     XmlText(&'a PyCell<YXmlText>),
+    XmlFragment(&'a PyCell<YXmlFragment>),
 }
 
 impl<'a> YPyType<'a> {
@@ -102,7 +106,7 @@ impl<'a> YPyType<'a> {
             YPyType::Text(v) => v.borrow().prelim(),
             YPyType::Array(v) => v.borrow().prelim(),
             YPyType::Map(v) => v.borrow().prelim(),
-            YPyType::XmlElement(_) | YPyType::XmlText(_) => false,
+            YPyType::XmlElement(_) | YPyType::XmlText(_) | YPyType::XmlFragment(_) => false,
         }
     }
 
@@ -113,6 +117,7 @@ impl<'a> YPyType<'a> {
             YPyType::Map(_) => TypeRef::Map,
             YPyType::XmlElement(py_xml_element) => TypeRef::XmlElement(py_xml_element.borrow().inner.tag().clone()),
             YPyType::XmlText(_) => TypeRef::XmlText,
+            YPyType::XmlFragment(_) => TypeRef::XmlFragment,
         }
     }
 
@@ -143,6 +148,7 @@ impl<'a> Display for YPyType<'a> {
             YPyType::Map(m) => m.borrow().__str__(),
             YPyType::XmlElement(xml) => xml.borrow().__str__(),
             YPyType::XmlText(xml) => xml.borrow().__str__(),
+            YPyType::XmlFragment(xml) => xml.borrow().__str__(),
         };
         write!(f, "{}", info)
     }
