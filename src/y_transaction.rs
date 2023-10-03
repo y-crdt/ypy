@@ -1,4 +1,3 @@
-use crate::{y_array::YArray, y_map::YMap, y_text::YText};
 use pyo3::exceptions::{PyException, PyAssertionError};
 use pyo3::types::PyBytes;
 use pyo3::{create_exception, prelude::*};
@@ -95,39 +94,6 @@ impl YTransactionInner {
             self.cached_before_state = Some(before_state);
         }
         return self.cached_before_state.as_ref().unwrap().clone();
-    }
-
-    /// Returns a `YText` shared data type, that's accessible for subsequent accesses using given
-    /// `name`.
-    ///
-    /// If there was no instance with this name before, it will be created and then returned.
-    ///
-    /// If there was an instance with this name, but it was of different type, it will be projected
-    /// onto `YText` instance.
-    pub fn get_text(&mut self, name: &str) -> YText {
-        self.deref().get_text(name).unwrap().into()
-    }
-
-    /// Returns a `YArray` shared data type, that's accessible for subsequent accesses using given
-    /// `name`.
-    ///
-    /// If there was no instance with this name before, it will be created and then returned.
-    ///
-    /// If there was an instance with this name, but it was of different type, it will be projected
-    /// onto `YArray` instance.
-    pub fn get_array(&mut self, name: &str) -> YArray {
-        self.deref().get_array(name).unwrap().into()
-    }
-
-    /// Returns a `YMap` shared data type, that's accessible for subsequent accesses using given
-    /// `name`.
-    ///
-    /// If there was no instance with this name before, it will be created and then returned.
-    ///
-    /// If there was an instance with this name, but it was of different type, it will be projected
-    /// onto `YMap` instance.
-    pub fn get_map(&mut self, name: &str) -> YMap {
-        self.deref().get_map(name).unwrap().into()
     }
 
     /// Triggers a post-update series of operations without `free`ing the transaction. This includes

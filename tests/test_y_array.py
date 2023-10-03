@@ -1,9 +1,10 @@
-from test_helper import exchange_updates
-import pytest
-
-from y_py import YDoc, YArray, YArrayEvent
-from copy import deepcopy
 import json
+from copy import deepcopy
+
+import pytest
+from test_helper import exchange_updates
+from y_py import YArray, YArrayEvent, YDoc
+
 
 def test_inserts():
     d1 = YDoc(1)
@@ -69,6 +70,7 @@ def test_inserts_nested():
     d1.transact(lambda txn: nested.insert(txn, 0, "hello"))
 
     expected = [1, 2, ["hello", "world"], 3, 4]
+    assert to_list(nested) == ["hello", "world"]
     assert type(x[2]) == YArray
     assert to_list(x) == expected
 

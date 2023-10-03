@@ -1,9 +1,9 @@
 use crate::shared_types::{
     CompatiblePyType, DeepSubscription, DefaultPyErr, IntegratedOperationException,
-    PreliminaryObservationException, ShallowSubscription, SharedType, SubId,
+    PreliminaryObservationException, ShallowSubscription, SharedType, SubId, TypeWithDoc,
 };
-use crate::type_conversions::{events_into_py, ToPython};
-use crate::y_doc::{WithDoc, WithTransaction, YDocInner};
+use crate::type_conversions::{events_into_py, ToPython, WithDocToPython};
+use crate::y_doc::{WithDoc, YDocInner};
 use crate::y_transaction::{YTransactionInner, YTransaction};
 use lib0::any::Any;
 use pyo3::prelude::*;
@@ -33,39 +33,11 @@ use yrs::{GetString, Observable, Text, TextRef, TransactionMut};
 /// unique document id to determine correct and consistent ordering.
 #[pyclass(unsendable)]
 #[derive(Clone)]
-pub struct YText {
-    pub inner: SharedType<TextRef, String>,
-    doc: Option<Rc<RefCell<YDocInner>>>,
-}
-
-impl From<TextRef> for YText {
-    fn from(v: TextRef) -> Self {
-        YText {
-            inner: SharedType::new(v),
-            doc: None,
-        }
-    }
-}
+pub struct YText(pub SharedType<TypeWithDoc<TextRef>, String>);
 
 impl WithDoc<YText> for TextRef {
     fn with_doc(self, doc: Rc<RefCell<YDocInner>>) -> YText {
-        YText {
-            inner: SharedType::new(self),
-            doc: Some(doc),
-        }
-    }
-}
-
-impl WithTransaction for YText {
-    fn get_doc(&self) -> Rc<RefCell<YDocInner>> {
-        self.doc.as_ref().unwrap().clone()
-    }
-}
-
-impl YText {
-    pub fn set_doc(&mut self, doc: Rc<RefCell<YDocInner>>) {
-        assert!(self.doc.is_none());
-        self.doc = Some(doc);
+        YText(SharedType::new(TypeWithDoc::new(self, doc)))
     }
 }
 
@@ -79,10 +51,7 @@ impl YText {
     /// document store and cannot be nested again: attempt to do so will result in an exception.
     #[new]
     pub fn new(init: Option<String>) -> Self {
-        YText {
-            inner: SharedType::prelim(init.unwrap_or_default()),
-            doc: None,
-        }
+        YText(SharedType::prelim(init.unwrap_or_default()))
     }
 
     /// Returns true if this is a preliminary instance of `YText`.
@@ -92,7 +61,7 @@ impl YText {
     /// document store and cannot be nested again: attempt to do so will result in an exception.
     #[getter]
     pub fn prelim(&self) -> bool {
-        match self.inner {
+        match self.0 {
             SharedType::Prelim(_) => true,
             _ => false,
         }
@@ -100,8 +69,8 @@ impl YText {
 
     /// Returns an underlying shared string stored in this data type.
     pub fn __str__(&self) -> String {
-        match &self.inner {
-            SharedType::Integrated(v) => self.with_transaction(|txn| v.get_string(txn)),
+        match &self.0 {
+            SharedType::Integrated(v) => v.with_transaction(|txn| v.get_string(txn)),
             SharedType::Prelim(v) => v.clone(),
         }
     }
@@ -113,15 +82,8 @@ impl YText {
     /// Returns length of an underlying string stored in this `YText` instance,
     /// understood as a number of UTF-8 encoded bytes.
     pub fn __len__(&self) -> usize {
-        match &self.inner {
-            SharedType::Integrated(v) => self.with_transaction(|txn| v.len(txn)) as usize,
-            SharedType::Prelim(v) => v.len() as usize,
-        }
-    }
-
-    pub fn _len(&self, txn: &YTransactionInner) -> usize {
-        match &self.inner {
-            SharedType::Integrated(v) => v.len(txn) as usize,
+        match &self.0 {
+            SharedType::Integrated(v) => v.with_transaction(|txn| v.len(txn)) as usize,
             SharedType::Prelim(v) => v.len() as usize,
         }
     }
@@ -152,7 +114,7 @@ impl YText {
         let attributes: Option<PyResult<Attrs>> = attributes.map(Self::parse_attrs);
 
         if let Some(Ok(attributes)) = attributes {
-            match &mut self.inner {
+            match &mut self.0 {
                 SharedType::Integrated(text) => {
                     text.insert_with_attributes(txn, index, chunk, attributes);
                     Ok(())
@@ -162,7 +124,7 @@ impl YText {
         } else if let Some(Err(error)) = attributes {
             Err(error)
         } else {
-            match &mut self.inner {
+            match &mut self.0 {
                 SharedType::Integrated(text) => text.insert(txn, index, chunk),
                 SharedType::Prelim(prelim_string) => {
                     prelim_string.insert_str(index as usize, chunk)
@@ -194,7 +156,7 @@ impl YText {
         embed: PyObject,
         attributes: Option<HashMap<String, PyObject>>,
     ) -> PyResult<()> {
-        match &mut self.inner {
+        match &mut self.0 {
             SharedType::Integrated(text) => {
                 let content: PyResult<Any> = Python::with_gil(|py| {
                     let py_type: CompatiblePyType = embed.extract(py)?;
@@ -232,7 +194,7 @@ impl YText {
         attributes: HashMap<String, PyObject>,
     ) -> PyResult<()> {
         match Self::parse_attrs(attributes) {
-            Ok(attrs) => match &mut self.inner {
+            Ok(attrs) => match &mut self.0 {
                 SharedType::Integrated(text) => {
                     text.format(txn, index, length, attrs);
                     Ok(())
@@ -248,7 +210,7 @@ impl YText {
         txn.transact(|txn| self._extend(txn, chunk))
     }
     fn _extend(&mut self, txn: &mut YTransactionInner, chunk: &str) {
-        match &mut self.inner {
+        match &mut self.0 {
             SharedType::Integrated(v) => v.push(txn, chunk),
             SharedType::Prelim(v) => v.push_str(chunk),
         }
@@ -265,7 +227,7 @@ impl YText {
     }
 
     fn _delete_range(&mut self, txn: &mut YTransactionInner, index: u32, length: u32) {
-        match &mut self.inner {
+        match &mut self.0 {
             SharedType::Integrated(v) => v.remove_range(txn, index, length),
             SharedType::Prelim(v) => {
                 v.drain((index as usize)..(index + length) as usize);
@@ -275,10 +237,10 @@ impl YText {
 
     /// Observes updates from the `YText` instance.
     pub fn observe(&mut self, f: PyObject) -> PyResult<ShallowSubscription> {
-        let doc = self.get_doc();
-        match &mut self.inner {
+        match &mut self.0 {
             SharedType::Integrated(text) => {
-                let sub_id = text
+                let doc = text.doc.clone();
+                let sub_id = text.inner
                     .observe(move |txn, e| {
                         let e = YTextEvent::new(e, txn, doc.clone());
                         Python::with_gil(|py| {
@@ -296,13 +258,13 @@ impl YText {
 
     /// Observes updates from the `YText` instance and all of its nested children.
     pub fn observe_deep(&mut self, f: PyObject) -> PyResult<DeepSubscription> {
-        let doc = self.get_doc();
-        match &mut self.inner {
+        match &mut self.0 {
             SharedType::Integrated(text) => {
-                let sub = text
+                let doc = text.doc.clone();
+                let sub = text.inner
                     .observe_deep(move |txn, events| {
                         Python::with_gil(|py| {
-                            let events = events_into_py(txn, events, Some(doc.clone()));
+                            let events = events_into_py(txn, events, doc.clone());
                             if let Err(err) = f.call1(py, (events,)) {
                                 err.restore(py)
                             }
@@ -316,7 +278,7 @@ impl YText {
     }
     /// Cancels the observer callback associated with the `subscripton_id`.
     pub fn unobserve(&mut self, subscription_id: SubId) -> PyResult<()> {
-        match &mut self.inner {
+        match &mut self.0 {
             SharedType::Integrated(text) => Ok(match subscription_id {
                 SubId::Shallow(ShallowSubscription(id)) => text.unobserve(id),
                 SubId::Deep(DeepSubscription(id)) => text.unobserve_deep(id),
@@ -415,7 +377,7 @@ impl YTextEvent {
                     self.inner()
                         .delta(self.txn())
                         .into_iter()
-                        .map(|d| d.clone().into_py(py))
+                        .map(|d| d.clone().with_doc_into_py(self.doc.clone(), py))
                 };
                 PyList::new(py, delta).into()
             });

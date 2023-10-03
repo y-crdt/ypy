@@ -5,10 +5,10 @@ use std::rc::Rc;
 use crate::json_builder::JsonBuilder;
 use crate::shared_types::{
     CompatiblePyType, DeepSubscription, DefaultPyErr, PreliminaryObservationException,
-    ShallowSubscription, SubId,
+    ShallowSubscription, SubId, TypeWithDoc,
 };
-use crate::type_conversions::events_into_py;
-use crate::y_doc::{WithDoc, WithTransaction, YDocInner};
+use crate::type_conversions::{events_into_py, WithDocToPython};
+use crate::y_doc::{WithDoc, YDocInner};
 use crate::y_transaction::{YTransactionInner, YTransaction};
 
 use super::shared_types::SharedType;
@@ -42,39 +42,11 @@ use yrs::{Array, ArrayRef, Assoc, Observable, SubscriptionId, TransactionMut};
 /// after merging all updates together). In case of Yrs conflict resolution is solved by using
 /// unique document id to determine correct and consistent ordering.
 #[pyclass(unsendable)]
-pub struct YArray {
-    pub inner: SharedType<ArrayRef, Vec<PyObject>>,
-    doc: Option<Rc<RefCell<YDocInner>>>,
-}
-
-impl From<ArrayRef> for YArray {
-    fn from(v: ArrayRef) -> Self {
-        YArray {
-            inner: SharedType::new(v),
-            doc: None,
-        }
-    }
-}
+pub struct YArray(pub SharedType<TypeWithDoc<ArrayRef>, Vec<PyObject>>);
 
 impl WithDoc<YArray> for ArrayRef {
     fn with_doc(self, doc: Rc<RefCell<YDocInner>>) -> YArray {
-        YArray {
-            inner: SharedType::new(self),
-            doc: Some(doc),
-        }
-    }
-}
-
-impl WithTransaction for YArray {
-    fn get_doc(&self) -> Rc<RefCell<YDocInner>> {
-        self.doc.clone().unwrap()
-    }
-}
-
-impl YArray {
-    pub fn set_doc(&mut self, doc: Rc<RefCell<YDocInner>>) {
-        assert!(self.doc.is_none());
-        self.doc = Some(doc);
+        YArray(SharedType::new(TypeWithDoc::new(self, doc.clone())))
     }
 }
 
@@ -89,10 +61,7 @@ impl YArray {
     #[new]
     pub fn new(init: Option<PyObject>) -> PyResult<Self> {
         let elements = init.map(Self::py_iter).unwrap_or(Ok(Vec::default()));
-        elements.map(|el_array| YArray {
-            inner: SharedType::prelim(el_array),
-            doc: None,
-        })
+        elements.map(|el_array| YArray(SharedType::prelim(el_array)))
     }
 
     /// Returns true if this is a preliminary instance of `YArray`.
@@ -102,7 +71,7 @@ impl YArray {
     /// document store and cannot be nested again: attempt to do so will result in an exception.
     #[getter]
     pub fn prelim(&self) -> bool {
-        match &self.inner {
+        match &self.0 {
             SharedType::Prelim(_) => true,
             _ => false,
         }
@@ -110,24 +79,24 @@ impl YArray {
 
     /// Returns a number of elements stored within this instance of `YArray`.
     pub fn __len__(&self) -> usize {
-        match &self.inner {
-            SharedType::Integrated(v) => self.with_transaction(|txn| v.len(txn)) as usize,
+        match &self.0 {
+            SharedType::Integrated(v) => v.with_transaction(|txn| v.len(txn)) as usize,
             SharedType::Prelim(v) => v.len() as usize,
         }
     }
 
     /// Returns a number of elements stored within this instance of `YArray` using a provided transaction.
     fn _len(&self, txn: &YTransactionInner) -> usize {
-        match &self.inner {
+        match &self.0 {
             SharedType::Integrated(v) => v.len(txn) as usize,
             SharedType::Prelim(v) => v.len() as usize,
         }
     }
 
     pub fn __str__(&self) -> String {
-        match &self.inner {
+        match &self.0 {
             SharedType::Integrated(y_array) => {
-                let any = self.with_transaction(|txn| y_array.to_json(txn));
+                let any = y_array.with_transaction(|txn| y_array.to_json(txn));
                 let py_values = Python::with_gil(|py| any.into_py(py));
                 py_values.to_string()
             }
@@ -145,9 +114,9 @@ impl YArray {
     /// Converts an underlying contents of this `YArray` instance into their JSON representation.
     pub fn to_json(&self) -> PyResult<String> {
         let mut json_builder = JsonBuilder::new();
-        match &self.inner {
+        match &self.0 {
             SharedType::Integrated(array) => {
-                self.with_transaction(|txn| json_builder.append_json(&array.to_json(txn)))
+                array.with_transaction(|txn| json_builder.append_json(&array.to_json(txn)))
             }
             SharedType::Prelim(py_vec) => json_builder.append_json(py_vec),
         }?;
@@ -165,9 +134,9 @@ impl YArray {
     }
 
     fn _insert(&mut self, txn: &mut YTransactionInner, index: u32, item: PyObject) -> PyResult<()> {
-        match &mut self.inner {
+        match &mut self.0 {
             SharedType::Integrated(array) if array.len(txn) >= index => {
-                array.insert(txn, index, PyObjectWrapper::new(item, self.doc.clone()));
+                array.insert(txn, index, PyObjectWrapper::new(item, array.doc.clone()));
                 Ok(())
             }
             SharedType::Prelim(vec) if vec.len() >= index as usize => {
@@ -194,9 +163,9 @@ impl YArray {
         items: PyObject,
     ) -> PyResult<()> {
         let items = Self::py_iter(items)?;
-        match &mut self.inner {
+        match &mut self.0 {
             SharedType::Integrated(array) if array.len(txn) >= index => {
-                Self::insert_multiple_at(array, txn, index, items)?;
+                Self::insert_multiple_at(&array.inner, txn, array.doc.clone(), index, items)?;
                 Ok(())
             }
             SharedType::Prelim(vec) if vec.len() >= index as usize => {
@@ -226,9 +195,9 @@ impl YArray {
     }
 
     fn _append(&mut self, txn: &mut YTransactionInner, item: PyObject) {
-        match &mut self.inner {
+        match &mut self.0 {
             SharedType::Integrated(array) => {
-                array.push_back(txn, PyObjectWrapper::new(item, self.doc.clone()));
+                array.push_back(txn, PyObjectWrapper::new(item, array.doc.clone()));
             }
             SharedType::Prelim(vec) => vec.push(item),
         }
@@ -239,7 +208,7 @@ impl YArray {
     }
 
     fn _delete(&mut self, txn: &mut YTransactionInner, index: u32) -> PyResult<()> {
-        match &mut self.inner {
+        match &mut self.0 {
             SharedType::Integrated(v) if index < v.len(txn) => Ok(v.remove(txn, index)),
             SharedType::Prelim(v) if index < v.len() as u32 => {
                 v.remove(index as usize);
@@ -256,7 +225,7 @@ impl YArray {
     }
 
     fn _delete_range(&mut self, txn: &mut YTransactionInner, index: u32, length: u32) {
-        match &mut self.inner {
+        match &mut self.0 {
             SharedType::Integrated(v) => v.remove_range(txn, index, length),
             SharedType::Prelim(v) => {
                 v.drain((index as usize)..(index + length) as usize);
@@ -275,7 +244,7 @@ impl YArray {
     }
 
     fn _move_to(&mut self, txn: &mut YTransactionInner, source: u32, target: u32) -> PyResult<()> {
-        match &mut self.inner {
+        match &mut self.0 {
             SharedType::Integrated(v) => {
                 v.move_to(txn, source, target);
                 Ok(())
@@ -331,7 +300,7 @@ impl YArray {
         end: u32,
         target: u32,
     ) -> PyResult<()> {
-        match &mut self.inner {
+        match &mut self.0 {
             SharedType::Integrated(v) => {
                 v.move_range_to(txn, start, Assoc::After, end, Assoc::Before, target);
                 Ok(())
@@ -396,9 +365,9 @@ impl YArray {
     /// ```
     pub fn __iter__(&self) -> PyObject {
         Python::with_gil(|py| {
-            let list: PyObject = match &self.inner {
+            let list: PyObject = match &self.0 {
                 SharedType::Integrated(arr) => {
-                    self.with_transaction(|txn| arr.to_json(txn).into_py(py))
+                    arr.with_transaction(|txn| arr.to_json(txn).into_py(py))
                 }
                 SharedType::Prelim(arr) => arr.clone().into_py(py),
             };
@@ -411,10 +380,10 @@ impl YArray {
     /// batched and eventually triggered during transaction commit phase.
     /// Returns a `SubscriptionId` which can be used to cancel the callback with `unobserve`.
     pub fn observe(&mut self, f: PyObject) -> PyResult<ShallowSubscription> {
-        let doc = self.get_doc();
-        match &mut self.inner {
+        match &mut self.0 {
             SharedType::Integrated(array) => {
-                let sub: SubscriptionId = array
+                let doc = array.doc.clone();
+                let sub: SubscriptionId = array.inner
                     .observe(move |txn, e| {
                         Python::with_gil(|py| {
                             let event = YArrayEvent::new(e, txn, doc.clone());
@@ -431,13 +400,13 @@ impl YArray {
     }
     /// Observes YArray events and events of all child elements.
     pub fn observe_deep(&mut self, f: PyObject) -> PyResult<DeepSubscription> {
-        let doc = self.get_doc();
-        match &mut self.inner {
+        match &mut self.0 {
             SharedType::Integrated(array) => {
-                let sub: SubscriptionId = array
+                let doc = array.doc.clone();
+                let sub: SubscriptionId = array.inner
                     .observe_deep(move |txn, events| {
                         Python::with_gil(|py| {
-                            let events = events_into_py(txn, events, Some(doc.clone()));
+                            let events = events_into_py(txn, events, doc.clone());
                             if let Err(err) = f.call1(py, (events,)) {
                                 err.restore(py)
                             }
@@ -452,7 +421,7 @@ impl YArray {
 
     /// Cancels the callback of an observer using the Subscription ID returned from the `observe` method.
     pub fn unobserve(&mut self, subscription_id: SubId) -> PyResult<()> {
-        match &mut self.inner {
+        match &mut self.0 {
             SharedType::Integrated(arr) => Ok(match subscription_id {
                 SubId::Shallow(ShallowSubscription(id)) => arr.unobserve(id),
                 SubId::Deep(DeepSubscription(id)) => arr.unobserve_deep(id),
@@ -465,11 +434,11 @@ impl YArray {
 impl YArray {
     /// Gets a single element from a YArray.
     fn get_element(&self, index: u32) -> PyResult<PyObject> {
-        match &self.inner {
+        match &self.0 {
             SharedType::Integrated(v) => {
-                let value = self.with_transaction(|txn| v.get(txn, index as u32));
+                let value = v.with_transaction(|txn| v.get(txn, index as u32));
                 if let Some(value) = value {
-                    Ok(Python::with_gil(|py| value.into_py(py)))
+                    Ok(Python::with_gil(|py| value.with_doc_into_py(v.doc.clone(), py)))
                 } else {
                     Err(PyIndexError::default_message())
                 }
@@ -489,31 +458,31 @@ impl YArray {
         let PySliceIndices {
             start, stop, step, ..
         } = slice.indices(self.__len__().try_into().unwrap()).unwrap();
-        match &self.inner {
+        match &self.0 {
             SharedType::Integrated(arr) => Python::with_gil(|py| {
-                self.with_transaction(|txn| {
+                arr.with_transaction(|txn| {
                     if step < 0 {
                         let step = step.abs() as usize;
                         let (start, stop) = ((stop + 1) as usize, (start + 1) as usize);
-                        let values: Vec<PyObject> = arr
+                        let values: Vec<PyObject> = arr.inner
                             .iter(txn)
                             .enumerate()
                             .skip(start)
                             .step_by(step)
                             .take_while(|(i, _)| i < &stop)
-                            .map(|(_, el)| el.into_py(py))
+                            .map(|(_, el)| el.with_doc_into_py(arr.doc.clone(), py))
                             .collect();
                         let values: Vec<PyObject> = values.into_iter().rev().collect();
                         Ok(values.into_py(py))
                     } else {
                         let (start, stop, step) = (start as usize, stop as usize, step as usize);
-                        let values: Vec<PyObject> = arr
+                        let values: Vec<PyObject> = arr.inner
                             .iter(txn)
                             .enumerate()
                             .skip(start)
                             .step_by(step)
                             .take_while(|(i, _)| i < &stop)
-                            .map(|(_, el)| el.into_py(py))
+                            .map(|(_, el)| el.with_doc_into_py(arr.doc.clone(), py))
                             .collect();
                         Ok(values.into_py(py))
                     }
@@ -547,6 +516,7 @@ impl YArray {
     pub fn insert_multiple_at(
         dst: &ArrayRef,
         txn: &mut TransactionMut,
+        doc: Rc<RefCell<YDocInner>>,
         index: u32,
         src: Vec<PyObject>,
     ) -> PyResult<()> {
@@ -574,8 +544,11 @@ impl YArray {
                 while let Some(y_type) =
                     iter.next_if(|element| matches!(element, Ok(CompatiblePyType::YType(_))))
                 {
-                    dst.insert(txn, index, y_type?);
-                    index += 1
+                    if let CompatiblePyType::YType(y_type) = y_type? {
+                        let wrapped = PyObjectWrapper::new(y_type.into(), doc.clone());
+                        dst.insert(txn, index, wrapped);
+                        index += 1
+                    }
                 }
             }
             Ok(())
@@ -683,7 +656,7 @@ impl YArrayEvent {
                     .inner()
                     .delta(self.txn())
                     .into_iter()
-                    .map(|change| Python::with_gil(|py| change.into_py(py)));
+                    .map(|change| Python::with_gil(|py| change.with_doc_into_py(self.doc.clone(), py)));
                 PyList::new(py, delta).into()
             });
             self.delta = Some(delta.clone());

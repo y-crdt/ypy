@@ -2,12 +2,12 @@ use crate::{
     y_array::YArray,
     y_map::YMap,
     y_text::YText,
-    y_xml::{YXmlElement, YXmlText, YXmlFragment}, y_doc::YDocInner,
+    y_xml::{YXmlElement, YXmlText, YXmlFragment}, y_doc::YDocInner, y_transaction::YTransactionInner,
 };
 use pyo3::create_exception;
 use pyo3::types as pytypes;
 use pyo3::{exceptions::PyException, prelude::*};
-use std::{fmt::Display, rc::Rc, cell::RefCell};
+use std::{fmt::Display, rc::Rc, cell::RefCell, ops::{Deref, DerefMut}};
 use yrs::types::TypeRef;
 use yrs::SubscriptionId;
 
@@ -62,14 +62,6 @@ pub enum CompatiblePyType<'a> {
     None,
 }
 
-impl<'a> CompatiblePyType<'a> {
-    pub fn set_doc(&self, doc: Rc<RefCell<YDocInner>>) {
-        if let CompatiblePyType::YType(v) = self {
-            v.set_doc(doc)
-        }
-    }
-}
-
 #[derive(Clone)]
 pub enum SharedType<I, P> {
     Integrated(I),
@@ -115,28 +107,56 @@ impl<'a> YPyType<'a> {
             YPyType::Text(_) => TypeRef::Text,
             YPyType::Array(_) => TypeRef::Array,
             YPyType::Map(_) => TypeRef::Map,
-            YPyType::XmlElement(py_xml_element) => TypeRef::XmlElement(py_xml_element.borrow().inner.tag().clone()),
+            YPyType::XmlElement(py_xml_element) => TypeRef::XmlElement(py_xml_element.borrow().0.tag().clone()),
             YPyType::XmlText(_) => TypeRef::XmlText,
             YPyType::XmlFragment(_) => TypeRef::XmlFragment,
         }
     }
+}
 
-    pub fn set_doc(&self, doc: Rc<RefCell<YDocInner>> ) {
-        match &self {
-            YPyType::Text(v) => {
-                let mut y_text = v.borrow_mut();
-                y_text.set_doc(doc)
-            },
-            YPyType::Array(v) => {
-                let mut y_array = v.borrow_mut();
-                y_array.set_doc(doc)
-            },
-            YPyType::Map(v) => {
-                let mut y_array = v.borrow_mut();
-                y_array.set_doc(doc)
-            },
-            _ => {}
+#[derive(Clone)]
+pub struct TypeWithDoc<T> {
+    pub inner: T,
+    pub doc: Rc<RefCell<YDocInner>>,
+}
+
+impl <T> TypeWithDoc<T> {
+    pub fn new(inner: T, doc: Rc<RefCell<YDocInner>>) -> Self {
+        Self {
+            inner,
+            doc,
         }
+    }
+
+    fn get_transaction(&self) -> Rc<RefCell<YTransactionInner>> {
+        let doc = self.doc.clone();
+        let txn = doc.borrow_mut().begin_transaction();
+        txn
+    }
+
+    pub fn with_transaction<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(&YTransactionInner) -> R,
+    {
+        let txn = self.get_transaction();
+        let mut txn = txn.borrow_mut();
+        let result = f(&mut txn);
+        result
+    }
+}
+
+impl<T> Deref for TypeWithDoc<T> {
+    type Target = T;
+    #[inline(always)]
+    fn deref(&self) -> &T {
+        &self.inner
+    }
+}
+
+impl<T> DerefMut for TypeWithDoc<T> {
+    #[inline(always)]
+    fn deref_mut(&mut self) -> &mut T {
+        &mut self.inner
     }
 }
 

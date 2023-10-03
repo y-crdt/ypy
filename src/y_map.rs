@@ -15,10 +15,10 @@ use yrs::{Map, MapRef, Observable, SubscriptionId, TransactionMut};
 use crate::json_builder::JsonBuilder;
 use crate::shared_types::{
     DeepSubscription, DefaultPyErr, PreliminaryObservationException, ShallowSubscription,
-    SharedType, SubId,
+    SharedType, SubId, TypeWithDoc,
 };
 use crate::type_conversions::{events_into_py, PyObjectWrapper, ToPython, WithDocToPython};
-use crate::y_doc::{YDocInner, WithDoc, WithTransaction};
+use crate::y_doc::{YDocInner, WithDoc};
 use crate::y_transaction::{YTransactionInner, YTransaction};
 
 /// Collection used to store key-value entries in an unordered manner. Keys are always represented
@@ -30,44 +30,13 @@ use crate::y_transaction::{YTransactionInner, YTransaction};
 /// by different peers are resolved into a single value using document id seniority to establish
 /// order.
 #[pyclass(unsendable)]
-pub struct YMap {
-    pub inner: SharedType<MapRef, HashMap<String, PyObject>>,
-    doc: Option<Rc<RefCell<YDocInner>>>,
-}
-
-impl From<MapRef> for YMap {
-    fn from(v: MapRef) -> Self {
-        YMap {
-            inner: SharedType::new(v),
-            doc: None
-        }
-
-    }
-}
+pub struct YMap(pub SharedType<TypeWithDoc<MapRef>, HashMap<String, PyObject>>);
 
 impl WithDoc<YMap> for MapRef {
     fn with_doc(self, doc: Rc<RefCell<YDocInner>>) -> YMap {
-        YMap {
-            inner: SharedType::new(self),
-            doc: Some(doc),
-        }
+        YMap(SharedType::new(TypeWithDoc::new(self, doc)))
     }
 }
-
-impl WithTransaction for YMap {
-    fn get_doc(&self) -> Rc<RefCell<YDocInner>> {
-        self.doc.clone().unwrap()
-    }
-}
-
-
-impl YMap {
-    pub fn set_doc(&mut self, doc: Rc<RefCell<YDocInner>>) {
-        assert!(self.doc.is_none());
-        self.doc = Some(doc);
-    }
-}
-
 
 #[pymethods]
 impl YMap {
@@ -85,10 +54,7 @@ impl YMap {
             let v: PyObject = v.into();
             map.insert(k, v);
         }
-        Ok(YMap {
-            inner: SharedType::Prelim(map),
-            doc: None,
-        })
+        Ok(YMap(SharedType::Prelim(map)))
     }
 
     /// Returns true if this is a preliminary instance of `YMap`.
@@ -98,22 +64,22 @@ impl YMap {
     /// document store and cannot be nested again: attempt to do so will result in an exception.
     #[getter]
     pub fn prelim(&self) -> bool {
-        match &self.inner {
+        match &self.0 {
             SharedType::Prelim(_) => true,
             _ => false,
         }
     }
 
     pub fn __len__(&self) -> usize {
-        match &self.inner {
-            SharedType::Integrated(v) => self.with_transaction(|txn| v.len(txn)) as usize,
+        match &self.0 {
+            SharedType::Integrated(v) => v.with_transaction(|txn| v.len(txn)) as usize,
             SharedType::Prelim(v) => v.len() as usize,
         }
     }
 
     /// Returns a number of elements stored within this instance of `YArray` using a provided transaction.
     fn _len(&self, txn: &YTransactionInner) -> usize {
-        match &self.inner {
+        match &self.0 {
             SharedType::Integrated(v) => v.len(txn) as usize,
             SharedType::Prelim(v) => v.len() as usize,
         }
@@ -122,9 +88,9 @@ impl YMap {
 
     pub fn __str__(&self) -> String {
         Python::with_gil(|py| {
-            match &self.inner {
+            match &self.0 {
                 SharedType::Integrated(y_array) => {
-                    self.with_transaction(|txn| y_array.to_json(txn).into_py(py).to_string())
+                    y_array.with_transaction(|txn| y_array.to_json(txn).into_py(py).to_string())
                 }
                 SharedType::Prelim(py_contents) => {
                     py_contents.clone().into_py(py).to_string()
@@ -135,8 +101,8 @@ impl YMap {
 
     pub fn __dict__(&self) -> PyResult<PyObject> {
         println!("dict called");
-        Python::with_gil(|py| match &self.inner {
-            SharedType::Integrated(v) => self.with_transaction(|txn| Ok(v.to_json(txn).into_py(py))),
+        Python::with_gil(|py| match &self.0 {
+            SharedType::Integrated(v) => v.with_transaction(|txn| Ok(v.to_json(txn).into_py(py))),
             SharedType::Prelim(map) => {
                 println!("prelim called");
                 let dict = PyDict::new(py);
@@ -156,9 +122,9 @@ impl YMap {
     /// Converts contents of this `YMap` instance into a JSON representation.
     pub fn to_json(&self) -> PyResult<String> {
         let mut json_builder = JsonBuilder::new();
-        match &self.inner {
+        match &self.0 {
             SharedType::Integrated(dict) => {
-                self.with_transaction(|txn| json_builder.append_json(&dict.to_json(txn)))?
+                dict.with_transaction(|txn| json_builder.append_json(&dict.to_json(txn)))?
             },
             SharedType::Prelim(dict) => json_builder.append_json(dict)?,
         }
@@ -172,9 +138,9 @@ impl YMap {
     }
 
     fn _set(&mut self, txn: &mut YTransactionInner, key: &str, value: PyObject) {
-        match &mut self.inner {
+        match &mut self.0 {
             SharedType::Integrated(v) => {
-                v.insert(txn, key.to_string(), PyObjectWrapper::new(value, self.doc.clone()));
+                v.insert(txn, key.to_string(), PyObjectWrapper::new(value, v.doc.clone()));
             }
             SharedType::Prelim(v) => {
                 v.insert(key.to_string(), value);
@@ -231,10 +197,10 @@ impl YMap {
         key: &str,
         fallback: Option<PyObject>,
     ) -> PyResult<PyObject> {
-        let popped = match &mut self.inner {
-            SharedType::Integrated(v) => v
+        let popped = match &mut self.0 {
+            SharedType::Integrated(v) => v.inner
                 .remove(txn, key)
-                .map(|v| Python::with_gil(|py| v.into_py(py))),
+                .map(|value| Python::with_gil(|py| value.with_doc_into_py(v.doc.clone(), py))),
             SharedType::Prelim(v) => v.remove(key),
         };
         if let Some(value) = popped {
@@ -248,10 +214,7 @@ impl YMap {
 
     /// Retrieves an item from the map. If the item isn't found, the fallback value is returned.
     pub fn get(&self, key: &str, fallback: Option<PyObject>) -> PyObject {
-        self.with_transaction(|txn| self._get(txn, key, fallback))
-    }
-    fn _get(&self, txn: &YTransactionInner, key: &str, fallback: Option<PyObject>) -> PyObject {
-        self._getitem(txn, key)
+        self.__getitem__(key)
             .ok()
             .unwrap_or_else(|| fallback.unwrap_or_else(|| Python::with_gil(|py| py.None())))
     }
@@ -259,13 +222,11 @@ impl YMap {
     /// Returns value of an entry stored under given `key` within this instance of `YMap`,
     /// or `undefined` if no such entry existed.
     pub fn __getitem__(&self, key: &str) -> PyResult<PyObject> {
-        self.with_transaction(|txn| self._getitem(txn, key))
-    }
-    fn _getitem(&self, txn: &YTransactionInner, key: &str) -> PyResult<PyObject> {
-        let entry = match &self.inner {
-            SharedType::Integrated(y_map) => y_map
+        let entry = match &self.0 {
+            SharedType::Integrated(y_map) => y_map.with_transaction(|txn| y_map.inner
                 .get(txn, key)
-                .map(|value| Python::with_gil(|py| value.with_doc_into_py(self.get_doc().clone(), py))),
+                .map(|value| Python::with_gil(|py| value.with_doc_into_py(y_map.doc.clone(), py)))
+            ),
             SharedType::Prelim(hash_map) => hash_map.get(key).cloned(),
         };
 
@@ -307,10 +268,10 @@ impl YMap {
     }
 
     pub fn observe(&mut self, f: PyObject) -> PyResult<ShallowSubscription> {
-        let doc = self.get_doc();
-        match &mut self.inner {
+        match &mut self.0 {
             SharedType::Integrated(v) => {
-                let sub_id: SubscriptionId = v
+                let doc = v.doc.clone();
+                let sub_id: SubscriptionId = v.inner
                     .observe(move |txn: &TransactionMut, e| {
                         Python::with_gil(|py| {
                             let e = YMapEvent::new(e, txn, doc.clone());
@@ -327,13 +288,13 @@ impl YMap {
     }
 
     pub fn observe_deep(&mut self, f: PyObject) -> PyResult<DeepSubscription> {
-        let doc = self.get_doc();
-        match &mut self.inner {
+        match &mut self.0 {
             SharedType::Integrated(map) => {
-                let sub: SubscriptionId = map
+                let doc = map.doc.clone();
+                let sub: SubscriptionId = map.inner
                     .observe_deep(move |txn, events| {
                         Python::with_gil(|py| {
-                            let events = events_into_py(txn, events, Some(doc.clone()));
+                            let events = events_into_py(txn, events, doc.clone());
                             if let Err(err) = f.call1(py, (events,)) {
                                 err.restore(py)
                             }
@@ -347,7 +308,7 @@ impl YMap {
     }
     /// Cancels the observer callback associated with the `subscripton_id`.
     pub fn unobserve(&mut self, subscription_id: SubId) -> PyResult<()> {
-        match &mut self.inner {
+        match &mut self.0 {
             SharedType::Integrated(map) => Ok(match subscription_id {
                 SubId::Shallow(ShallowSubscription(id)) => map.unobserve(id),
                 SubId::Deep(DeepSubscription(id)) => map.unobserve_deep(id),
@@ -376,8 +337,8 @@ impl ItemView {
 
     fn __len__(&self) -> usize {
         let ymap = unsafe { &*self.0 };
-        match &ymap.inner {
-            SharedType::Integrated(map) => ymap.with_transaction(|txn| map.len(txn) as usize),
+        match &ymap.0 {
+            SharedType::Integrated(map) => map.with_transaction(|txn| map.len(txn) as usize),
             SharedType::Prelim(map) => map.len(),
         }
     }
@@ -395,14 +356,20 @@ impl ItemView {
         format!("ItemView({data})")
     }
 
-    fn contains(&self, txn: &YTransactionInner, el: PyObject) -> bool {
+    fn __contains__(&self, el: PyObject) -> bool {
         let ymap = unsafe { &*self.0 };
         let kv: Result<(String, PyObject), _> = Python::with_gil(|py| el.extract(py));
         kv.ok()
             .and_then(|(key, value)| 
-                match &ymap.inner {
-                    SharedType::Integrated(map) if map.contains_key(txn, &key) => map.get(txn, &key).map(|v| {
-                        Python::with_gil(|py| v.into_py(py).as_ref(py).eq(value)).unwrap_or(false)
+                match &ymap.0 {
+                    SharedType::Integrated(map) => map.with_transaction(|txn| {
+                        if map.contains_key(txn, &key) {
+                            map.get(txn, &key).map(|v| {
+                                Python::with_gil(|py| v.with_doc_into_py(map.doc.clone(), py).as_ref(py).eq(value)).unwrap_or(false)
+                            })
+                        } else {
+                            None
+                        }
                     }),
                     SharedType::Prelim(map) if map.contains_key(&key) => map
                         .get(&key)
@@ -432,8 +399,8 @@ impl KeyView {
 
     fn __len__(&self) -> usize {
         let ymap = unsafe { &*self.0 };
-        match &ymap.inner {
-            SharedType::Integrated(map) => ymap.with_transaction(|txn| map.len(txn) as usize),
+        match &ymap.0 {
+            SharedType::Integrated(map) => map.with_transaction(|txn| map.len(txn) as usize),
             SharedType::Prelim(map) => map.len(),
         }
     }
@@ -451,12 +418,12 @@ impl KeyView {
         format!("KeyView({data})")
     }
 
-    fn contains(&self, el: PyObject) -> bool {
+    fn __contains__(&self, el: PyObject) -> bool {
         let ymap = unsafe { &*self.0 };
         let key: Result<String, _> = Python::with_gil(|py| el.extract(py));
         key.ok()
-            .map(|key| match &ymap.inner {
-                    SharedType::Integrated(map) => ymap.with_transaction(|txn| map.contains_key(txn, &key)),
+            .map(|key| match &ymap.0 {
+                    SharedType::Integrated(map) => map.with_transaction(|txn| map.contains_key(txn, &key)),
                     SharedType::Prelim(map) => map.contains_key(&key),
             }
             )
@@ -483,8 +450,8 @@ impl ValueView {
 
     fn __len__(&self) -> usize {
         let ymap = unsafe { &*self.0 };
-        match &ymap.inner {
-            SharedType::Integrated(map) => ymap.with_transaction(|txn| map.len(txn) as usize),
+        match &ymap.0 {
+            SharedType::Integrated(map) => map.with_transaction(|txn| map.len(txn) as usize),
             SharedType::Prelim(map) => map.len(),
         }
     }
@@ -505,52 +472,36 @@ impl ValueView {
 }
 
 pub enum InnerYMapIterator {
-    Integrated(MapIter<'static, &'static YTransactionInner, YTransactionInner>),
+    Integrated(TypeWithDoc<MapIter<'static, &'static YTransactionInner, YTransactionInner>>),
     Prelim(std::collections::hash_map::Iter<'static, String, PyObject>),
 }
 
 #[pyclass(unsendable)]
-pub struct YMapIterator {
-    inner: ManuallyDrop<InnerYMapIterator>,
-    doc: Rc<RefCell<YDocInner>>,
-}
-
-impl WithTransaction for YMapIterator {
-    fn get_doc(&self) -> Rc<RefCell<YDocInner>> {
-        self.doc.clone()
-    }
-}
-
+pub struct YMapIterator(ManuallyDrop<InnerYMapIterator>);
 
 impl Drop for YMapIterator {
     fn drop(&mut self) {
-        unsafe { ManuallyDrop::drop(&mut self.inner) }
+        unsafe { ManuallyDrop::drop(&mut self.0) }
     }
 }
 
 impl From<*const YMap> for YMapIterator {
     fn from(inner_map_ptr: *const YMap) -> Self {
         let map = unsafe { &*inner_map_ptr };
-        match &map.inner {
+        match &map.0 {
             SharedType::Integrated(val) => {
-                let iter = map.with_transaction(|txn| {
+                let iter = val.with_transaction(|txn| {
                     let txn = txn as *const YTransactionInner;
                     unsafe { 
                         val.iter(&*txn)
                     }
                 });
-                let shared_iter = InnerYMapIterator::Integrated(iter);
-                YMapIterator {
-                    inner: ManuallyDrop::new(shared_iter),
-                    doc: map.get_doc(),
-                }
+                let shared_iter = InnerYMapIterator::Integrated(TypeWithDoc::new(iter, val.doc.clone()));
+                YMapIterator(ManuallyDrop::new(shared_iter))
             }
             SharedType::Prelim(val) => {
                 let shared_iter = InnerYMapIterator::Prelim(val.iter());
-                YMapIterator {
-                    inner:ManuallyDrop::new(shared_iter),
-                    doc: map.get_doc(),
-                }
+                YMapIterator(ManuallyDrop::new(shared_iter))
             }
         }
     }
@@ -560,9 +511,9 @@ impl Iterator for YMapIterator {
     type Item = (String, PyObject);
 
     fn next(&mut self) -> Option<Self::Item> {
-        match self.inner.deref_mut() {
+        match self.0.deref_mut() {
             InnerYMapIterator::Integrated(iter) => {
-                Python::with_gil(|py| iter.next().map(|(k, v)| (k.to_string(), v.with_doc_into_py(self.doc.clone(), py))))
+                Python::with_gil(|py| iter.next().map(|(k, v)| (k.to_string(), v.with_doc_into_py(iter.doc.clone(), py))))
             }
             InnerYMapIterator::Prelim(iter) => iter.next().map(|(k, v)| (k.clone(), v.clone())),
         }
@@ -683,7 +634,7 @@ impl YMapEvent {
                 let result = PyDict::new(py);
                 for (key, value) in keys.iter() {
                     let key = &**key;
-                    result.set_item(key, value.into_py(py)).unwrap();
+                    result.set_item(key, value.with_doc_into_py(self.doc.clone(), py)).unwrap();
                 }
                 result.into()
             });
