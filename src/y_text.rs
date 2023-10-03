@@ -138,9 +138,7 @@ impl YText {
         chunk: &str,
         attributes: Option<HashMap<String, PyObject>>,
     ) -> PyResult<()> {
-        let inner = txn.get_inner();
-        let mut txn = inner.borrow_mut();
-        self._insert(&mut txn, index, chunk, attributes)
+        txn.transact(|txn| self._insert(txn, index, chunk, attributes))?
     }
 
     /// Inserts a given `chunk` of text into this `YText` instance, starting at a given `index`.
@@ -186,9 +184,7 @@ impl YText {
         embed: PyObject,
         attributes: Option<HashMap<String, PyObject>>,
     ) -> PyResult<()> {
-        let inner = txn.get_inner();
-        let mut txn = inner.borrow_mut();
-        self._insert_embed(&mut txn, index, embed, attributes)
+        txn.transact(|txn| self._insert_embed(txn, index, embed, attributes))?
     }
 
     fn _insert_embed(
@@ -225,9 +221,7 @@ impl YText {
         length: u32,
         attributes: HashMap<String, PyObject>,
     ) -> PyResult<()> {
-        let inner = txn.get_inner();
-        let mut txn = inner.borrow_mut();
-        self._format(&mut txn, index, length, attributes)
+        txn.transact(|txn| self._format(txn, index, length, attributes))?
     }
 
     fn _format(
@@ -250,10 +244,8 @@ impl YText {
     }
 
     /// Appends a given `chunk` of text at the end of current `YText` instance.
-    pub fn extend(&mut self, txn: &mut YTransaction, chunk: &str) {
-        let inner = txn.get_inner();
-        let mut txn = inner.borrow_mut();
-        self._extend(&mut txn, chunk)
+    pub fn extend(&mut self, txn: &mut YTransaction, chunk: &str) -> PyResult<()> {
+        txn.transact(|txn| self._extend(txn, chunk))
     }
     fn _extend(&mut self, txn: &mut YTransactionInner, chunk: &str) {
         match &mut self.inner {
@@ -262,16 +254,14 @@ impl YText {
         }
     }
     /// Deletes character at the specified index.
-    pub fn delete(&mut self, txn: &mut YTransaction, index: u32) {
-        self.delete_range(txn, index, 1);
+    pub fn delete(&mut self, txn: &mut YTransaction, index: u32) -> PyResult<()> {
+        self.delete_range(txn, index, 1)
     }
 
     /// Deletes a specified range of of characters, starting at a given `index`.
     /// Both `index` and `length` are counted in terms of a number of UTF-8 character bytes.
-    pub fn delete_range(&mut self, txn: &mut YTransaction, index: u32, length: u32) {
-        let inner = txn.get_inner();
-        let mut txn = inner.borrow_mut();
-        self._delete_range(&mut txn, index, length);
+    pub fn delete_range(&mut self, txn: &mut YTransaction, index: u32, length: u32) -> PyResult<()> {
+        txn.transact(|txn| self._delete_range(txn, index, length))
     }
 
     fn _delete_range(&mut self, txn: &mut YTransactionInner, index: u32, length: u32) {

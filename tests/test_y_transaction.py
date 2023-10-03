@@ -1,4 +1,6 @@
+import pytest
 import y_py as Y
+
 
 def test_before_state():
     doc = Y.YDoc()
@@ -10,3 +12,26 @@ def test_before_state():
         text.extend(txn, " World")
         assert len(txn.before_state) == 1
     
+
+def test_transaction_already_committed():
+    doc = Y.YDoc()
+    text = doc.get_text("test")
+    with doc.begin_transaction() as txn:
+        text.extend(txn, "Hello")
+
+    with pytest.raises(AssertionError) as excinfo:
+        text.extend(txn, "Bug")
+        
+    assert str(excinfo.value) == "Transaction already committed!"
+    assert str(text) == "Hello"
+
+    txn = doc.begin_transaction()
+    text.extend(txn, "Bug")
+
+    assert str(text) == "HelloBug"
+    txn.commit()
+
+    with pytest.raises(AssertionError) as excinfo:
+        txn.commit()
+    assert str(excinfo.value) == "Transaction already committed!"
+

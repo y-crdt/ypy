@@ -1,5 +1,5 @@
 use crate::{y_array::YArray, y_map::YMap, y_text::YText};
-use pyo3::exceptions::PyException;
+use pyo3::exceptions::{PyException, PyAssertionError};
 use pyo3::types::PyBytes;
 use pyo3::{create_exception, prelude::*};
 use std::cell::RefCell;
@@ -160,14 +160,24 @@ impl YTransaction {
     pub fn get_inner(&self) -> Rc<RefCell<YTransactionInner>> {
         self.inner.clone()
     }
-    pub fn commit(&mut self) {
-        if !self.committed {
-            self.get_inner().borrow_mut().commit();
-            self.committed = true;
+
+    fn raise_alread_committed(&self) -> PyErr {
+        PyAssertionError::new_err("Transaction already committed!")
+    }
+
+    pub fn transact<F, R>(&self, f: F) -> PyResult<R>
+    where
+        F: FnOnce(&mut YTransactionInner) -> R,
+    {
+        let inner = self.get_inner();
+        let mut txn = inner.borrow_mut();
+        if txn.committed {
+            Err(self.raise_alread_committed())
         } else {
-            panic!("Transaction already committed!");
+            Ok(f(&mut txn))
         }
     }
+
 }
 
 
@@ -177,6 +187,17 @@ impl YTransaction {
     pub fn before_state(&mut self) -> PyObject {
         self.get_inner().borrow_mut().before_state()
     }
+
+    pub fn commit(&mut self) -> PyResult<()> {
+        if !self.committed {
+            self.get_inner().borrow_mut().commit();
+            self.committed = true;
+            Ok(())
+        } else {
+            Err(self.raise_alread_committed())
+        }
+    }
+
     /// Encodes a state vector of a given transaction document into its binary representation using
     /// lib0 v1 encoding. State vector is a compact representation of updates performed on a given
     /// document and can be used by `encode_state_as_update` on remote peer to generate a delta
@@ -319,7 +340,7 @@ impl YTransaction {
         _exception_value: Option<&'p PyAny>,
         _traceback: Option<&'p PyAny>,
     ) -> PyResult<bool> {
-        self.commit();
+        self.commit()?;
         Ok(exception_type.is_none())
     }
 }

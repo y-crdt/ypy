@@ -92,10 +92,8 @@ impl YXmlElement {
         txn: &mut YTransaction,
         index: u32,
         name: &str,
-    ) -> YXmlElement {
-        let inner = txn.get_inner();
-        let mut txn = inner.borrow_mut();
-        self._insert_xml_element(&mut txn, index, name)
+    ) -> PyResult<YXmlElement> {
+        txn.transact(|txn| self._insert_xml_element(txn, index, name))
     }
 
     fn _insert_xml_element(
@@ -112,10 +110,8 @@ impl YXmlElement {
     }
 
     // /// Inserts a new instance of `YXmlText` as a child of this XML node and returns it.
-    pub fn insert_xml_text(&self, txn: &mut YTransaction, index: u32) -> YXmlText {
-        let inner = txn.get_inner();
-        let mut txn = inner.borrow_mut();
-        self._insert_xml_text(&mut txn, index)
+    pub fn insert_xml_text(&self, txn: &mut YTransaction, index: u32) -> PyResult<YXmlText> {
+        txn.transact(|txn| self._insert_xml_text(txn, index))
     }
 
     fn _insert_xml_text(&self, txn: &mut YTransactionInner, index: u32) -> YXmlText {
@@ -128,10 +124,8 @@ impl YXmlElement {
 
     /// Removes a range of children XML nodes from this `YXmlElement` instance,
     /// starting at given `index`.
-    pub fn delete(&self, txn: &mut YTransaction, index: u32, length: u32) {
-        let inner = txn.get_inner();
-        let mut txn = inner.borrow_mut();
-        self._delete(&mut txn, index, length)
+    pub fn delete(&self, txn: &mut YTransaction, index: u32, length: u32) -> PyResult<()> {
+        txn.transact(|txn| self._delete(txn, index, length))
     }
 
     fn _delete(&self, txn: &mut YTransactionInner, index: u32, length: u32) {
@@ -139,10 +133,8 @@ impl YXmlElement {
     }
 
     /// Appends a new instance of `YXmlElement` as the last child of this XML node and returns it.
-    pub fn push_xml_element(&self, txn: &mut YTransaction, name: &str) -> YXmlElement {
-        let inner = txn.get_inner();
-        let mut txn = inner.borrow_mut();
-        self._push_xml_element(&mut txn, name)
+    pub fn push_xml_element(&self, txn: &mut YTransaction, name: &str) -> PyResult<YXmlElement> {
+        txn.transact(|txn| self._push_xml_element(txn, name))
     }
     fn _push_xml_element(&self, txn: &mut YTransactionInner, name: &str) -> YXmlElement {
         let index = self._len(txn) as u32;
@@ -150,10 +142,8 @@ impl YXmlElement {
     }
 
     /// Appends a new instance of `YXmlText` as the last child of this XML node and returns it.
-    pub fn push_xml_text(&self, txn: &mut YTransaction) -> YXmlText {
-        let inner = txn.get_inner();
-        let mut txn = inner.borrow_mut();
-        self._push_xml_text(&mut txn)
+    pub fn push_xml_text(&self, txn: &mut YTransaction) -> PyResult<YXmlText> {
+        txn.transact(|txn| self._push_xml_text(txn))
     }
     fn _push_xml_text(&self, txn: &mut YTransactionInner) -> YXmlText {
         let index = self._len(txn) as u32;
@@ -219,10 +209,8 @@ impl YXmlElement {
 
     /// Sets a `name` and `value` as new attribute for this XML node. If an attribute with the same
     /// `name` already existed on that node, its value with be overridden with a provided one.
-    pub fn set_attribute(&self, txn: &mut YTransaction, name: &str, value: &str) {
-        let inner = txn.get_inner();
-        let mut txn = inner.borrow_mut();
-        self.inner.insert_attribute(&mut txn, name, value)
+    pub fn set_attribute(&self, txn: &mut YTransaction, name: &str, value: &str) -> PyResult<()> {
+        txn.transact(|txn| self.inner.insert_attribute(txn, name, value))
     }
 
     /// Returns a value of an attribute given its `name`. If no attribute with such name existed,
@@ -231,10 +219,8 @@ impl YXmlElement {
         self.with_transaction(|txn| self.inner.get_attribute(txn, name))
     }
 
-    pub fn remove_attribute(&self, txn: &mut YTransaction, name: &str) {
-        let inner = txn.get_inner();
-        let mut txn = inner.borrow_mut();
-        self.inner.remove_attribute(&mut txn, &name);
+    pub fn remove_attribute(&self, txn: &mut YTransaction, name: &str) -> PyResult<()> {
+        txn.transact(|txn| self.inner.remove_attribute(txn, &name))
     }
 
     /// Returns the attributes of this XML node as a Python list of tuples
@@ -371,20 +357,16 @@ impl YXmlText {
     }
 
     /// Inserts a given `chunk` of text into this `YXmlText` instance, starting at a given `index`.
-    pub fn insert(&self, txn: &mut YTransaction, index: i32, chunk: &str) {
-        let inner = txn.get_inner();
-        let mut txn = inner.borrow_mut();
-        self._insert(&mut txn, index, chunk)
+    pub fn insert(&self, txn: &mut YTransaction, index: i32, chunk: &str) -> PyResult<()> {
+        txn.transact(|txn| self._insert(txn, index, chunk))
     }
     fn _insert(&self, txn: &mut YTransactionInner, index: i32, chunk: &str) {
         self.inner.insert(txn, index as u32, chunk)
     }
 
     /// Appends a given `chunk` of text at the end of `YXmlText` instance.
-    pub fn push(&self, txn: &mut YTransaction, chunk: &str) {
-        let inner = txn.get_inner();
-        let mut txn = inner.borrow_mut();
-        self._push(&mut txn, chunk)
+    pub fn push(&self, txn: &mut YTransaction, chunk: &str) -> PyResult<()> {
+        txn.transact(|txn| self._push(txn, chunk))
     }
 
     fn _push(&self, txn: &mut YTransactionInner, chunk: &str) {
@@ -393,10 +375,8 @@ impl YXmlText {
 
     /// Deletes a specified range of of characters, starting at a given `index`.
     /// Both `index` and `length` are counted in terms of a number of UTF-8 character bytes.
-    pub fn delete(&self, txn: &mut YTransaction, index: u32, length: u32) {
-        let inner = txn.get_inner();
-        let mut txn = inner.borrow_mut();
-        self._delete(&mut txn, index, length)
+    pub fn delete(&self, txn: &mut YTransaction, index: u32, length: u32) -> PyResult<()> {
+        txn.transact(|txn| self._delete(txn, index, length))
     }
     fn _delete(&self, txn: &mut YTransactionInner, index: u32, length: u32) {
         self.inner.remove_range(txn, index, length)
@@ -449,10 +429,8 @@ impl YXmlText {
 
     /// Sets a `name` and `value` as new attribute for this XML node. If an attribute with the same
     /// `name` already existed on that node, its value with be overridden with a provided one.
-    pub fn set_attribute(&self, txn: &mut YTransaction, name: &str, value: &str) {
-        let inner = txn.get_inner();
-        let mut txn = inner.borrow_mut();
-        self.inner.insert_attribute(&mut txn, name, value)
+    pub fn set_attribute(&self, txn: &mut YTransaction, name: &str, value: &str) -> PyResult<()> {
+        txn.transact(|txn| self.inner.insert_attribute(txn, name, value))
     }
 
     /// Returns a value of an attribute given its `name`. If no attribute with such name existed,
@@ -462,10 +440,8 @@ impl YXmlText {
     }
 
     /// Removes an attribute from this XML node, given its `name`.
-    pub fn remove_attribute(&self, txn: &mut YTransaction, name: &str) {
-        let inner = txn.get_inner();
-        let mut txn = inner.borrow_mut();
-        self.inner.remove_attribute(&mut txn, &name);
+    pub fn remove_attribute(&self, txn: &mut YTransaction, name: &str) -> PyResult<()> {
+        txn.transact(|txn| self.inner.remove_attribute(txn, &name))
     }
 
     /// Returns an iterator that enables to traverse over all attributes of this XML node in
@@ -612,10 +588,8 @@ impl YXmlFragment {
         txn: &mut YTransaction,
         index: u32,
         name: &str,
-    ) -> YXmlElement {
-        let inner = txn.get_inner();
-        let mut txn = inner.borrow_mut();
-        self._insert_xml_element(&mut txn, index, name)
+    ) -> PyResult<YXmlElement> {
+        txn.transact(|txn| self._insert_xml_element(txn, index, name))
     }
 
     fn _insert_xml_element(
@@ -632,10 +606,8 @@ impl YXmlFragment {
     }
 
     /// Removes a single element at provided `index`.
-    pub fn remove(&self, txn: &mut YTransaction, index: u32) {
-        let inner = txn.get_inner();
-        let mut txn = inner.borrow_mut();
-        self._remove(&mut txn, index)
+    pub fn remove(&self, txn: &mut YTransaction, index: u32) -> PyResult<()> {
+        txn.transact(|txn| self._remove(txn, index))
     }
 
     fn _remove(&self, txn: &mut YTransactionInner, index: u32) {

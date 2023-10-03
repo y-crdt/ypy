@@ -1,7 +1,6 @@
 use pyo3::exceptions::{PyKeyError, PyTypeError};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
-use yrs::block::Item;
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -168,10 +167,8 @@ impl YMap {
 
     /// Sets a given `key`-`value` entry within this instance of `YMap`. If another entry was
     /// already stored under given `key`, it will be overridden with new `value`.
-    pub fn set(&mut self, txn: &mut YTransaction, key: &str, value: PyObject) {
-        let inner = txn.get_inner();
-        let mut txn = inner.borrow_mut();
-        self._set(&mut txn, key, value);
+    pub fn set(&mut self, txn: &mut YTransaction, key: &str, value: PyObject) -> PyResult<()> {
+        txn.transact(|txn| self._set(txn, key, value))
     }
 
     fn _set(&mut self, txn: &mut YTransactionInner, key: &str, value: PyObject) {
@@ -186,9 +183,7 @@ impl YMap {
     }
     /// Updates `YMap` with the key value pairs in the `items` object.
     pub fn update(&mut self, txn: &mut YTransaction, items: PyObject) -> PyResult<()> {
-        let inner = txn.get_inner();
-        let mut txn = inner.borrow_mut();
-        self._update(&mut txn, items)
+        txn.transact(|txn| self._update(txn, items))?
     }
     
     fn _update(&mut self, txn: &mut YTransactionInner, items: PyObject) -> PyResult<()> {
@@ -227,9 +222,7 @@ impl YMap {
         key: &str,
         fallback: Option<PyObject>,
     ) -> PyResult<PyObject> {
-        let inner = txn.get_inner();
-        let mut txn = inner.borrow_mut();
-        self._pop(&mut txn, key, fallback)
+        txn.transact(|txn| self._pop(txn, key, fallback))?
     }
 
     fn _pop(

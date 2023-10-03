@@ -161,9 +161,7 @@ impl YArray {
         index: u32,
         item: PyObject,
     ) -> PyResult<()> {
-        let inner = txn.get_inner();
-        let mut txn = inner.borrow_mut();
-        self._insert(&mut txn, index, item)
+        txn.transact(|txn| self._insert(txn, index, item))?
     }
 
     fn _insert(&mut self, txn: &mut YTransactionInner, index: u32, item: PyObject) -> PyResult<()> {
@@ -186,9 +184,7 @@ impl YArray {
         index: u32,
         items: PyObject,
     ) -> PyResult<()> {
-        let inner = txn.get_inner();
-        let mut txn = inner.borrow_mut();
-        self._insert_range(&mut txn, index, items)
+        txn.transact(|txn| self._insert_range(txn, index, items))?
     }
 
     fn _insert_range(
@@ -217,9 +213,7 @@ impl YArray {
 
     /// Appends a range of `items` at the end of this `YArray` instance.
     pub fn extend(&mut self, txn: &mut YTransaction, items: PyObject) -> PyResult<()> {
-        let inner = txn.get_inner();
-        let mut txn = inner.borrow_mut();
-        self._extend(&mut txn, items)
+        txn.transact(|txn| self._extend(txn, items))?
     }
     fn _extend(&mut self, txn: &mut YTransactionInner, items: PyObject) -> PyResult<()> {
         let index = self._len(txn) as u32;
@@ -227,10 +221,8 @@ impl YArray {
     }
 
     /// Adds a single item to the end of the array
-    pub fn append(&mut self, txn: &mut YTransaction, item: PyObject) {
-        let inner = txn.get_inner();
-        let mut txn = inner.borrow_mut();
-        self._append(&mut txn, item)
+    pub fn append(&mut self, txn: &mut YTransaction, item: PyObject) -> PyResult<()> {
+        txn.transact(|txn| self._append(txn, item))
     }
 
     fn _append(&mut self, txn: &mut YTransactionInner, item: PyObject) {
@@ -243,9 +235,7 @@ impl YArray {
     }
     /// Removes the element that the given index from the list.
     pub fn delete(&mut self, txn: &mut YTransaction, index: u32) -> PyResult<()> {
-        let inner = txn.get_inner();
-        let mut txn = inner.borrow_mut();
-        self._delete(&mut txn, index)
+        txn.transact(|txn| self._delete(txn, index))?
     }
 
     fn _delete(&mut self, txn: &mut YTransactionInner, index: u32) -> PyResult<()> {
@@ -261,10 +251,8 @@ impl YArray {
 
     /// Deletes a range of items of given `length` from current `YArray` instance,
     /// starting from given `index`.
-    pub fn delete_range(&mut self, txn: &mut YTransaction, index: u32, length: u32) {
-        let inner = txn.get_inner();
-        let mut txn = inner.borrow_mut();
-        self._delete_range(&mut txn, index, length)
+    pub fn delete_range(&mut self, txn: &mut YTransaction, index: u32, length: u32) -> PyResult<()> {
+        txn.transact(|txn| self._delete_range(txn, index, length))
     }
 
     fn _delete_range(&mut self, txn: &mut YTransactionInner, index: u32, length: u32) {
@@ -283,9 +271,7 @@ impl YArray {
         source: u32,
         target: u32,
     ) -> PyResult<()> {
-        let inner = txn.get_inner();
-        let mut txn = inner.borrow_mut();
-        self._move_to(&mut txn, source, target)
+        txn.transact(|txn| self._move_to(txn, source, target))?
     }
 
     fn _move_to(&mut self, txn: &mut YTransactionInner, source: u32, target: u32) -> PyResult<()> {
@@ -335,9 +321,7 @@ impl YArray {
         end: u32,
         target: u32,
     ) -> PyResult<()> {
-        let inner = txn.get_inner();
-        let mut txn = inner.borrow_mut();
-        self._move_range_to(&mut txn, start, end, target)
+        txn.transact(|txn| self._move_range_to(txn, start, end, target))?
     }
 
     fn _move_range_to(
