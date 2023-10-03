@@ -35,3 +35,13 @@ def test_transaction_already_committed():
         txn.commit()
     assert str(excinfo.value) == "Transaction already committed!"
 
+
+def test_document_modification_during_transaction():
+    doc = Y.YDoc()
+    text = doc.get_text("test")
+    with doc.begin_transaction() as txn:
+        with pytest.raises(AssertionError) as excinfo:
+            text_2 = doc.get_text("test2")
+        assert str(excinfo.value) == "Transaction already started!"
+
+    doc.get_text("test2")

@@ -51,6 +51,15 @@ pub struct YDocInner {
 }
 
 impl YDocInner {
+    pub fn has_transaction(&self) -> bool {
+        if let Some(weak_txn) = &self.txn {
+            if let Some(txn) = weak_txn.upgrade() {
+                return !txn.borrow().committed
+            }
+        }
+        false
+    }
+
     pub fn begin_transaction(&mut self) -> Rc<RefCell<YTransactionInner>> {
         // Check if we think we still have a transaction
         if let Some(weak_txn) = &self.txn {
@@ -107,6 +116,17 @@ impl YDocInner {
 #[pyclass(unsendable, subclass)]
 pub struct YDoc {
     pub inner: Rc<RefCell<YDocInner>>,
+}
+
+impl YDoc {
+    pub fn guard_store(&self) -> PyResult<()> {
+        if self.inner.borrow().has_transaction() {
+            return Err(pyo3::exceptions::PyAssertionError::new_err(
+                "Transaction already started!",
+            ));
+        }
+        Ok(())
+    }
 }
 
 #[pymethods]
@@ -197,8 +217,9 @@ impl YDoc {
     ///
     /// If there was an instance with this name, but it was of different type, it will be projected
     /// onto `YMap` instance.
-    pub fn get_map(&mut self, name: &str) -> YMap {
-        self.inner.borrow().doc.get_or_insert_map(name).with_doc(self.inner.clone())
+    pub fn get_map(&mut self, name: &str) -> PyResult<YMap> {
+        self.guard_store()?;
+        Ok(self.inner.borrow().doc.get_or_insert_map(name).with_doc(self.inner.clone()))
     }
 
     /// Returns a `YXmlElement` shared data type, that's accessible for subsequent accesses using
@@ -208,12 +229,13 @@ impl YDoc {
     ///
     /// If there was an instance with this name, but it was of different type, it will be projected
     /// onto `YXmlElement` instance.
-    pub fn get_xml_element(&mut self, name: &str) -> YXmlElement {
-        self.inner
+    pub fn get_xml_element(&mut self, name: &str) -> PyResult<YXmlElement> {
+        self.guard_store()?;
+        Ok(self.inner
             .borrow()
             .doc
             .get_or_insert_xml_element(name)
-            .with_doc(self.inner.clone())
+            .with_doc(self.inner.clone()))
     }
 
     /// Returns a `YXmlText` shared data type, that's accessible for subsequent accesses using given
@@ -223,8 +245,9 @@ impl YDoc {
     ///
     /// If there was an instance with this name, but it was of different type, it will be projected
     /// onto `YXmlText` instance.
-    pub fn get_xml_text(&mut self, name: &str) -> YXmlText {
-        self.inner.borrow().doc.get_or_insert_xml_text(name).with_doc(self.inner.clone())
+    pub fn get_xml_text(&mut self, name: &str) -> PyResult<YXmlText> {
+        self.guard_store()?;
+        Ok(self.inner.borrow().doc.get_or_insert_xml_text(name).with_doc(self.inner.clone()))
     }
 
     /// Returns a `YXmlFragment` shared data type, that's accessible for subsequent accesses using
@@ -234,12 +257,13 @@ impl YDoc {
     ///
     /// If there was an instance with this name, but it was of different type, it will be projected
     /// onto `YXmlFragment` instance.
-    pub fn get_xml_fragment(&mut self, name: &str) -> YXmlFragment {
-        self.inner
+    pub fn get_xml_fragment(&mut self, name: &str) -> PyResult<YXmlFragment> {
+        self.guard_store()?;
+        Ok(self.inner
             .borrow()
             .doc
             .get_or_insert_xml_fragment(name)
-            .with_doc(self.inner.clone())
+            .with_doc(self.inner.clone()))
     }
 
     /// Returns a `YArray` shared data type, that's accessible for subsequent accesses using given
@@ -249,12 +273,13 @@ impl YDoc {
     ///
     /// If there was an instance with this name, but it was of different type, it will be projected
     /// onto `YArray` instance.
-    pub fn get_array(&mut self, name: &str) -> YArray {
-        self.inner
+    pub fn get_array(&mut self, name: &str) -> PyResult<YArray> {
+        self.guard_store()?;
+        Ok(self.inner
             .borrow()
             .doc
-            .get_or_insert_array(&name)
-            .with_doc(self.inner.clone())
+            .get_or_insert_array(name)
+            .with_doc(self.inner.clone()))
     }
 
     /// Returns a `YText` shared data type, that's accessible for subsequent accesses using given
@@ -264,12 +289,13 @@ impl YDoc {
     ///
     /// If there was an instance with this name, but it was of different type, it will be projected
     /// onto `YText` instance.
-    pub fn get_text(&mut self, name: &str) -> YText {
-        self.inner
+    pub fn get_text(&mut self, name: &str) -> PyResult<YText> {
+        self.guard_store()?;
+        Ok(self.inner
             .borrow()
             .doc
-            .get_or_insert_text(&name)
-            .with_doc(self.inner.clone())
+            .get_or_insert_text(name)
+            .with_doc(self.inner.clone()))
     }
 
     /// Subscribes a callback to a `YDoc` lifecycle event.
