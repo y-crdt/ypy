@@ -227,11 +227,15 @@ impl Prelim for PyObjectWrapper {
                                             err.restore(py);
                                             CompatiblePyType::None
                                         });
-                                        map.insert(txn, k.to_owned(), x);
+                                        if let CompatiblePyType::YType(y_type) = x {
+                                            let wrapped = PyObjectWrapper::new(y_type.into(), self.0.doc.clone());
+                                            map.insert(txn, k.to_owned(), wrapped);
+                                        } else {
+                                            map.insert(txn, k.to_owned(), x);
+                                        }
                                     }
                                 }
                             });
-                            
                             y_map.0 = SharedType::Integrated(TypeWithDoc::new(map.clone(), self.0.doc.clone()));
                         }
                         YPyType::XmlElement(_) | YPyType::XmlText(_) | YPyType::XmlFragment(_) => unreachable!("As defined in Shared::is_prelim(), neither XML type can ever exist outside a YDoc"),
