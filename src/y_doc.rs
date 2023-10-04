@@ -79,6 +79,16 @@ impl YDocInner {
         txn
     }
 
+    pub fn commit_transaction(&mut self) {
+        if let Some(weak_txn) = &self.txn {
+            if let Some(txn) = weak_txn.upgrade() {
+                let mut txn = txn.borrow_mut();
+                txn.commit();
+            }
+        }
+        self.txn = None;
+    }
+
     pub fn transact_mut<F, R>(&self, f: F) -> R
     where
         F: FnOnce(&mut YTransactionInner) -> R,
@@ -200,7 +210,9 @@ impl YDoc {
             let args = PyTuple::new(py, vec![txn.into_py(py)]);
             callback.call(py, args, None)
         });
-        self.0.borrow_mut().txn = None;
+        // Make transaction commit after callback returns
+        let mut doc = self.0.borrow_mut();
+        doc.commit_transaction();
         result
     }
 

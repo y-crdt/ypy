@@ -35,6 +35,14 @@ def test_transaction_already_committed():
         txn.commit()
     assert str(excinfo.value) == "Transaction already committed!"
 
+    # Try smuggling transaction out of callback and reusing it
+    smuggle = {}
+    doc.transact(lambda txn: smuggle.update({"txn": txn}))
+    with pytest.raises(AssertionError) as excinfo:
+        text.extend(smuggle["txn"], "Bug")
+    assert str(excinfo.value) == "Transaction already committed!"
+    assert str(text) == "HelloBug"
+
 
 def test_document_modification_during_transaction():
     doc = Y.YDoc()
