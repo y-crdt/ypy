@@ -1,4 +1,4 @@
-use pyo3::exceptions::{PyException, PyAssertionError};
+use pyo3::exceptions::{PyAssertionError, PyException};
 use pyo3::types::PyBytes;
 use pyo3::{create_exception, prelude::*};
 use std::cell::RefCell;
@@ -143,9 +143,7 @@ impl YTransaction {
             Ok(f(&mut txn))
         }
     }
-
 }
-
 
 #[pymethods]
 impl YTransaction {

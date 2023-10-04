@@ -4,7 +4,7 @@ use crate::shared_types::{
 };
 use crate::type_conversions::{events_into_py, ToPython, WithDocToPython};
 use crate::y_doc::{WithDoc, YDocInner};
-use crate::y_transaction::{YTransactionInner, YTransaction};
+use crate::y_transaction::{YTransaction, YTransactionInner};
 use lib0::any::Any;
 use pyo3::prelude::*;
 use pyo3::types::PyList;
@@ -219,7 +219,12 @@ impl YText {
 
     /// Deletes a specified range of of characters, starting at a given `index`.
     /// Both `index` and `length` are counted in terms of a number of UTF-8 character bytes.
-    pub fn delete_range(&mut self, txn: &mut YTransaction, index: u32, length: u32) -> PyResult<()> {
+    pub fn delete_range(
+        &mut self,
+        txn: &mut YTransaction,
+        index: u32,
+        length: u32,
+    ) -> PyResult<()> {
         txn.transact(|txn| self._delete_range(txn, index, length))
     }
 
@@ -237,7 +242,8 @@ impl YText {
         match &mut self.0 {
             SharedType::Integrated(text) => {
                 let doc = text.doc.clone();
-                let sub_id = text.inner
+                let sub_id = text
+                    .inner
                     .observe(move |txn, e| {
                         let e = YTextEvent::new(e, txn, doc.clone());
                         Python::with_gil(|py| {
@@ -258,7 +264,8 @@ impl YText {
         match &mut self.0 {
             SharedType::Integrated(text) => {
                 let doc = text.doc.clone();
-                let sub = text.inner
+                let sub = text
+                    .inner
                     .observe_deep(move |txn, events| {
                         Python::with_gil(|py| {
                             let events = events_into_py(txn, events, doc.clone());
@@ -282,7 +289,7 @@ impl YText {
                     SubId::Deep(DeepSubscription(id)) => text.unobserve_deep(id),
                 }
                 Ok(())
-            },
+            }
             SharedType::Prelim(_) => Err(PreliminaryObservationException::default_message()),
         }
     }

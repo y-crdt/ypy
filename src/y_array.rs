@@ -9,7 +9,7 @@ use crate::shared_types::{
 };
 use crate::type_conversions::{events_into_py, WithDocToPython};
 use crate::y_doc::{WithDoc, YDocInner};
-use crate::y_transaction::{YTransactionInner, YTransaction};
+use crate::y_transaction::{YTransaction, YTransactionInner};
 
 use super::shared_types::SharedType;
 use crate::type_conversions::ToPython;
@@ -121,12 +121,7 @@ impl YArray {
     }
 
     /// Adds a single item to the provided index in the array.
-    pub fn insert(
-        &mut self,
-        txn: &mut YTransaction,
-        index: u32,
-        item: PyObject,
-    ) -> PyResult<()> {
+    pub fn insert(&mut self, txn: &mut YTransaction, index: u32, item: PyObject) -> PyResult<()> {
         txn.transact(|txn| self._insert(txn, index, item))?
     }
 
@@ -210,7 +205,7 @@ impl YArray {
             SharedType::Integrated(v) if index < v.len(txn) => {
                 v.remove(txn, index);
                 Ok(())
-            },
+            }
             SharedType::Prelim(v) if index < v.len() as u32 => {
                 v.remove(index as usize);
                 Ok(())
@@ -221,7 +216,12 @@ impl YArray {
 
     /// Deletes a range of items of given `length` from current `YArray` instance,
     /// starting from given `index`.
-    pub fn delete_range(&mut self, txn: &mut YTransaction, index: u32, length: u32) -> PyResult<()> {
+    pub fn delete_range(
+        &mut self,
+        txn: &mut YTransaction,
+        index: u32,
+        length: u32,
+    ) -> PyResult<()> {
         txn.transact(|txn| self._delete_range(txn, index, length))
     }
 
@@ -235,12 +235,7 @@ impl YArray {
     }
 
     /// Moves the element from the index source to target.
-    pub fn move_to(
-        &mut self,
-        txn: &mut YTransaction,
-        source: u32,
-        target: u32,
-    ) -> PyResult<()> {
+    pub fn move_to(&mut self, txn: &mut YTransaction, source: u32, target: u32) -> PyResult<()> {
         txn.transact(|txn| self._move_to(txn, source, target))?
     }
 
@@ -375,7 +370,8 @@ impl YArray {
         match &mut self.0 {
             SharedType::Integrated(array) => {
                 let doc = array.doc.clone();
-                let sub: SubscriptionId = array.inner
+                let sub: SubscriptionId = array
+                    .inner
                     .observe(move |txn, e| {
                         Python::with_gil(|py| {
                             let event = YArrayEvent::new(e, txn, doc.clone());
@@ -395,7 +391,8 @@ impl YArray {
         match &mut self.0 {
             SharedType::Integrated(array) => {
                 let doc = array.doc.clone();
-                let sub: SubscriptionId = array.inner
+                let sub: SubscriptionId = array
+                    .inner
                     .observe_deep(move |txn, events| {
                         Python::with_gil(|py| {
                             let events = events_into_py(txn, events, doc.clone());
@@ -433,7 +430,9 @@ impl YArray {
             SharedType::Integrated(v) => {
                 let value = v.with_transaction(|txn| v.get(txn, index));
                 if let Some(value) = value {
-                    Ok(Python::with_gil(|py| value.with_doc_into_py(v.doc.clone(), py)))
+                    Ok(Python::with_gil(|py| {
+                        value.with_doc_into_py(v.doc.clone(), py)
+                    }))
                 } else {
                     Err(PyIndexError::default_message())
                 }
@@ -459,7 +458,8 @@ impl YArray {
                     if step < 0 {
                         let step = step.unsigned_abs();
                         let (start, stop) = ((stop + 1) as usize, (start + 1) as usize);
-                        let values: Vec<PyObject> = arr.inner
+                        let values: Vec<PyObject> = arr
+                            .inner
                             .iter(txn)
                             .enumerate()
                             .skip(start)
@@ -471,7 +471,8 @@ impl YArray {
                         Ok(values.into_py(py))
                     } else {
                         let (start, stop, step) = (start as usize, stop as usize, step as usize);
-                        let values: Vec<PyObject> = arr.inner
+                        let values: Vec<PyObject> = arr
+                            .inner
                             .iter(txn)
                             .enumerate()
                             .skip(start)
@@ -647,11 +648,9 @@ impl YArrayEvent {
             delta.clone()
         } else {
             let delta: PyObject = Python::with_gil(|py| {
-                let delta = self
-                    .inner()
-                    .delta(self.txn())
-                    .iter()
-                    .map(|change| Python::with_gil(|py| change.with_doc_into_py(self.doc.clone(), py)));
+                let delta = self.inner().delta(self.txn()).iter().map(|change| {
+                    Python::with_gil(|py| change.with_doc_into_py(self.doc.clone(), py))
+                });
                 PyList::new(py, delta).into()
             });
             self.delta = Some(delta.clone());

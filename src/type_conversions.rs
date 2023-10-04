@@ -5,20 +5,20 @@ use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
 use pyo3::types as pytypes;
 use pyo3::types::PyList;
-use yrs::ArrayRef;
-use yrs::MapRef;
-use yrs::TextRef;
-use yrs::TransactionMut;
-use yrs::block::Unused;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::convert::TryInto;
 use std::ops::Deref;
 use std::rc::Rc;
+use yrs::block::Unused;
 use yrs::block::{ItemContent, Prelim};
 use yrs::types::Events;
 use yrs::types::{Attrs, Branch, BranchPtr, Change, Delta, Value};
+use yrs::ArrayRef;
+use yrs::MapRef;
+use yrs::TextRef;
+use yrs::TransactionMut;
 use yrs::{Array, Map, Text};
 
 use crate::shared_types::CompatiblePyType;
@@ -41,7 +41,7 @@ pub trait ToPython {
 impl<T: ToPython> ToPython for Vec<T> {
     fn into_py(self, py: Python) -> PyObject {
         let elements = self.into_iter().map(|v| v.into_py(py));
-         pyo3::types::PyList::new(py, elements).into()
+        pyo3::types::PyList::new(py, elements).into()
     }
 }
 
@@ -143,8 +143,10 @@ impl WithDocToPython for &Change {
         let result = pytypes::PyDict::new(py);
         match self {
             Change::Added(values) => {
-                let values: Vec<PyObject> =
-                    values.iter().map(|v| v.clone().with_doc_into_py(doc.clone(), py)).collect();
+                let values: Vec<PyObject> = values
+                    .iter()
+                    .map(|v| v.clone().with_doc_into_py(doc.clone(), py))
+                    .collect();
                 result.set_item("insert", values).unwrap();
             }
             Change::Removed(len) => {
@@ -184,7 +186,8 @@ impl Prelim for PyObjectWrapper {
                 CompatiblePyType::None
             });
             let (item_content, py_any) = valid_type.into_content(txn);
-            let wrapper: Option<Self> = py_any.map(|py_type| PyObjectWrapper::new(py_type.into(), self.0.doc.clone()));
+            let wrapper: Option<Self> =
+                py_any.map(|py_type| PyObjectWrapper::new(py_type.into(), self.0.doc.clone()));
             (item_content, wrapper)
         })
     }
@@ -358,7 +361,7 @@ impl<'a> From<YPyType<'a>> for PyObject {
             YPyType::Map(map) => map.into(),
             YPyType::XmlElement(xml) => xml.into(),
             YPyType::XmlText(xml) => xml.into(),
-            YPyType::XmlFragment(xml) => xml.into()
+            YPyType::XmlFragment(xml) => xml.into(),
         }
     }
 }
@@ -374,9 +377,9 @@ impl<'a> TryFrom<&'a PyAny> for YPyType<'a> {
         } else if let Ok(map) = value.extract() {
             Ok(YPyType::Map(map))
         } else {
-            Err(pyo3::exceptions::PyValueError::new_err(
-                format!("Could not extract a Ypy type from this object: {value}")
-            ))
+            Err(pyo3::exceptions::PyValueError::new_err(format!(
+                "Could not extract a Ypy type from this object: {value}"
+            )))
         }
     }
 }
@@ -428,17 +431,25 @@ impl WithDocToPython for Value {
     }
 }
 
-
-
-pub(crate) fn events_into_py(txn: &TransactionMut, events: &Events, doc: Rc<RefCell<YDocInner>>) -> PyObject {
+pub(crate) fn events_into_py(
+    txn: &TransactionMut,
+    events: &Events,
+    doc: Rc<RefCell<YDocInner>>,
+) -> PyObject {
     Python::with_gil(|py| {
         let py_events = events.iter().map(|event| match event {
             yrs::types::Event::Text(e_txt) => YTextEvent::new(e_txt, txn, doc.clone()).into_py(py),
-            yrs::types::Event::Array(e_arr) => YArrayEvent::new(e_arr, txn, doc.clone()).into_py(py),
+            yrs::types::Event::Array(e_arr) => {
+                YArrayEvent::new(e_arr, txn, doc.clone()).into_py(py)
+            }
             yrs::types::Event::Map(e_map) => YMapEvent::new(e_map, txn, doc.clone()).into_py(py),
             // TODO: check YXmlFragment Event
-            yrs::types::Event::XmlFragment(e_xml) => YXmlEvent::new(e_xml, txn, doc.clone()).into_py(py),
-            yrs::types::Event::XmlText(e_xml) => YXmlTextEvent::new(e_xml, txn, doc.clone()).into_py(py),
+            yrs::types::Event::XmlFragment(e_xml) => {
+                YXmlEvent::new(e_xml, txn, doc.clone()).into_py(py)
+            }
+            yrs::types::Event::XmlText(e_xml) => {
+                YXmlTextEvent::new(e_xml, txn, doc.clone()).into_py(py)
+            }
         });
         PyList::new(py, py_events).into()
     })

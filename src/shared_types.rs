@@ -1,13 +1,20 @@
 use crate::{
     y_array::YArray,
+    y_doc::YDocInner,
     y_map::YMap,
     y_text::YText,
-    y_xml::{YXmlElement, YXmlText, YXmlFragment}, y_doc::YDocInner, y_transaction::YTransactionInner,
+    y_transaction::YTransactionInner,
+    y_xml::{YXmlElement, YXmlFragment, YXmlText},
 };
 use pyo3::create_exception;
 use pyo3::types as pytypes;
 use pyo3::{exceptions::PyException, prelude::*};
-use std::{fmt::Display, rc::Rc, cell::RefCell, ops::{Deref, DerefMut}};
+use std::{
+    cell::RefCell,
+    fmt::Display,
+    ops::{Deref, DerefMut},
+    rc::Rc,
+};
 use yrs::types::TypeRef;
 use yrs::SubscriptionId;
 
@@ -80,8 +87,6 @@ impl<I, P> SharedType<I, P> {
     }
 }
 
-
-
 #[derive(Clone)]
 pub enum YPyType<'a> {
     Text(&'a PyCell<YText>),
@@ -107,7 +112,9 @@ impl<'a> YPyType<'a> {
             YPyType::Text(_) => TypeRef::Text,
             YPyType::Array(_) => TypeRef::Array,
             YPyType::Map(_) => TypeRef::Map,
-            YPyType::XmlElement(py_xml_element) => TypeRef::XmlElement(py_xml_element.borrow().0.tag().clone()),
+            YPyType::XmlElement(py_xml_element) => {
+                TypeRef::XmlElement(py_xml_element.borrow().0.tag().clone())
+            }
             YPyType::XmlText(_) => TypeRef::XmlText,
             YPyType::XmlFragment(_) => TypeRef::XmlFragment,
         }
@@ -120,12 +127,9 @@ pub struct TypeWithDoc<T> {
     pub doc: Rc<RefCell<YDocInner>>,
 }
 
-impl <T> TypeWithDoc<T> {
+impl<T> TypeWithDoc<T> {
     pub fn new(inner: T, doc: Rc<RefCell<YDocInner>>) -> Self {
-        Self {
-            inner,
-            doc,
-        }
+        Self { inner, doc }
     }
 
     fn get_transaction(&self) -> Rc<RefCell<YTransactionInner>> {

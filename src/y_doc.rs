@@ -5,8 +5,8 @@ use std::rc::Weak;
 use crate::y_array::YArray;
 use crate::y_map::YMap;
 use crate::y_text::YText;
-use crate::y_transaction::YTransactionInner;
 use crate::y_transaction::YTransaction;
+use crate::y_transaction::YTransactionInner;
 use crate::y_xml::YXmlElement;
 use crate::y_xml::YXmlFragment;
 use crate::y_xml::YXmlText;
@@ -53,7 +53,7 @@ impl YDocInner {
     pub fn has_transaction(&self) -> bool {
         if let Some(weak_txn) = &self.txn {
             if let Some(txn) = weak_txn.upgrade() {
-                return !txn.borrow().committed
+                return !txn.borrow().committed;
             }
         }
         false
@@ -225,7 +225,12 @@ impl YDoc {
     /// onto `YMap` instance.
     pub fn get_map(&mut self, name: &str) -> PyResult<YMap> {
         self.guard_store()?;
-        Ok(self.0.borrow().doc.get_or_insert_map(name).with_doc(self.0.clone()))
+        Ok(self
+            .0
+            .borrow()
+            .doc
+            .get_or_insert_map(name)
+            .with_doc(self.0.clone()))
     }
 
     /// Returns a `YXmlElement` shared data type, that's accessible for subsequent accesses using
@@ -237,7 +242,8 @@ impl YDoc {
     /// onto `YXmlElement` instance.
     pub fn get_xml_element(&mut self, name: &str) -> PyResult<YXmlElement> {
         self.guard_store()?;
-        Ok(self.0
+        Ok(self
+            .0
             .borrow()
             .doc
             .get_or_insert_xml_element(name)
@@ -253,7 +259,12 @@ impl YDoc {
     /// onto `YXmlText` instance.
     pub fn get_xml_text(&mut self, name: &str) -> PyResult<YXmlText> {
         self.guard_store()?;
-        Ok(self.0.borrow().doc.get_or_insert_xml_text(name).with_doc(self.0.clone()))
+        Ok(self
+            .0
+            .borrow()
+            .doc
+            .get_or_insert_xml_text(name)
+            .with_doc(self.0.clone()))
     }
 
     /// Returns a `YXmlFragment` shared data type, that's accessible for subsequent accesses using
@@ -265,7 +276,8 @@ impl YDoc {
     /// onto `YXmlFragment` instance.
     pub fn get_xml_fragment(&mut self, name: &str) -> PyResult<YXmlFragment> {
         self.guard_store()?;
-        Ok(self.0
+        Ok(self
+            .0
             .borrow()
             .doc
             .get_or_insert_xml_fragment(name)
@@ -281,7 +293,8 @@ impl YDoc {
     /// onto `YArray` instance.
     pub fn get_array(&mut self, name: &str) -> PyResult<YArray> {
         self.guard_store()?;
-        Ok(self.0
+        Ok(self
+            .0
             .borrow()
             .doc
             .get_or_insert_array(name)
@@ -297,7 +310,8 @@ impl YDoc {
     /// onto `YText` instance.
     pub fn get_text(&mut self, name: &str) -> PyResult<YText> {
         self.guard_store()?;
-        Ok(self.0
+        Ok(self
+            .0
             .borrow()
             .doc
             .get_or_insert_text(name)
@@ -344,9 +358,7 @@ impl YDoc {
 /// ```
 #[pyfunction]
 pub fn encode_state_vector(doc: &mut YDoc) -> PyObject {
-    let txn = doc.0
-        .borrow_mut()
-        .begin_transaction();
+    let txn = doc.0.borrow_mut().begin_transaction();
     let txn = YTransaction::new(txn);
     txn.state_vector_v1()
 }
@@ -373,9 +385,7 @@ pub fn encode_state_vector(doc: &mut YDoc) -> PyObject {
 /// ```
 #[pyfunction]
 pub fn encode_state_as_update(doc: &mut YDoc, vector: Option<Vec<u8>>) -> PyResult<PyObject> {
-    let txn = doc.0
-        .borrow_mut()
-        .begin_transaction();
+    let txn = doc.0.borrow_mut().begin_transaction();
     YTransaction::new(txn).diff_v1(vector)
 }
 
@@ -399,9 +409,7 @@ pub fn encode_state_as_update(doc: &mut YDoc, vector: Option<Vec<u8>>) -> PyResu
 /// ```
 #[pyfunction]
 pub fn apply_update(doc: &mut YDoc, diff: Vec<u8>) -> PyResult<()> {
-    let txn = doc.0
-    .borrow_mut()
-    .begin_transaction();
+    let txn = doc.0.borrow_mut().begin_transaction();
     YTransaction::new(txn).apply_v1(diff)?;
 
     Ok(())
