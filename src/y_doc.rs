@@ -113,13 +113,11 @@ impl YDocInner {
 ///     print(output)
 /// ```
 #[pyclass(unsendable, subclass)]
-pub struct YDoc {
-    pub inner: Rc<RefCell<YDocInner>>,
-}
+pub struct YDoc(Rc<RefCell<YDocInner>>);
 
 impl YDoc {
     pub fn guard_store(&self) -> PyResult<()> {
-        if self.inner.borrow().has_transaction() {
+        if self.0.borrow().has_transaction() {
             return Err(pyo3::exceptions::PyAssertionError::new_err(
                 "Transaction already started!",
             ));
@@ -167,15 +165,13 @@ impl YDoc {
             txn: None,
         };
 
-        Ok(YDoc {
-            inner: Rc::new(RefCell::new(inner)),
-        })
+        Ok(YDoc(Rc::new(RefCell::new(inner))))
     }
 
     /// Gets globally unique identifier of this `YDoc` instance.
     #[getter]
     pub fn client_id(&self) -> u64 {
-        self.inner.borrow().doc.client_id()
+        self.0.borrow().doc.client_id()
     }
 
     /// Returns a new transaction for this document. Ypy shared data types execute their
@@ -195,17 +191,16 @@ impl YDoc {
     ///     text.insert(txn, 0, 'hello world')
     /// ```
     pub fn begin_transaction(&self) -> YTransaction {
-        YTransaction::new(self.inner.borrow_mut().begin_transaction())
+        YTransaction::new(self.0.borrow_mut().begin_transaction())
     }
 
     pub fn transact(&mut self, callback: PyObject) -> PyResult<PyObject> {
-        let txn = YTransaction::new(self.inner.borrow_mut().begin_transaction());
+        let txn = YTransaction::new(self.0.borrow_mut().begin_transaction());
         let result = Python::with_gil(|py| {
             let args = PyTuple::new(py, vec![txn.into_py(py)]);
-            let result = callback.call(py, args, None);
-            result
+            callback.call(py, args, None)
         });
-        self.inner.borrow_mut().txn = None;
+        self.0.borrow_mut().txn = None;
         result
     }
 
@@ -218,7 +213,7 @@ impl YDoc {
     /// onto `YMap` instance.
     pub fn get_map(&mut self, name: &str) -> PyResult<YMap> {
         self.guard_store()?;
-        Ok(self.inner.borrow().doc.get_or_insert_map(name).with_doc(self.inner.clone()))
+        Ok(self.0.borrow().doc.get_or_insert_map(name).with_doc(self.0.clone()))
     }
 
     /// Returns a `YXmlElement` shared data type, that's accessible for subsequent accesses using
@@ -230,11 +225,11 @@ impl YDoc {
     /// onto `YXmlElement` instance.
     pub fn get_xml_element(&mut self, name: &str) -> PyResult<YXmlElement> {
         self.guard_store()?;
-        Ok(self.inner
+        Ok(self.0
             .borrow()
             .doc
             .get_or_insert_xml_element(name)
-            .with_doc(self.inner.clone()))
+            .with_doc(self.0.clone()))
     }
 
     /// Returns a `YXmlText` shared data type, that's accessible for subsequent accesses using given
@@ -246,7 +241,7 @@ impl YDoc {
     /// onto `YXmlText` instance.
     pub fn get_xml_text(&mut self, name: &str) -> PyResult<YXmlText> {
         self.guard_store()?;
-        Ok(self.inner.borrow().doc.get_or_insert_xml_text(name).with_doc(self.inner.clone()))
+        Ok(self.0.borrow().doc.get_or_insert_xml_text(name).with_doc(self.0.clone()))
     }
 
     /// Returns a `YXmlFragment` shared data type, that's accessible for subsequent accesses using
@@ -258,11 +253,11 @@ impl YDoc {
     /// onto `YXmlFragment` instance.
     pub fn get_xml_fragment(&mut self, name: &str) -> PyResult<YXmlFragment> {
         self.guard_store()?;
-        Ok(self.inner
+        Ok(self.0
             .borrow()
             .doc
             .get_or_insert_xml_fragment(name)
-            .with_doc(self.inner.clone()))
+            .with_doc(self.0.clone()))
     }
 
     /// Returns a `YArray` shared data type, that's accessible for subsequent accesses using given
@@ -274,11 +269,11 @@ impl YDoc {
     /// onto `YArray` instance.
     pub fn get_array(&mut self, name: &str) -> PyResult<YArray> {
         self.guard_store()?;
-        Ok(self.inner
+        Ok(self.0
             .borrow()
             .doc
             .get_or_insert_array(name)
-            .with_doc(self.inner.clone()))
+            .with_doc(self.0.clone()))
     }
 
     /// Returns a `YText` shared data type, that's accessible for subsequent accesses using given
@@ -290,16 +285,16 @@ impl YDoc {
     /// onto `YText` instance.
     pub fn get_text(&mut self, name: &str) -> PyResult<YText> {
         self.guard_store()?;
-        Ok(self.inner
+        Ok(self.0
             .borrow()
             .doc
             .get_or_insert_text(name)
-            .with_doc(self.inner.clone()))
+            .with_doc(self.0.clone()))
     }
 
     /// Subscribes a callback to a `YDoc` lifecycle event.
     pub fn observe_after_transaction(&mut self, callback: PyObject) -> SubscriptionId {
-        self.inner
+        self.0
             .borrow()
             .doc
             .observe_transaction_cleanup(move |txn, event| {
@@ -337,7 +332,7 @@ impl YDoc {
 /// ```
 #[pyfunction]
 pub fn encode_state_vector(doc: &mut YDoc) -> PyObject {
-    let txn = doc.inner
+    let txn = doc.0
         .borrow_mut()
         .begin_transaction();
     let txn = YTransaction::new(txn);
@@ -366,7 +361,7 @@ pub fn encode_state_vector(doc: &mut YDoc) -> PyObject {
 /// ```
 #[pyfunction]
 pub fn encode_state_as_update(doc: &mut YDoc, vector: Option<Vec<u8>>) -> PyResult<PyObject> {
-    let txn = doc.inner
+    let txn = doc.0
         .borrow_mut()
         .begin_transaction();
     YTransaction::new(txn).diff_v1(vector)
@@ -392,7 +387,7 @@ pub fn encode_state_as_update(doc: &mut YDoc, vector: Option<Vec<u8>>) -> PyResu
 /// ```
 #[pyfunction]
 pub fn apply_update(doc: &mut YDoc, diff: Vec<u8>) -> PyResult<()> {
-    let txn = doc.inner
+    let txn = doc.0
     .borrow_mut()
     .begin_transaction();
     YTransaction::new(txn).apply_v1(diff)?;
