@@ -100,14 +100,11 @@ impl YMap {
     }
 
     pub fn __dict__(&self) -> PyResult<PyObject> {
-        println!("dict called");
         Python::with_gil(|py| match &self.0 {
             SharedType::Integrated(v) => v.with_transaction(|txn| Ok(v.to_json(txn).into_py(py))),
             SharedType::Prelim(map) => {
-                println!("prelim called");
                 let dict = PyDict::new(py);
                 for (k, v) in map.iter() {
-                    println!("k: {}, v: {}", k, v);
                     dict.set_item(k, v)?;
                 }
                 Ok(dict.into())

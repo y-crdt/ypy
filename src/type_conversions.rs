@@ -195,11 +195,6 @@ impl Prelim for PyObjectWrapper {
                 err.restore(py);
                 CompatiblePyType::None
             });
-            // if let Some(doc) = self.doc {
-            //     valid_type.set_doc(doc.clone());
-            // }
-            // valid_type.integrate(txn, inner_ref);
-
 
             match valid_type {
                 CompatiblePyType::YType(y_type) if y_type.is_prelim() => {
