@@ -768,7 +768,7 @@ impl YXmlEvent {
                 let delta = self
                     .inner()
                     .delta(self.txn())
-                    .into_iter()
+                    .iter()
                     .map(|d| Python::with_gil(|py| d.with_doc_into_py(self.doc.clone(), py)));
                 let result = pyo3::types::PyList::new(py, delta);
                 let delta: PyObject = result.into();
@@ -883,7 +883,7 @@ impl YXmlTextEvent {
                 let delta = self
                     .inner()
                     .delta(self.txn())
-                    .into_iter()
+                    .iter()
                     .map(|d| Python::with_gil(|py| d.clone().with_doc_into_py(self.doc.clone(), py)));
                 let result = pyo3::types::PyList::new(py, delta);
                 let delta: PyObject = result.into();

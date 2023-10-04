@@ -34,8 +34,7 @@ pub trait WithTransaction {
     {
         let txn = self.get_transaction();
         let mut txn = txn.borrow_mut();
-        let result = f(&mut txn);
-        result
+        f(&mut txn)
     }
 
     fn get_transaction(&self) -> Rc<RefCell<YTransactionInner>> {
@@ -146,7 +145,7 @@ impl YDoc {
         }
 
         if let Some(raw_offset) = offset_kind {
-            let clean_offset = raw_offset.to_lowercase().replace("-", "");
+            let clean_offset = raw_offset.to_lowercase().replace('-', "");
             let offset = match clean_offset.as_str() {
                 "utf8" => Ok(OffsetKind::Bytes),
                 "utf16" => Ok(OffsetKind::Utf16),

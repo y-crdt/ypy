@@ -140,8 +140,7 @@ impl <T> TypeWithDoc<T> {
     {
         let txn = self.get_transaction();
         let mut txn = txn.borrow_mut();
-        let result = f(&mut txn);
-        result
+        f(&mut txn)
     }
 }
 

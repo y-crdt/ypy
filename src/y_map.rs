@@ -64,16 +64,13 @@ impl YMap {
     /// document store and cannot be nested again: attempt to do so will result in an exception.
     #[getter]
     pub fn prelim(&self) -> bool {
-        match &self.0 {
-            SharedType::Prelim(_) => true,
-            _ => false,
-        }
+        matches!(&self.0, SharedType::Prelim(_))
     }
 
     pub fn __len__(&self) -> usize {
         match &self.0 {
             SharedType::Integrated(v) => v.with_transaction(|txn| v.len(txn)) as usize,
-            SharedType::Prelim(v) => v.len() as usize,
+            SharedType::Prelim(v) => v.len(),
         }
     }
 
@@ -81,7 +78,7 @@ impl YMap {
     fn _len(&self, txn: &YTransactionInner) -> usize {
         match &self.0 {
             SharedType::Integrated(v) => v.len(txn) as usize,
-            SharedType::Prelim(v) => v.len() as usize,
+            SharedType::Prelim(v) => v.len(),
         }
     }
 
@@ -205,7 +202,7 @@ impl YMap {
         } else if let Some(fallback) = fallback {
             Ok(fallback)
         } else {
-            Err(PyKeyError::new_err(format!("{key}")))
+            Err(PyKeyError::new_err(key.to_string()))
         }
     }
 
@@ -227,7 +224,7 @@ impl YMap {
             SharedType::Prelim(hash_map) => hash_map.get(key).cloned(),
         };
 
-        entry.ok_or_else(|| PyKeyError::new_err(format!("{key}")))
+        entry.ok_or_else(|| PyKeyError::new_err(key.to_string()))
     }
 
     /// Returns an item view that can be used to traverse over all entries stored within this
@@ -306,10 +303,13 @@ impl YMap {
     /// Cancels the observer callback associated with the `subscripton_id`.
     pub fn unobserve(&mut self, subscription_id: SubId) -> PyResult<()> {
         match &mut self.0 {
-            SharedType::Integrated(map) => Ok(match subscription_id {
-                SubId::Shallow(ShallowSubscription(id)) => map.unobserve(id),
-                SubId::Deep(DeepSubscription(id)) => map.unobserve_deep(id),
-            }),
+            SharedType::Integrated(map) => {
+                match subscription_id {
+                    SubId::Shallow(ShallowSubscription(id)) => map.unobserve(id),
+                    SubId::Deep(DeepSubscription(id)) => map.unobserve_deep(id),
+                }
+                Ok(())
+            }
             SharedType::Prelim(_) => Err(PreliminaryObservationException::default_message()),
         }
     }

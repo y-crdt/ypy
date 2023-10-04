@@ -71,17 +71,14 @@ impl YArray {
     /// document store and cannot be nested again: attempt to do so will result in an exception.
     #[getter]
     pub fn prelim(&self) -> bool {
-        match &self.0 {
-            SharedType::Prelim(_) => true,
-            _ => false,
-        }
+        matches!(&self.0, SharedType::Prelim(_))
     }
 
     /// Returns a number of elements stored within this instance of `YArray`.
     pub fn __len__(&self) -> usize {
         match &self.0 {
             SharedType::Integrated(v) => v.with_transaction(|txn| v.len(txn)) as usize,
-            SharedType::Prelim(v) => v.len() as usize,
+            SharedType::Prelim(v) => v.len(),
         }
     }
 
@@ -89,7 +86,7 @@ impl YArray {
     fn _len(&self, txn: &YTransactionInner) -> usize {
         match &self.0 {
             SharedType::Integrated(v) => v.len(txn) as usize,
-            SharedType::Prelim(v) => v.len() as usize,
+            SharedType::Prelim(v) => v.len(),
         }
     }
 
@@ -140,7 +137,8 @@ impl YArray {
                 Ok(())
             }
             SharedType::Prelim(vec) if vec.len() >= index as usize => {
-                Ok(vec.insert(index as usize, item))
+                vec.insert(index as usize, item);
+                Ok(())
             }
             _ => Err(PyIndexError::default_message()),
         }
@@ -209,7 +207,10 @@ impl YArray {
 
     fn _delete(&mut self, txn: &mut YTransactionInner, index: u32) -> PyResult<()> {
         match &mut self.0 {
-            SharedType::Integrated(v) if index < v.len(txn) => Ok(v.remove(txn, index)),
+            SharedType::Integrated(v) if index < v.len(txn) => {
+                v.remove(txn, index);
+                Ok(())
+            },
             SharedType::Prelim(v) if index < v.len() as u32 => {
                 v.remove(index as usize);
                 Ok(())
@@ -248,9 +249,6 @@ impl YArray {
             SharedType::Integrated(v) => {
                 v.move_to(txn, source, target);
                 Ok(())
-            }
-            SharedType::Prelim(_) if source < 0 as u32 || target < 0 as u32 => {
-                Err(PyIndexError::default_message())
             }
             SharedType::Prelim(v) if source < v.len() as u32 && target < v.len() as u32 => {
                 if source < target {
@@ -304,12 +302,6 @@ impl YArray {
             SharedType::Integrated(v) => {
                 v.move_range_to(txn, start, Assoc::After, end, Assoc::Before, target);
                 Ok(())
-            }
-
-            // y-rs does nothing if end < start
-            // SharedType::Prelim(_) if end < start => Err(PyIndexError::default_message()),
-            SharedType::Prelim(_) if start < 0 as u32 || end < 0 as u32 || target < 0 as u32 => {
-                Err(PyIndexError::default_message())
             }
             SharedType::Prelim(v)
                 if start > v.len() as u32 || end > v.len() as u32 || target > v.len() as u32 =>
@@ -422,10 +414,13 @@ impl YArray {
     /// Cancels the callback of an observer using the Subscription ID returned from the `observe` method.
     pub fn unobserve(&mut self, subscription_id: SubId) -> PyResult<()> {
         match &mut self.0 {
-            SharedType::Integrated(arr) => Ok(match subscription_id {
-                SubId::Shallow(ShallowSubscription(id)) => arr.unobserve(id),
-                SubId::Deep(DeepSubscription(id)) => arr.unobserve_deep(id),
-            }),
+            SharedType::Integrated(arr) => {
+                match subscription_id {
+                    SubId::Shallow(ShallowSubscription(id)) => arr.unobserve(id),
+                    SubId::Deep(DeepSubscription(id)) => arr.unobserve_deep(id),
+                }
+                Ok(())
+            }
             SharedType::Prelim(_) => Err(PreliminaryObservationException::default_message()),
         }
     }
@@ -436,7 +431,7 @@ impl YArray {
     fn get_element(&self, index: u32) -> PyResult<PyObject> {
         match &self.0 {
             SharedType::Integrated(v) => {
-                let value = v.with_transaction(|txn| v.get(txn, index as u32));
+                let value = v.with_transaction(|txn| v.get(txn, index));
                 if let Some(value) = value {
                     Ok(Python::with_gil(|py| value.with_doc_into_py(v.doc.clone(), py)))
                 } else {
@@ -462,7 +457,7 @@ impl YArray {
             SharedType::Integrated(arr) => Python::with_gil(|py| {
                 arr.with_transaction(|txn| {
                     if step < 0 {
-                        let step = step.abs() as usize;
+                        let step = step.unsigned_abs();
                         let (start, stop) = ((stop + 1) as usize, (start + 1) as usize);
                         let values: Vec<PyObject> = arr.inner
                             .iter(txn)
@@ -490,7 +485,7 @@ impl YArray {
             }),
             SharedType::Prelim(arr) => Python::with_gil(|py| {
                 if step < 0 {
-                    let step = step.abs() as usize;
+                    let step = step.unsigned_abs();
                     let (start, stop) = ((stop + 1) as usize, (start + 1) as usize);
                     let list =
                         PyList::new(py, arr[start..stop].iter().rev().step_by(step).cloned());
@@ -655,7 +650,7 @@ impl YArrayEvent {
                 let delta = self
                     .inner()
                     .delta(self.txn())
-                    .into_iter()
+                    .iter()
                     .map(|change| Python::with_gil(|py| change.with_doc_into_py(self.doc.clone(), py)));
                 PyList::new(py, delta).into()
             });

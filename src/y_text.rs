@@ -61,10 +61,7 @@ impl YText {
     /// document store and cannot be nested again: attempt to do so will result in an exception.
     #[getter]
     pub fn prelim(&self) -> bool {
-        match self.0 {
-            SharedType::Prelim(_) => true,
-            _ => false,
-        }
+        matches!(self.0, SharedType::Prelim(_))
     }
 
     /// Returns an underlying shared string stored in this data type.
@@ -84,7 +81,7 @@ impl YText {
     pub fn __len__(&self) -> usize {
         match &self.0 {
             SharedType::Integrated(v) => v.with_transaction(|txn| v.len(txn)) as usize,
-            SharedType::Prelim(v) => v.len() as usize,
+            SharedType::Prelim(v) => v.len(),
         }
     }
 
@@ -279,10 +276,13 @@ impl YText {
     /// Cancels the observer callback associated with the `subscripton_id`.
     pub fn unobserve(&mut self, subscription_id: SubId) -> PyResult<()> {
         match &mut self.0 {
-            SharedType::Integrated(text) => Ok(match subscription_id {
-                SubId::Shallow(ShallowSubscription(id)) => text.unobserve(id),
-                SubId::Deep(DeepSubscription(id)) => text.unobserve_deep(id),
-            }),
+            SharedType::Integrated(text) => {
+                match subscription_id {
+                    SubId::Shallow(ShallowSubscription(id)) => text.unobserve(id),
+                    SubId::Deep(DeepSubscription(id)) => text.unobserve_deep(id),
+                }
+                Ok(())
+            },
             SharedType::Prelim(_) => Err(PreliminaryObservationException::default_message()),
         }
     }
@@ -376,7 +376,7 @@ impl YTextEvent {
                 let delta = {
                     self.inner()
                         .delta(self.txn())
-                        .into_iter()
+                        .iter()
                         .map(|d| d.clone().with_doc_into_py(self.doc.clone(), py))
                 };
                 PyList::new(py, delta).into()
