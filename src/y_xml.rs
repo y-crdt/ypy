@@ -455,7 +455,7 @@ impl YXmlFragment {
 
 #[pymethods]
 impl YXmlFragment {
-    /// Returns a number of child XML nodes stored within this `YXMlElement` instance.
+    /// Returns a number of child XML nodes stored within this `YmlFragment` instance.
     pub fn __len__(&self) -> usize {
         self.0.with_transaction(|txn| self._len(txn))
     }
@@ -464,31 +464,7 @@ impl YXmlFragment {
         self.0.len(txn) as usize
     }
 
-    pub fn __str__(&self) -> String {
-        self.0.with_transaction(|txn| self.0.get_string(txn))
-    }
-
-    pub fn __repr__(&self) -> String {
-        format!("YXmlElement({})", self.__str__())
-    }
-
-    /// Returns a first child of this XML node.
-    /// It can be either `YXmlElement`, `YXmlText` or `undefined` if current node has not children.
-    #[getter]
-    pub fn first_child(&self) -> PyObject {
-        Python::with_gil(|py| {
-            self.0.inner
-                .first_child()
-                .map_or(py.None(), |xml| xml.with_doc_into_py(self.0.doc.clone(), py))
-        })
-    }
-
-    #[getter]
-    pub fn parent(&self) -> PyObject {
-        Python::with_gil(|py| self.0.parent().map_or(py.None(), |xml| xml.with_doc_into_py(self.0.doc.clone(), py)))
-    }
-
-    /// Inserts a new instance of `YXmlElement` as a child of this XML node and returns it.
+    /// Inserts a new instance of `YXmlElement` as a child of this XML fragment and returns it.
     pub fn insert_xml_element(
         &self,
         txn: &mut YTransaction,
@@ -508,25 +484,68 @@ impl YXmlFragment {
         YXmlElement::new(inner_node, self.0.doc.clone())
     }
 
-    /// Removes a single element at provided `index`.
-    pub fn remove(&self, txn: &mut YTransaction, index: u32) -> PyResult<()> {
-        txn.transact(|txn| self._remove(txn, index))
+    // /// Inserts a new instance of `YXmlText` as a child of this XML node and returns it.
+    pub fn insert_xml_text(&self, txn: &mut YTransaction, index: u32) -> PyResult<YXmlText> {
+        txn.transact(|txn| self._insert_xml_text(txn, index))
     }
 
-    fn _remove(&self, txn: &mut YTransactionInner, index: u32) {
-        self.0.remove_range(txn, index, 1)
+    fn _insert_xml_text(&self, txn: &mut YTransactionInner, index: u32) -> YXmlText {
+        let inner_node = self.0.insert(txn, index, XmlTextPrelim::new(""));
+        YXmlText::new(inner_node, self.0.doc.clone())
     }
 
-    /// Retrieves a value stored at a given `index`. Returns `None` when provided index was out
-    /// of the range of a current array.
-    pub fn get(&self, index: u32) -> Option<PyObject> {
+    /// Removes a range of children XML nodes from this `YXmlElement` instance,
+    /// starting at given `index`.
+    pub fn delete(&self, txn: &mut YTransaction, index: u32, length: u32) -> PyResult<()> {
+        txn.transact(|txn| self._delete(txn, index, length))
+    }
+
+    fn _delete(&self, txn: &mut YTransactionInner, index: u32, length: u32) {
+        self.0.remove_range(txn, index, length)
+    }
+
+    /// Appends a new instance of `YXmlElement` as the last child of this XML node and returns it.
+    pub fn push_xml_element(&self, txn: &mut YTransaction, name: &str) -> PyResult<YXmlElement> {
+        txn.transact(|txn| self._push_xml_element(txn, name))
+    }
+    fn _push_xml_element(&self, txn: &mut YTransactionInner, name: &str) -> YXmlElement {
+        let index = self._len(txn) as u32;
+        self._insert_xml_element(txn, index, name)
+    }
+
+    /// Appends a new instance of `YXmlText` as the last child of this XML node and returns it.
+    pub fn push_xml_text(&self, txn: &mut YTransaction) -> PyResult<YXmlText> {
+        txn.transact(|txn| self._push_xml_text(txn))
+    }
+    fn _push_xml_text(&self, txn: &mut YTransactionInner) -> YXmlText {
+        let index = self._len(txn) as u32;
+        self._insert_xml_text(txn, index)
+    }
+
+    /// Returns a first child of this XML node.
+    /// It can be either `YXmlElement`, `YXmlText` or `undefined` if current node has not children.
+    #[getter]
+    pub fn first_child(&self) -> PyObject {
         Python::with_gil(|py| {
-            self.0.with_transaction(|txn| {
-                self.0.get(txn, index).map(|xml| xml.with_doc_into_py(self.0.doc.clone(), py))
-            })
+            self.0.inner
+                .first_child()
+                .map_or(py.None(), |xml| xml.with_doc_into_py(self.0.doc.clone(), py))
         })
     }
 
+    /// Returns a parent `YXmlElement` node or `undefined` if current node has no parent assigned.
+    #[getter]
+    pub fn parent(&self) -> PyObject {
+        Python::with_gil(|py| self.0.parent().map_or(py.None(), |xml| xml.with_doc_into_py(self.0.doc.clone(), py)))
+    }
+
+    /// Returns a string representation of this XML node.
+    pub fn __str__(&self) -> String {
+        self.0.with_transaction(|txn| self.0.get_string(txn))
+    }
+
+    /// Returns an iterator that enables a deep traversal of this XML node - starting from first
+    /// child over this XML node successors using depth-first strategy.
     pub fn tree_walker(&self) -> YXmlTreeWalker {
         YXmlTreeWalker::from(self)
     }
@@ -574,6 +593,16 @@ impl YXmlFragment {
             SubId::Shallow(ShallowSubscription(id)) => self.0.unobserve(id),
             SubId::Deep(DeepSubscription(id)) => self.0.unobserve_deep(id),
         }
+    }
+
+    /// Retrieves a value stored at a given `index`. Returns `None` when provided index was out
+    /// of the range of a current array.
+    pub fn get(&self, index: u32) -> Option<PyObject> {
+        Python::with_gil(|py| {
+            self.0.with_transaction(|txn| {
+                self.0.get(txn, index).map(|xml| xml.with_doc_into_py(self.0.doc.clone(), py))
+            })
+        })
     }
 }
 

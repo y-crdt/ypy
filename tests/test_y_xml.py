@@ -289,7 +289,7 @@ def test_xml_fragment():
     first_child = fragment.first_child
     with ydoc.begin_transaction() as txn:
         first_child.set_attribute(txn, "key", "value")
-        fragment.remove(txn, 1)
+        fragment.delete(txn, 1, 1)
 
     assert str(fragment) == '<a key="value"></a><c></c>'
 
