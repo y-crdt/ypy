@@ -1,16 +1,22 @@
 use crate::{
     y_array::YArray,
+    y_doc::YDocInner,
     y_map::YMap,
     y_text::YText,
-    y_xml::{YXmlElement, YXmlText},
+    y_transaction::YTransactionInner,
+    y_xml::{YXmlElement, YXmlFragment, YXmlText},
 };
 use pyo3::create_exception;
 use pyo3::types as pytypes;
 use pyo3::{exceptions::PyException, prelude::*};
-use std::fmt::Display;
-use yrs::types::TYPE_REFS_XML_TEXT;
-use yrs::types::{TypeRefs, TYPE_REFS_ARRAY, TYPE_REFS_MAP, TYPE_REFS_TEXT};
-use yrs::{types::TYPE_REFS_XML_ELEMENT, SubscriptionId};
+use std::{
+    cell::RefCell,
+    fmt::Display,
+    ops::{Deref, DerefMut},
+    rc::Rc,
+};
+use yrs::types::TypeRef;
+use yrs::SubscriptionId;
 
 // Common errors
 create_exception!(y_py, PreliminaryObservationException, PyException, "Occurs when an observer is attached to a Y type that is not integrated into a YDoc. Y types can only be observed once they have been added to a YDoc.");
@@ -80,6 +86,7 @@ impl<I, P> SharedType<I, P> {
         SharedType::Prelim(prelim)
     }
 }
+
 #[derive(Clone)]
 pub enum YPyType<'a> {
     Text(&'a PyCell<YText>),
@@ -87,6 +94,7 @@ pub enum YPyType<'a> {
     Map(&'a PyCell<YMap>),
     XmlElement(&'a PyCell<YXmlElement>),
     XmlText(&'a PyCell<YXmlText>),
+    XmlFragment(&'a PyCell<YXmlFragment>),
 }
 
 impl<'a> YPyType<'a> {
@@ -95,18 +103,63 @@ impl<'a> YPyType<'a> {
             YPyType::Text(v) => v.borrow().prelim(),
             YPyType::Array(v) => v.borrow().prelim(),
             YPyType::Map(v) => v.borrow().prelim(),
-            YPyType::XmlElement(_) | YPyType::XmlText(_) => false,
+            YPyType::XmlElement(_) | YPyType::XmlText(_) | YPyType::XmlFragment(_) => false,
         }
     }
 
-    pub fn type_ref(&self) -> TypeRefs {
-        match self {
-            YPyType::Text(_) => TYPE_REFS_TEXT,
-            YPyType::Array(_) => TYPE_REFS_ARRAY,
-            YPyType::Map(_) => TYPE_REFS_MAP,
-            YPyType::XmlElement(_) => TYPE_REFS_XML_ELEMENT,
-            YPyType::XmlText(_) => TYPE_REFS_XML_TEXT,
+    pub fn type_ref(&self) -> TypeRef {
+        match &self {
+            YPyType::Text(_) => TypeRef::Text,
+            YPyType::Array(_) => TypeRef::Array,
+            YPyType::Map(_) => TypeRef::Map,
+            YPyType::XmlElement(py_xml_element) => {
+                TypeRef::XmlElement(py_xml_element.borrow().0.tag().clone())
+            }
+            YPyType::XmlText(_) => TypeRef::XmlText,
+            YPyType::XmlFragment(_) => TypeRef::XmlFragment,
         }
+    }
+}
+
+#[derive(Clone)]
+pub struct TypeWithDoc<T> {
+    pub inner: T,
+    pub doc: Rc<RefCell<YDocInner>>,
+}
+
+impl<T> TypeWithDoc<T> {
+    pub fn new(inner: T, doc: Rc<RefCell<YDocInner>>) -> Self {
+        Self { inner, doc }
+    }
+
+    fn get_transaction(&self) -> Rc<RefCell<YTransactionInner>> {
+        let doc = self.doc.clone();
+        let txn = doc.borrow_mut().begin_transaction();
+        txn
+    }
+
+    pub fn with_transaction<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(&YTransactionInner) -> R,
+    {
+        let txn = self.get_transaction();
+        let mut txn = txn.borrow_mut();
+        f(&mut txn)
+    }
+}
+
+impl<T> Deref for TypeWithDoc<T> {
+    type Target = T;
+    #[inline(always)]
+    fn deref(&self) -> &T {
+        &self.inner
+    }
+}
+
+impl<T> DerefMut for TypeWithDoc<T> {
+    #[inline(always)]
+    fn deref_mut(&mut self) -> &mut T {
+        &mut self.inner
     }
 }
 
@@ -118,6 +171,7 @@ impl<'a> Display for YPyType<'a> {
             YPyType::Map(m) => m.borrow().__str__(),
             YPyType::XmlElement(xml) => xml.borrow().__str__(),
             YPyType::XmlText(xml) => xml.borrow().__str__(),
+            YPyType::XmlFragment(xml) => xml.borrow().__str__(),
         };
         write!(f, "{}", info)
     }

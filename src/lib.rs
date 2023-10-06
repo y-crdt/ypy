@@ -24,6 +24,7 @@ pub fn y_py(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<y_map::YMap>()?;
     m.add_class::<y_xml::YXmlText>()?;
     m.add_class::<y_xml::YXmlElement>()?;
+    m.add_class::<y_xml::YXmlFragment>()?;
     // Events
     m.add_class::<y_text::YTextEvent>()?;
     m.add_class::<y_array::YArrayEvent>()?;

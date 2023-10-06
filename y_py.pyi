@@ -1,16 +1,5 @@
-from typing import (
-    Any,
-    Callable,
-    Iterator,
-    List,
-    Iterable,
-    Literal,
-    Optional,
-    Tuple,
-    TypedDict,
-    Union,
-    Dict,
-)
+from typing import (Any, Callable, Dict, Iterable, Iterator, List, Literal,
+                    Optional, Tuple, TypedDict, Union)
 
 class SubscriptionId:
     """
@@ -104,6 +93,16 @@ class YDoc:
 
         If there was an instance with this name, but it was of different type, it will be projected
         onto `YXmlText` instance.
+        """
+    def get_xml_fragment(self, name: str) -> YXmlFragment:
+        """
+        Returns:
+            A `YXmlFragment` shared data type, that's accessible for subsequent accesses using given `name`.
+
+        If there was no instance with this name before, it will be created and then returned.
+
+        If there was an instance with this name, but it was of different type, it will be projected
+        onto `YXmlFragment` instance.
         """
     def get_array(self, name: str) -> YArray:
         """
@@ -1019,6 +1018,91 @@ class YXmlElement:
 
         Args:
             f: A callback function that receives update events from the Xml element and its children.
+        Returns:
+            A `SubscriptionId` that can be used to cancel the observer callback.
+        """
+    def unobserve(self, subscription_id: SubscriptionId):
+        """
+        Cancels the observer callback associated with the `subscripton_id`.
+
+        Args:
+            subscription_id: reference to a subscription provided by the `observe` method.
+        """
+
+class YXmlFragment:
+    """
+    XML fragment data type. It represents a collection of XML nodes.
+    """
+
+    first_child: Optional[Xml]
+    parent: Optional[YXmlElement]
+
+    def __len__(self) -> int:
+        """
+        Returns a number of child XML nodes stored within this `YXmlFragment` instance.
+        """
+    def insert_xml_element(
+        self,
+        txn: YTransaction,
+        index: int,
+        name: str,
+    ) -> YXmlElement:
+        """
+        Inserts a new instance of `YXmlElement` as a child of this XML fragment and returns it.
+        """
+    def insert_xml_text(self, txn: YTransaction, index: int) -> YXmlText:
+        """
+        Inserts a new instance of `YXmlText` as a child of this XML fragment and returns it.
+        """
+    def delete(self, txn: YTransaction, index: int, length: int):
+        """
+        Removes a range of children XML nodes from this `YXmlFragment` instance,
+        starting at given `index`.
+        """
+    def push_xml_element(self, txn: YTransaction, name: str) -> YXmlElement:
+        """
+        Appends a new instance of `YXmlElement` as the last child of this XML fragment and returns it.
+        """
+    def push_xml_text(self, txn: YTransaction) -> YXmlText:
+        """
+        Appends a new instance of `YXmlText` as the last child of this XML fragment and returns it.
+        """
+    def __str__(self) -> str:
+        """
+        Returns:
+            A string representation of this XML fragment.
+        """
+    def __repr__(self) -> str:
+        """
+        Returns:
+            A string representation of this YXmlFragment
+        """
+    def get(self, index: int) -> Union[YXmlText, YXmlElement]:
+        """
+        Returns the child node at the specified index.
+        """
+    def tree_walker(self) -> YXmlTreeWalker:
+        """
+        Returns an iterator that enables a deep traversal of this XML fragment - starting from first
+        child over this XML fragment successors using depth-first strategy.
+        """
+    def observe(self, f: Callable[[YXmlElementEvent]]) -> SubscriptionId:
+        """
+        Subscribes to all operations happening over this instance of `YXmlFragment`. All changes are
+        batched and eventually triggered during transaction commit phase.
+
+        Args:
+            f: A callback function that receives update events.
+        Returns:
+            A `SubscriptionId` that can be used to cancel the observer callback.
+        """
+    def observe_deep(self, f: Callable[[List[Event]]]) -> SubscriptionId:
+        """
+        Subscribes to all operations happening over this instance of `YXmlFragment` and its children. All changes are
+        batched and eventually triggered during transaction commit phase.
+
+        Args:
+            f: A callback function that receives update events from the Xml fragment and its children.
         Returns:
             A `SubscriptionId` that can be used to cancel the observer callback.
         """

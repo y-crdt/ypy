@@ -5,26 +5,32 @@ use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
 use pyo3::types as pytypes;
 use pyo3::types::PyList;
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::convert::TryInto;
 use std::ops::Deref;
+use std::rc::Rc;
+use yrs::block::Unused;
 use yrs::block::{ItemContent, Prelim};
 use yrs::types::Events;
-use yrs::types::{Attrs, Branch, BranchPtr, Change, Delta, EntryChange, Value};
-use yrs::{Array, Map, Text, Transaction};
+use yrs::types::{Attrs, Branch, BranchPtr, Change, Delta, Value};
+use yrs::ArrayRef;
+use yrs::MapRef;
+use yrs::TextRef;
+use yrs::TransactionMut;
+use yrs::{Array, Map, Text};
 
 use crate::shared_types::CompatiblePyType;
+use crate::shared_types::TypeWithDoc;
 use crate::shared_types::{SharedType, YPyType};
 use crate::y_array::YArray;
 use crate::y_array::YArrayEvent;
-use crate::y_map::YMap;
+use crate::y_doc::WithDoc;
+use crate::y_doc::YDocInner;
 use crate::y_map::YMapEvent;
-use crate::y_text::YText;
 use crate::y_text::YTextEvent;
-use crate::y_xml::YXmlEvent;
-use crate::y_xml::YXmlTextEvent;
-use crate::y_xml::{YXmlElement, YXmlText};
+use crate::y_xml::{YXmlEvent, YXmlTextEvent};
 
 create_exception!(y_py, MultipleIntegrationError, PyException, "A Ypy data type instance cannot be integrated into multiple YDocs or the same YDoc multiple times");
 
@@ -35,8 +41,7 @@ pub trait ToPython {
 impl<T: ToPython> ToPython for Vec<T> {
     fn into_py(self, py: Python) -> PyObject {
         let elements = self.into_iter().map(|v| v.into_py(py));
-        let arr: PyObject = pyo3::types::PyList::new(py, elements).into();
-        return arr;
+        pyo3::types::PyList::new(py, elements).into()
     }
 }
 
@@ -88,17 +93,20 @@ impl<'a> FromPyObject<'a> for CompatiblePyType<'a> {
     }
 }
 
+pub trait WithDocToPython {
+    fn with_doc_into_py(self, doc: Rc<RefCell<YDocInner>>, py: Python) -> PyObject;
+}
 
-impl ToPython for Delta {
-    fn into_py(self, py: Python) -> PyObject {
+impl WithDocToPython for Delta {
+    fn with_doc_into_py(self, doc: Rc<RefCell<YDocInner>>, py: Python) -> PyObject {
         let result = pytypes::PyDict::new(py);
         match self {
             Delta::Inserted(value, attrs) => {
-                let value = value.clone().into_py(py);
+                let value = value.clone().with_doc_into_py(doc.clone(), py);
                 result.set_item("insert", value).unwrap();
 
                 if let Some(attrs) = attrs {
-                    let attrs = attrs_into_py(attrs.deref());
+                    let attrs = attrs.with_doc_into_py(doc.clone(), py);
                     result.set_item("attributes", attrs).unwrap();
                 }
             }
@@ -106,7 +114,7 @@ impl ToPython for Delta {
                 result.set_item("retain", len).unwrap();
 
                 if let Some(attrs) = attrs {
-                    let attrs = attrs_into_py(attrs.deref());
+                    let attrs = attrs.with_doc_into_py(doc.clone(), py);
                     result.set_item("attributes", attrs).unwrap();
                 }
             }
@@ -118,25 +126,27 @@ impl ToPython for Delta {
     }
 }
 
-fn attrs_into_py(attrs: &Attrs) -> PyObject {
-    Python::with_gil(|py| {
+impl WithDocToPython for &Attrs {
+    fn with_doc_into_py(self, doc: Rc<RefCell<YDocInner>>, py: Python) -> PyObject {
         let o = pytypes::PyDict::new(py);
-        for (key, value) in attrs.iter() {
+        for (key, value) in self.iter() {
             let key = key.as_ref();
-            let value = Value::Any(value.clone()).into_py(py);
+            let value = Value::Any(value.clone()).with_doc_into_py(doc.clone(), py);
             o.set_item(key, value).unwrap();
         }
         o.into()
-    })
+    }
 }
 
-impl ToPython for &Change {
-    fn into_py(self, py: Python) -> PyObject {
+impl WithDocToPython for &Change {
+    fn with_doc_into_py(self, doc: Rc<RefCell<YDocInner>>, py: Python) -> PyObject {
         let result = pytypes::PyDict::new(py);
         match self {
             Change::Added(values) => {
-                let values: Vec<PyObject> =
-                    values.into_iter().map(|v| v.clone().into_py(py)).collect();
+                let values: Vec<PyObject> = values
+                    .iter()
+                    .map(|v| v.clone().with_doc_into_py(doc.clone(), py))
+                    .collect();
                 result.set_item("insert", values).unwrap();
             }
             Change::Removed(len) => {
@@ -150,42 +160,11 @@ impl ToPython for &Change {
     }
 }
 
-#[repr(transparent)]
-struct EntryChangeWrapper<'a>(&'a EntryChange);
+pub(crate) struct PyObjectWrapper(pub TypeWithDoc<PyObject>);
 
-impl<'a> IntoPy<PyObject> for EntryChangeWrapper<'a> {
-    fn into_py(self, py: Python) -> PyObject {
-        let result = pytypes::PyDict::new(py);
-        let action = "action";
-        match self.0 {
-            EntryChange::Inserted(new) => {
-                let new_value = new.clone().into_py(py);
-                result.set_item(action, "add").unwrap();
-                result.set_item("newValue", new_value).unwrap();
-            }
-            EntryChange::Updated(old, new) => {
-                let old_value = old.clone().into_py(py);
-                let new_value = new.clone().into_py(py);
-                result.set_item(action, "update").unwrap();
-                result.set_item("oldValue", old_value).unwrap();
-                result.set_item("newValue", new_value).unwrap();
-            }
-            EntryChange::Removed(old) => {
-                let old_value = old.clone().into_py(py);
-                result.set_item(action, "delete").unwrap();
-                result.set_item("oldValue", old_value).unwrap();
-            }
-        }
-        result.into()
-    }
-}
-
-#[repr(transparent)]
-pub(crate) struct PyObjectWrapper(pub PyObject);
-
-impl From<PyObject> for PyObjectWrapper {
-    fn from(value: PyObject) -> Self {
-        PyObjectWrapper(value)
+impl PyObjectWrapper {
+    pub fn new(inner: PyObject, doc: Rc<RefCell<YDocInner>>) -> Self {
+        Self(TypeWithDoc::new(inner, doc))
     }
 }
 
@@ -193,30 +172,80 @@ impl Deref for PyObjectWrapper {
     type Target = PyObject;
 
     fn deref(&self) -> &Self::Target {
-        &self.0
+        &self.0.inner
     }
 }
 
 impl Prelim for PyObjectWrapper {
-    fn into_content(self, txn: &mut Transaction) -> (ItemContent, Option<Self>) {
+    type Return = Unused;
+
+    fn into_content(self, txn: &mut TransactionMut) -> (ItemContent, Option<Self>) {
         Python::with_gil(|py| {
             let valid_type: CompatiblePyType = self.0.extract(py).unwrap_or_else(|err| {
                 err.restore(py);
                 CompatiblePyType::None
             });
             let (item_content, py_any) = valid_type.into_content(txn);
-            let wrapper: Option<Self> = py_any.map(|py_type| PyObjectWrapper(py_type.into()));
+            let wrapper: Option<Self> =
+                py_any.map(|py_type| PyObjectWrapper::new(py_type.into(), self.0.doc.clone()));
             (item_content, wrapper)
         })
     }
 
-    fn integrate(self, txn: &mut Transaction, inner_ref: BranchPtr) {
+    fn integrate(self, txn: &mut TransactionMut, inner_ref: BranchPtr) {
         Python::with_gil(|py| {
             let valid_type: CompatiblePyType = self.0.extract(py).unwrap_or_else(|err| {
                 err.restore(py);
                 CompatiblePyType::None
             });
-            valid_type.integrate(txn, inner_ref);
+
+            match valid_type {
+                CompatiblePyType::YType(y_type) if y_type.is_prelim() => {
+                    match y_type {
+                        YPyType::Text(v) => {
+                            let text = TextRef::from(inner_ref);
+                            let mut y_text = v.borrow_mut();
+
+                            if let SharedType::Prelim(v) = y_text.0.to_owned() {
+                                text.push(txn, v.as_str());
+                            }
+                            y_text.0 = SharedType::Integrated(TypeWithDoc::new(text.clone(), self.0.doc.clone()));
+                        }
+                        YPyType::Array(v) => {
+                            let array = ArrayRef::from(inner_ref);
+                            let mut y_array = v.borrow_mut();
+                            if let SharedType::Prelim(items) = y_array.0.to_owned() {
+                                let len = array.len(txn);
+                                YArray::insert_multiple_at(&array, txn, self.0.doc.clone(), len, items).unwrap();
+                            }
+                            y_array.0 = SharedType::Integrated(TypeWithDoc::new(array.clone(), self.0.doc.clone()));
+                        }
+                        YPyType::Map(v) => {
+                            let map = MapRef::from(inner_ref);
+                            let mut y_map = v.borrow_mut();
+                            Python::with_gil(|py| {
+                                if let SharedType::Prelim(ref entries) = y_map.0 {
+                                    for (k, v) in entries {
+                                        let x: CompatiblePyType = v.extract(py).unwrap_or_else(|err| {
+                                            err.restore(py);
+                                            CompatiblePyType::None
+                                        });
+                                        if let CompatiblePyType::YType(y_type) = x {
+                                            let wrapped = PyObjectWrapper::new(y_type.into(), self.0.doc.clone());
+                                            map.insert(txn, k.to_owned(), wrapped);
+                                        } else {
+                                            map.insert(txn, k.to_owned(), x);
+                                        }
+                                    }
+                                }
+                            });
+                            y_map.0 = SharedType::Integrated(TypeWithDoc::new(map.clone(), self.0.doc.clone()));
+                        }
+                        YPyType::XmlElement(_) | YPyType::XmlText(_) | YPyType::XmlFragment(_) => unreachable!("As defined in Shared::is_prelim(), neither XML type can ever exist outside a YDoc"),
+                    }
+                }
+                _ => ()
+            }
         })
     }
 }
@@ -237,10 +266,12 @@ impl<'a> From<CompatiblePyType<'a>> for PyObject {
 }
 
 impl<'a> Prelim for CompatiblePyType<'a> {
-    fn into_content(self, _txn: &mut Transaction) -> (ItemContent, Option<Self>) {
+    type Return = Unused;
+
+    fn into_content(self, _txn: &mut TransactionMut) -> (ItemContent, Option<Self>) {
         let content = match self.clone() {
             CompatiblePyType::YType(y_type) if y_type.is_prelim() => {
-                let branch = Branch::new(y_type.type_ref(), None);
+                let branch = Branch::new(y_type.type_ref());
                 Ok(ItemContent::Type(branch))
             }
             py_value => Any::try_from(py_value).map(|any| ItemContent::Any(vec![any])),
@@ -260,46 +291,12 @@ impl<'a> Prelim for CompatiblePyType<'a> {
         (content, this)
     }
 
-    fn integrate(self, txn: &mut Transaction, inner_ref: BranchPtr) {
+    fn integrate(self, _txn: &mut TransactionMut, _inner_ref: BranchPtr) {
         match self {
             CompatiblePyType::YType(y_type) if y_type.is_prelim() => {
                 match y_type {
-                    YPyType::Text(v) => {
-                        let text = Text::from(inner_ref);
-                        let mut y_text = v.borrow_mut();
-
-                        if let SharedType::Prelim(v) = y_text.0.to_owned() {
-                            text.push(txn, v.as_str());
-                        }
-                        y_text.0 = SharedType::Integrated(text.clone());
-                    }
-                    YPyType::Array(v) => {
-                        let array = Array::from(inner_ref);
-                        let mut y_array = v.borrow_mut();
-                        if let SharedType::Prelim(items) = y_array.0.to_owned() {
-                            let len = array.len();
-                            YArray::insert_multiple_at(&array, txn, len, items).unwrap();
-                        }
-                        y_array.0 = SharedType::Integrated(array.clone());
-                    }
-                    YPyType::Map(v) => {
-                        let map = Map::from(inner_ref);
-                        let mut y_map = v.borrow_mut();
-                        Python::with_gil(|py| {
-                            if let SharedType::Prelim(ref entries) = y_map.0 {
-                                for (k, v) in entries {
-                                    let x: CompatiblePyType = v.extract(py).unwrap_or_else(|err| {
-                                        err.restore(py);
-                                        CompatiblePyType::None
-                                    });
-                                    map.insert(txn, k.to_owned(), x);
-                                }
-                            }
-                        });
-                        
-                        y_map.0 = SharedType::Integrated(map.clone());
-                    }
-                    YPyType::XmlElement(_) | YPyType::XmlText(_) => unreachable!("As defined in Shared::is_prelim(), neither XML type can ever exist outside a YDoc"),
+                    YPyType::Text(_) | YPyType::Array(_) | YPyType::Map(_) => panic!("Trying to integrate ypytype without PyObjectWrapper!"),
+                    YPyType::XmlElement(_) | YPyType::XmlText(_) | YPyType::XmlFragment(_) => unreachable!("As defined in Shared::is_prelim(), neither XML type can ever exist outside a YDoc"),
                 }
             }
             _ => ()
@@ -364,6 +361,7 @@ impl<'a> From<YPyType<'a>> for PyObject {
             YPyType::Map(map) => map.into(),
             YPyType::XmlElement(xml) => xml.into(),
             YPyType::XmlText(xml) => xml.into(),
+            YPyType::XmlFragment(xml) => xml.into(),
         }
     }
 }
@@ -379,9 +377,9 @@ impl<'a> TryFrom<&'a PyAny> for YPyType<'a> {
         } else if let Ok(map) = value.extract() {
             Ok(YPyType::Map(map))
         } else {
-            Err(pyo3::exceptions::PyValueError::new_err(
-                format!("Could not extract a Ypy type from this object: {value}")
-            ))
+            Err(pyo3::exceptions::PyValueError::new_err(format!(
+                "Could not extract a Ypy type from this object: {value}"
+            )))
         }
     }
 }
@@ -418,27 +416,40 @@ impl ToPython for Any {
     }
 }
 
-impl ToPython for Value {
-    fn into_py(self, py: Python) -> pyo3::PyObject {
+impl WithDocToPython for Value {
+    fn with_doc_into_py(self, doc: Rc<RefCell<YDocInner>>, py: Python) -> PyObject {
         match self {
             Value::Any(v) => v.into_py(py),
-            Value::YText(v) => YText::from(v).into_py(py),
-            Value::YArray(v) => YArray::from(v).into_py(py),
-            Value::YMap(v) => YMap::from(v).into_py(py),
-            Value::YXmlElement(v) => YXmlElement(v).into_py(py),
-            Value::YXmlText(v) => YXmlText(v).into_py(py),
+            Value::YText(v) => v.with_doc(doc).into_py(py),
+            Value::YArray(v) => v.with_doc(doc).into_py(py),
+            Value::YMap(v) => v.with_doc(doc).into_py(py),
+            Value::YXmlElement(v) => v.with_doc(doc).into_py(py),
+            Value::YXmlText(v) => v.with_doc(doc).into_py(py),
+            Value::YXmlFragment(v) => v.with_doc(doc).into_py(py),
+            Value::YDoc(_) => py.None(),
         }
     }
 }
 
-pub(crate) fn events_into_py(txn: &Transaction, events: &Events) -> PyObject {
+pub(crate) fn events_into_py(
+    txn: &TransactionMut,
+    events: &Events,
+    doc: Rc<RefCell<YDocInner>>,
+) -> PyObject {
     Python::with_gil(|py| {
         let py_events = events.iter().map(|event| match event {
-            yrs::types::Event::Text(e_txt) => YTextEvent::new(e_txt, txn).into_py(py),
-            yrs::types::Event::Array(e_arr) => YArrayEvent::new(e_arr, txn).into_py(py),
-            yrs::types::Event::Map(e_map) => YMapEvent::new(e_map, txn).into_py(py),
-            yrs::types::Event::XmlElement(e_xml) => YXmlEvent::new(e_xml, txn).into_py(py),
-            yrs::types::Event::XmlText(e_xml) => YXmlTextEvent::new(e_xml, txn).into_py(py),
+            yrs::types::Event::Text(e_txt) => YTextEvent::new(e_txt, txn, doc.clone()).into_py(py),
+            yrs::types::Event::Array(e_arr) => {
+                YArrayEvent::new(e_arr, txn, doc.clone()).into_py(py)
+            }
+            yrs::types::Event::Map(e_map) => YMapEvent::new(e_map, txn, doc.clone()).into_py(py),
+            // TODO: check YXmlFragment Event
+            yrs::types::Event::XmlFragment(e_xml) => {
+                YXmlEvent::new(e_xml, txn, doc.clone()).into_py(py)
+            }
+            yrs::types::Event::XmlText(e_xml) => {
+                YXmlTextEvent::new(e_xml, txn, doc.clone()).into_py(py)
+            }
         });
         PyList::new(py, py_events).into()
     })

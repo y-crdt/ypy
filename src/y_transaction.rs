@@ -1,15 +1,18 @@
-use crate::{y_array::YArray, y_map::YMap, y_text::YText};
-use pyo3::exceptions::PyException;
+use pyo3::exceptions::{PyAssertionError, PyException};
 use pyo3::types::PyBytes;
 use pyo3::{create_exception, prelude::*};
+use std::cell::RefCell;
 use std::collections::HashMap;
+use std::mem::ManuallyDrop;
 use std::ops::{Deref, DerefMut};
+use std::rc::Rc;
 use yrs::updates::decoder::Decode;
 use yrs::updates::encoder::{Encode, Encoder};
 use yrs::{
     updates::{decoder::DecoderV1, encoder::EncoderV1},
-    StateVector, Transaction, Update,
+    StateVector, Update,
 };
+use yrs::{ReadTxn, TransactionMut};
 
 create_exception!(
     y_py,
@@ -35,30 +38,109 @@ create_exception!(
 ///     text.insert(txn, 0, 'hello world')
 /// ```
 #[pyclass(unsendable)]
-pub struct YTransaction {
-    pub inner: Transaction,
+pub struct YTransactionInner {
+    pub inner: ManuallyDrop<TransactionMut<'static>>,
     pub cached_before_state: Option<PyObject>,
+    pub committed: bool,
 }
 
-impl Deref for YTransaction {
-    type Target = Transaction;
+impl ReadTxn for YTransactionInner {
+    fn store(&self) -> &yrs::Store {
+        self.deref().store()
+    }
+}
+
+impl Deref for YTransactionInner {
+    type Target = TransactionMut<'static>;
 
     fn deref(&self) -> &Self::Target {
         &self.inner
     }
 }
 
-impl DerefMut for YTransaction {
+impl DerefMut for YTransactionInner {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.inner
     }
 }
 
-impl YTransaction {
-    pub fn new(txn: Transaction) -> Self {
-        YTransaction {
-            inner: txn,
+impl Drop for YTransactionInner {
+    fn drop(&mut self) {
+        if !self.committed {
+            self.commit();
+        }
+    }
+}
+
+impl YTransactionInner {
+    pub fn new(txn: TransactionMut<'static>) -> Self {
+        YTransactionInner {
+            inner: ManuallyDrop::new(txn),
             cached_before_state: None,
+            committed: false,
+        }
+    }
+}
+
+impl YTransactionInner {
+    pub fn before_state(&mut self) -> PyObject {
+        if self.cached_before_state.is_none() {
+            let before_state = Python::with_gil(|py| {
+                let txn = (*self).deref();
+                let state_map: HashMap<u64, u32> =
+                    txn.before_state().iter().map(|(x, y)| (*x, *y)).collect();
+                state_map.into_py(py)
+            });
+            self.cached_before_state = Some(before_state);
+        }
+        return self.cached_before_state.as_ref().unwrap().clone();
+    }
+
+    /// Triggers a post-update series of operations without `free`ing the transaction. This includes
+    /// compaction and optimization of internal representation of updates, triggering events etc.
+    /// Ypy transactions are auto-committed when they are `free`d.
+    pub fn commit(&mut self) {
+        if !self.committed {
+            self.deref_mut().commit();
+            self.committed = true;
+            unsafe { ManuallyDrop::drop(&mut self.inner) }
+        } else {
+            panic!("Transaction already committed!");
+        }
+    }
+}
+
+#[pyclass(unsendable)]
+pub struct YTransaction {
+    inner: Rc<RefCell<YTransactionInner>>,
+    committed: bool,
+}
+
+impl YTransaction {
+    pub fn new(txn: Rc<RefCell<YTransactionInner>>) -> Self {
+        YTransaction {
+            inner: txn.clone(),
+            committed: txn.borrow().committed,
+        }
+    }
+    pub fn get_inner(&self) -> Rc<RefCell<YTransactionInner>> {
+        self.inner.clone()
+    }
+
+    fn raise_alread_committed(&self) -> PyErr {
+        PyAssertionError::new_err("Transaction already committed!")
+    }
+
+    pub fn transact<F, R>(&self, f: F) -> PyResult<R>
+    where
+        F: FnOnce(&mut YTransactionInner) -> R,
+    {
+        let inner = self.get_inner();
+        let mut txn = inner.borrow_mut();
+        if txn.committed {
+            Err(self.raise_alread_committed())
+        } else {
+            Ok(f(&mut txn))
         }
     }
 }
@@ -67,55 +149,17 @@ impl YTransaction {
 impl YTransaction {
     #[getter]
     pub fn before_state(&mut self) -> PyObject {
-        if self.cached_before_state.is_none() {
-            let before_state = Python::with_gil(|py| {
-                let state_map: HashMap<u64, u32> =
-                    self.before_state.iter().map(|(x, y)| (*x, *y)).collect();
-                state_map.into_py(py)
-            });
-            self.cached_before_state = Some(before_state);
+        self.get_inner().borrow_mut().before_state()
+    }
+
+    pub fn commit(&mut self) -> PyResult<()> {
+        if !self.committed {
+            self.get_inner().borrow_mut().commit();
+            self.committed = true;
+            Ok(())
+        } else {
+            Err(self.raise_alread_committed())
         }
-        return self.cached_before_state.as_ref().unwrap().clone();
-    }
-
-    /// Returns a `YText` shared data type, that's accessible for subsequent accesses using given
-    /// `name`.
-    ///
-    /// If there was no instance with this name before, it will be created and then returned.
-    ///
-    /// If there was an instance with this name, but it was of different type, it will be projected
-    /// onto `YText` instance.
-    pub fn get_text(&mut self, name: &str) -> YText {
-        self.deref_mut().get_text(name).into()
-    }
-
-    /// Returns a `YArray` shared data type, that's accessible for subsequent accesses using given
-    /// `name`.
-    ///
-    /// If there was no instance with this name before, it will be created and then returned.
-    ///
-    /// If there was an instance with this name, but it was of different type, it will be projected
-    /// onto `YArray` instance.
-    pub fn get_array(&mut self, name: &str) -> YArray {
-        self.deref_mut().get_array(name).into()
-    }
-
-    /// Returns a `YMap` shared data type, that's accessible for subsequent accesses using given
-    /// `name`.
-    ///
-    /// If there was no instance with this name before, it will be created and then returned.
-    ///
-    /// If there was an instance with this name, but it was of different type, it will be projected
-    /// onto `YMap` instance.
-    pub fn get_map(&mut self, name: &str) -> YMap {
-        self.deref_mut().get_map(name).into()
-    }
-
-    /// Triggers a post-update series of operations without `free`ing the transaction. This includes
-    /// compaction and optimization of internal representation of updates, triggering events etc.
-    /// Ypy transactions are auto-committed when they are `free`d.
-    pub fn commit(&mut self) {
-        self.deref_mut().commit()
     }
 
     /// Encodes a state vector of a given transaction document into its binary representation using
@@ -145,8 +189,9 @@ impl YTransaction {
     ///     del remote_txn
     ///
     /// ```
+
     pub fn state_vector_v1(&self) -> PyObject {
-        let sv = self.state_vector();
+        let sv = self.get_inner().borrow().state_vector();
         let payload = sv.encode_v1();
         Python::with_gil(|py| PyBytes::new(py, &payload).into())
     }
@@ -185,7 +230,7 @@ impl YTransaction {
         } else {
             StateVector::default()
         };
-        self.encode_diff(&sv, &mut encoder);
+        self.get_inner().borrow_mut().encode_diff(&sv, &mut encoder);
         let bytes: PyObject = Python::with_gil(|py| PyBytes::new(py, &encoder.to_vec()).into());
         Ok(bytes)
     }
@@ -219,7 +264,7 @@ impl YTransaction {
         let mut decoder = DecoderV1::from(diff.as_slice());
         let update =
             Update::decode(&mut decoder).map_err(|e| EncodingException::new_err(e.to_string()))?;
-        self.apply_update(update);
+        self.get_inner().borrow_mut().apply_update(update);
         Ok(())
     }
 
@@ -259,7 +304,7 @@ impl YTransaction {
         _exception_value: Option<&'p PyAny>,
         _traceback: Option<&'p PyAny>,
     ) -> PyResult<bool> {
-        self.commit();
+        self.commit()?;
         Ok(exception_type.is_none())
     }
 }

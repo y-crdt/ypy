@@ -274,3 +274,11 @@ def test_borrow_issue():
 
     with doc.begin_transaction() as txn:
         wrapper.append(txn, inner)
+
+def test_integrate_nested_map():
+    d1 = Y.YDoc()
+    array = d1.get_array("test")
+    nested = Y.YMap({"a": Y.YArray(["A"])})
+
+    d1.transact(lambda txn: array.append(txn, nested))
+    assert array[0]["a"][0] == "A"
