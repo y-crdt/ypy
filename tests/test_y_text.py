@@ -1,11 +1,13 @@
+import json
+
 from test_helper import exchange_updates
 import y_py as Y
 from y_py import YText, YTextEvent
 
 
 def test_to_string():
-    expected = "Hello World!"
-    expected_json = '"Hello World!"'
+    expected = r'"Hello \n/ World!"'
+    expected_json = json.dumps(expected)
     d = Y.YDoc()
     prelim = YText(expected)
     integrated = d.get_text("test")
