@@ -605,7 +605,7 @@ class YArray:
             start: The index of the first element of the range (inclusive).
             end: The index of the last element of the range (inclusive).
             target: The new position of the element.
-        
+
         Example:
         ```
         import y_py as Y
@@ -614,7 +614,7 @@ class YArray:
 
         with doc.begin_transaction() as t:
             array.insert_range(t, 0, [1,2,3,4]);
-        
+
         // move elements 2 and 3 after the 4
         with doc.begin_transaction() as t:
             array.move_range_to(t, 1, 2, 4);
@@ -885,7 +885,7 @@ class YMapEvent:
     target: YMap
     """The element modified during this event."""
     keys: Dict[str, YMapEventKeyChange]
-    """A list of modifications to the YMap by key. 
+    """A list of modifications to the YMap by key.
     Includes the type of modification along with the before and after state."""
     def path(self) -> List[Union[int, str]]:
         """
