@@ -157,9 +157,8 @@ impl YDoc {
             let offset = match clean_offset.as_str() {
                 "utf8" => Ok(OffsetKind::Bytes),
                 "utf16" => Ok(OffsetKind::Utf16),
-                "utf32" => Ok(OffsetKind::Utf32),
                 _ => Err(pyo3::exceptions::PyValueError::new_err(format!(
-                    "'{}' is not a valid offset kind (utf8, utf16, or utf32).",
+                    "'{}' is not a valid offset kind (utf8, utf16).",
                     clean_offset
                 ))),
             }?;

@@ -5,7 +5,7 @@ use crate::shared_types::{
 use crate::type_conversions::{events_into_py, ToPython, WithDocToPython};
 use crate::y_doc::{WithDoc, YDocInner};
 use crate::y_transaction::{YTransaction, YTransactionInner};
-use lib0::any::Any;
+use yrs::Any;
 use pyo3::prelude::*;
 use pyo3::types::PyList;
 use std::cell::RefCell;
