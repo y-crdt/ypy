@@ -17,7 +17,7 @@ use yrs::updates::encoder::Encode;
 use yrs::Doc;
 use yrs::OffsetKind;
 use yrs::Options;
-use yrs::SubscriptionId;
+use yrs::Subscription;
 use yrs::Transact;
 use yrs::TransactionCleanupEvent;
 use yrs::TransactionMut;
@@ -319,7 +319,7 @@ impl YDoc {
     }
 
     /// Subscribes a callback to a `YDoc` lifecycle event.
-    pub fn observe_after_transaction(&mut self, callback: PyObject) -> SubscriptionId {
+    pub fn observe_after_transaction(&mut self, callback: PyObject) -> Subscription {
         self.0
             .borrow()
             .doc

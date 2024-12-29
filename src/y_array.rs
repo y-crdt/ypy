@@ -21,7 +21,7 @@ use pyo3::prelude::*;
 use pyo3::types::{PyList, PySlice, PySliceIndices};
 use yrs::types::array::ArrayEvent;
 use yrs::types::{DeepObservable, ToJson};
-use yrs::{Array, ArrayRef, Assoc, Observable, SubscriptionId, TransactionMut};
+use yrs::{Array, ArrayRef, Assoc, Observable, Subscription, TransactionMut};
 
 /// A collection used to store data in an indexed sequence structure. This type is internally
 /// implemented as a double linked list, which may squash values inserted directly one after another
@@ -365,12 +365,12 @@ impl YArray {
 
     /// Subscribes to all operations happening over this instance of `YArray`. All changes are
     /// batched and eventually triggered during transaction commit phase.
-    /// Returns a `SubscriptionId` which can be used to cancel the callback with `unobserve`.
+    /// Returns a `Subscription` which can be used to cancel the callback with `unobserve`.
     pub fn observe(&mut self, f: PyObject) -> PyResult<ShallowSubscription> {
         match &mut self.0 {
             SharedType::Integrated(array) => {
                 let doc = array.doc.clone();
-                let sub: SubscriptionId = array
+                let sub: Subscription = array
                     .inner
                     .observe(move |txn, e| {
                         Python::with_gil(|py| {
@@ -391,7 +391,7 @@ impl YArray {
         match &mut self.0 {
             SharedType::Integrated(array) => {
                 let doc = array.doc.clone();
-                let sub: SubscriptionId = array
+                let sub: Subscription = array
                     .inner
                     .observe_deep(move |txn, events| {
                         Python::with_gil(|py| {
@@ -409,14 +409,15 @@ impl YArray {
     }
 
     /// Cancels the callback of an observer using the Subscription ID returned from the `observe` method.
-    pub fn unobserve(&mut self, subscription_id: SubId) -> PyResult<()> {
+    pub fn unobserve(&mut self, subscription_id: SubId) -> PyResult<bool> {
         match &mut self.0 {
             SharedType::Integrated(arr) => {
-                match subscription_id {
-                    SubId::Shallow(ShallowSubscription(id)) => arr.unobserve(id),
-                    SubId::Deep(DeepSubscription(id)) => arr.unobserve_deep(id),
-                }
-                Ok(())
+                Ok(
+                    match subscription_id {
+                        SubId::Shallow(ShallowSubscription(id)) => arr.unobserve(id),
+                        SubId::Deep(DeepSubscription(id)) => arr.unobserve_deep(id),
+                    }
+                )
             }
             SharedType::Prelim(_) => Err(PreliminaryObservationException::default_message()),
         }

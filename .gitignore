@@ -10,3 +10,4 @@ docs/_*
 .DS_Store
 *.pyc
 dist
+.idea

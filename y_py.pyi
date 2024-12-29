@@ -489,7 +489,7 @@ class YText:
         """
     def unobserve(self, subscription_id: SubscriptionId):
         """
-        Cancels the observer callback associated with the `subscripton_id`.
+        Cancels the observer callback associated with the `subscription_id`.
 
         Args:
             subscription_id: reference to a subscription provided by the `observe` method.
@@ -661,7 +661,7 @@ class YArray:
         """
     def unobserve(self, subscription_id: SubscriptionId):
         """
-        Cancels the observer callback associated with the `subscripton_id`.
+        Cancels the observer callback associated with the `subscription_id`.
 
         Args:
             subscription_id: reference to a subscription provided by the `observe` method.
@@ -838,7 +838,7 @@ class YMap:
         """
     def unobserve(self, subscription_id: SubscriptionId):
         """
-        Cancels the observer callback associated with the `subscripton_id`.
+        Cancels the observer callback associated with the `subscription_id`.
 
         Args:
             subscription_id: reference to a subscription provided by the `observe` method.
@@ -1023,7 +1023,7 @@ class YXmlElement:
         """
     def unobserve(self, subscription_id: SubscriptionId):
         """
-        Cancels the observer callback associated with the `subscripton_id`.
+        Cancels the observer callback associated with the `subscription_id`.
 
         Args:
             subscription_id: reference to a subscription provided by the `observe` method.
@@ -1108,7 +1108,7 @@ class YXmlFragment:
         """
     def unobserve(self, subscription_id: SubscriptionId):
         """
-        Cancels the observer callback associated with the `subscripton_id`.
+        Cancels the observer callback associated with the `subscription_id`.
 
         Args:
             subscription_id: reference to a subscription provided by the `observe` method.
@@ -1191,7 +1191,7 @@ class YXmlText:
         """
     def unobserve(self, subscription_id: SubscriptionId):
         """
-        Cancels the observer callback associated with the `subscripton_id`.
+        Cancels the observer callback associated with the `subscription_id`.
 
         Args:
             subscription_id: reference to a subscription provided by the `observe` method.

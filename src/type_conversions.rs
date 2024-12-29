@@ -13,13 +13,14 @@ use std::ops::Deref;
 use std::rc::Rc;
 use yrs::block::Unused;
 use yrs::block::{ItemContent, Prelim};
+use yrs::branch::{Branch, BranchPtr};
 use yrs::types::Events;
-use yrs::types::{Attrs, Branch, BranchPtr, Change, Delta, Value};
+use yrs::types::{Attrs, Change, Delta};
 use yrs::ArrayRef;
 use yrs::MapRef;
 use yrs::TextRef;
 use yrs::TransactionMut;
-use yrs::{Array, Map, Text};
+use yrs::{Array, Map, Out, Text};
 
 use crate::shared_types::CompatiblePyType;
 use crate::shared_types::TypeWithDoc;
@@ -131,7 +132,7 @@ impl WithDocToPython for &Attrs {
         let o = pytypes::PyDict::new(py);
         for (key, value) in self.iter() {
             let key = key.as_ref();
-            let value = Value::Any(value.clone()).with_doc_into_py(doc.clone(), py);
+            let value = Out::Any(value.clone()).with_doc_into_py(doc.clone(), py);
             o.set_item(key, value).unwrap();
         }
         o.into()
@@ -416,17 +417,17 @@ impl ToPython for Any {
     }
 }
 
-impl WithDocToPython for Value {
+impl WithDocToPython for Out {
     fn with_doc_into_py(self, doc: Rc<RefCell<YDocInner>>, py: Python) -> PyObject {
         match self {
-            Value::Any(v) => v.into_py(py),
-            Value::YText(v) => v.with_doc(doc).into_py(py),
-            Value::YArray(v) => v.with_doc(doc).into_py(py),
-            Value::YMap(v) => v.with_doc(doc).into_py(py),
-            Value::YXmlElement(v) => v.with_doc(doc).into_py(py),
-            Value::YXmlText(v) => v.with_doc(doc).into_py(py),
-            Value::YXmlFragment(v) => v.with_doc(doc).into_py(py),
-            Value::YDoc(_) => py.None(),
+            Out::Any(v) => v.into_py(py),
+            Out::YText(v) => v.with_doc(doc).into_py(py),
+            Out::YArray(v) => v.with_doc(doc).into_py(py),
+            Out::YMap(v) => v.with_doc(doc).into_py(py),
+            Out::YXmlElement(v) => v.with_doc(doc).into_py(py),
+            Out::YXmlText(v) => v.with_doc(doc).into_py(py),
+            Out::YXmlFragment(v) => v.with_doc(doc).into_py(py),
+            _ => py.None(),
         }
     }
 }

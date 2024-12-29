@@ -280,15 +280,16 @@ impl YText {
             SharedType::Prelim(_) => Err(PreliminaryObservationException::default_message()),
         }
     }
-    /// Cancels the observer callback associated with the `subscripton_id`.
-    pub fn unobserve(&mut self, subscription_id: SubId) -> PyResult<()> {
+    /// Cancels the observer callback associated with the `subscription_id`.
+    pub fn unobserve(&mut self, subscription_id: SubId) -> PyResult<bool> {
         match &mut self.0 {
             SharedType::Integrated(text) => {
-                match subscription_id {
-                    SubId::Shallow(ShallowSubscription(id)) => text.unobserve(id),
-                    SubId::Deep(DeepSubscription(id)) => text.unobserve_deep(id),
-                }
-                Ok(())
+                Ok(
+                    match subscription_id {
+                        SubId::Shallow(ShallowSubscription(id)) => text.unobserve(id),
+                        SubId::Deep(DeepSubscription(id)) => text.unobserve_deep(id),
+                    }
+                )
             }
             SharedType::Prelim(_) => Err(PreliminaryObservationException::default_message()),
         }
