@@ -8,8 +8,8 @@ use std::ops::Deref;
 use std::rc::Rc;
 use yrs::types::xml::{TreeWalker, Xml, XmlEvent, XmlTextEvent};
 use yrs::types::{DeepObservable, EntryChange, Path, PathSegment};
-use yrs::{uuid_v4, Origin, XmlFragmentRef};
 use yrs::XmlTextRef;
+use yrs::{uuid_v4, Origin, XmlFragmentRef};
 use yrs::{GetString, XmlElementPrelim, XmlElementRef, XmlTextPrelim};
 use yrs::{Observable, Text, TransactionMut, XmlFragment, XmlOut};
 
@@ -223,17 +223,14 @@ impl YXmlElement {
     pub fn observe(&mut self, f: PyObject) -> PyOrigin {
         let doc = self.0.doc.clone();
         let origin = Origin::from(uuid_v4().to_string());
-        self.0.observe_with(
-            origin.clone(),
-            move |txn, e| {
-                Python::with_gil(|py| {
-                    let event = YXmlEvent::new(e, txn, doc.clone());
-                    if let Err(err) = f.call1(py, (event,)) {
-                        err.restore(py)
-                    }
-                })
-            }
-        );
+        self.0.observe_with(origin.clone(), move |txn, e| {
+            Python::with_gil(|py| {
+                let event = YXmlEvent::new(e, txn, doc.clone());
+                if let Err(err) = f.call1(py, (event,)) {
+                    err.restore(py)
+                }
+            })
+        });
         PyOrigin(origin)
     }
 
@@ -243,17 +240,16 @@ impl YXmlElement {
     pub fn observe_deep(&mut self, f: PyObject) -> PyOrigin {
         let doc = self.0.doc.clone();
         let origin = Origin::from(uuid_v4().to_string());
-        self.0.inner.observe_deep_with(
-            origin.clone(),
-            move |txn, events| {
+        self.0
+            .inner
+            .observe_deep_with(origin.clone(), move |txn, events| {
                 Python::with_gil(|py| {
                     let events = events_into_py(txn, events, doc.clone());
                     if let Err(err) = f.call1(py, (events,)) {
                         err.restore(py)
                     }
                 })
-            }
-        );
+            });
         PyOrigin(origin)
     }
 
@@ -427,17 +423,14 @@ impl YXmlText {
     pub fn observe(&mut self, f: PyObject) -> PyOrigin {
         let doc = self.0.doc.clone();
         let origin = Origin::from(uuid_v4().to_string());
-        self.0.observe_with(
-            origin.clone(),
-            move |txn, e| {
-                Python::with_gil(|py| {
-                    let e = YXmlTextEvent::new(e, txn, doc.clone());
-                    if let Err(err) = f.call1(py, (e,)) {
-                        err.restore(py)
-                    }
-                })
-            }
-        );
+        self.0.observe_with(origin.clone(), move |txn, e| {
+            Python::with_gil(|py| {
+                let e = YXmlTextEvent::new(e, txn, doc.clone());
+                if let Err(err) = f.call1(py, (e,)) {
+                    err.restore(py)
+                }
+            })
+        });
         PyOrigin(origin)
     }
 
@@ -447,17 +440,15 @@ impl YXmlText {
     pub fn observe_deep(&mut self, f: PyObject) -> PyOrigin {
         let doc = self.0.doc.clone();
         let origin = Origin::from(uuid_v4().to_string());
-        self.0.observe_deep_with(
-            origin.clone(),
-            move |txn, events| {
+        self.0
+            .observe_deep_with(origin.clone(), move |txn, events| {
                 Python::with_gil(|py| {
                     let e = events_into_py(txn, events, doc.clone());
                     if let Err(err) = f.call1(py, (e,)) {
                         err.restore(py)
                     }
                 })
-            }
-        );
+            });
         PyOrigin(origin)
     }
 
@@ -594,17 +585,14 @@ impl YXmlFragment {
     pub fn observe(&mut self, f: PyObject) -> PyOrigin {
         let doc = self.0.doc.clone();
         let origin = Origin::from(uuid_v4().to_string());
-        self.0.observe_with(
-            origin.clone(),
-            move |txn, e| {
-                Python::with_gil(|py| {
-                    let event = YXmlEvent::new(e, txn, doc.clone());
-                    if let Err(err) = f.call1(py, (event,)) {
-                        err.restore(py)
-                    }
-                })
-            }
-        );
+        self.0.observe_with(origin.clone(), move |txn, e| {
+            Python::with_gil(|py| {
+                let event = YXmlEvent::new(e, txn, doc.clone());
+                if let Err(err) = f.call1(py, (event,)) {
+                    err.restore(py)
+                }
+            })
+        });
         PyOrigin(origin)
     }
 
@@ -614,17 +602,16 @@ impl YXmlFragment {
     pub fn observe_deep(&mut self, f: PyObject) -> PyOrigin {
         let doc = self.0.doc.clone();
         let origin = Origin::from(uuid_v4().to_string());
-        self.0.inner.observe_deep_with(
-            origin.clone(),
-            move |txn, events| {
+        self.0
+            .inner
+            .observe_deep_with(origin.clone(), move |txn, events| {
                 Python::with_gil(|py| {
                     let events = events_into_py(txn, events, doc.clone());
                     if let Err(err) = f.call1(py, (events,)) {
                         err.restore(py)
                     }
                 })
-            }
-        );
+            });
         PyOrigin(origin)
     }
 

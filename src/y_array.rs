@@ -1,13 +1,15 @@
+use crate::json_builder::JsonBuilder;
+use crate::shared_types::{
+    CompatiblePyType, DefaultPyErr, PreliminaryObservationException, PyOrigin, TypeWithDoc,
+};
+use crate::type_conversions::{events_into_py, WithDocToPython};
+use crate::y_doc::{WithDoc, YDocInner};
+use crate::y_transaction::{YTransaction, YTransactionInner};
 use std::cell::RefCell;
 use std::clone::Clone;
 use std::convert::{TryFrom, TryInto};
 use std::rc::Rc;
 use std::string::ToString;
-use crate::json_builder::JsonBuilder;
-use crate::shared_types::{CompatiblePyType, DefaultPyErr, PreliminaryObservationException, PyOrigin, TypeWithDoc};
-use crate::type_conversions::{events_into_py, WithDocToPython};
-use crate::y_doc::{WithDoc, YDocInner};
-use crate::y_transaction::{YTransaction, YTransactionInner};
 
 use super::shared_types::SharedType;
 use crate::type_conversions::ToPython;
@@ -368,17 +370,14 @@ impl YArray {
             SharedType::Integrated(array) => {
                 let doc = array.doc.clone();
                 let origin = Origin::from(uuid_v4().to_string());
-                array.inner.observe_with(
-                    origin.clone(),
-                    move |txn, e| {
-                        Python::with_gil(|py| {
-                            let event = YArrayEvent::new(e, txn, doc.clone());
-                            if let Err(err) = f.call1(py, (event,)) {
-                                err.restore(py)
-                            }
-                        })
-                    }
-                );
+                array.inner.observe_with(origin.clone(), move |txn, e| {
+                    Python::with_gil(|py| {
+                        let event = YArrayEvent::new(e, txn, doc.clone());
+                        if let Err(err) = f.call1(py, (event,)) {
+                            err.restore(py)
+                        }
+                    })
+                });
                 Ok(PyOrigin(origin))
             }
             SharedType::Prelim(_) => Err(PreliminaryObservationException::default_message()),
@@ -390,17 +389,16 @@ impl YArray {
             SharedType::Integrated(array) => {
                 let doc = array.doc.clone();
                 let origin = Origin::from(uuid_v4().to_string());
-                array.inner.observe_deep_with(
-                    origin.clone(),
-                    move |txn, events| {
+                array
+                    .inner
+                    .observe_deep_with(origin.clone(), move |txn, events| {
                         Python::with_gil(|py| {
                             let events = events_into_py(txn, events, doc.clone());
                             if let Err(err) = f.call1(py, (events,)) {
                                 err.restore(py)
                             }
                         })
-                    }
-                );
+                    });
                 Ok(PyOrigin(origin))
             }
             SharedType::Prelim(_) => Err(PreliminaryObservationException::default_message()),

@@ -13,7 +13,9 @@ use yrs::types::{DeepObservable, ToJson};
 use yrs::{uuid_v4, Map, MapRef, Observable, Origin, TransactionMut};
 
 use crate::json_builder::JsonBuilder;
-use crate::shared_types::{DefaultPyErr, PreliminaryObservationException, PyOrigin, SharedType, TypeWithDoc};
+use crate::shared_types::{
+    DefaultPyErr, PreliminaryObservationException, PyOrigin, SharedType, TypeWithDoc,
+};
 use crate::type_conversions::{events_into_py, PyObjectWrapper, ToPython, WithDocToPython};
 use crate::y_doc::{WithDoc, YDocInner};
 use crate::y_transaction::{YTransaction, YTransactionInner};
@@ -264,17 +266,15 @@ impl YMap {
             SharedType::Integrated(v) => {
                 let doc = v.doc.clone();
                 let origin = Origin::from(uuid_v4().to_string());
-                v.inner.observe_with(
-                    origin.clone(),
-                    move |txn: &TransactionMut, e| {
+                v.inner
+                    .observe_with(origin.clone(), move |txn: &TransactionMut, e| {
                         Python::with_gil(|py| {
                             let e = YMapEvent::new(e, txn, doc.clone());
                             if let Err(err) = f.call1(py, (e,)) {
                                 err.restore(py)
                             }
                         })
-                    }
-                );
+                    });
                 Ok(PyOrigin(origin))
             }
             SharedType::Prelim(_) => Err(PreliminaryObservationException::default_message()),
@@ -286,17 +286,15 @@ impl YMap {
             SharedType::Integrated(map) => {
                 let doc = map.doc.clone();
                 let origin = Origin::from(uuid_v4().to_string());
-                map.inner.observe_deep_with(
-                    origin.clone(),
-                    move |txn, events| {
+                map.inner
+                    .observe_deep_with(origin.clone(), move |txn, events| {
                         Python::with_gil(|py| {
                             let events = events_into_py(txn, events, doc.clone());
                             if let Err(err) = f.call1(py, (events,)) {
                                 err.restore(py)
                             }
                         })
-                    }
-                );
+                    });
                 Ok(PyOrigin(origin))
             }
             SharedType::Prelim(_) => Err(PreliminaryObservationException::default_message()),

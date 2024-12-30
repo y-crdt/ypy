@@ -266,7 +266,7 @@ impl YTransaction {
             Update::decode(&mut decoder).map_err(|e| EncodingException::new_err(e.to_string()))?;
         match self.get_inner().borrow_mut().apply_update(update) {
             Ok(_) => Ok(()),
-            Err(e) => Err(PyException::new_err(format!("{:?}", e)))
+            Err(e) => Err(PyException::new_err(format!("{:?}", e))),
         }
     }
 

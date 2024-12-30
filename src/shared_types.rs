@@ -15,8 +15,8 @@ use std::{
     ops::{Deref, DerefMut},
     rc::Rc,
 };
-use yrs::Origin;
 use yrs::types::TypeRef;
+use yrs::Origin;
 
 // Common errors
 create_exception!(y_py, PreliminaryObservationException, PyException, "Occurs when an observer is attached to a Y type that is not integrated into a YDoc. Y types can only be observed once they have been added to a YDoc.");
