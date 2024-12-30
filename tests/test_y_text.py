@@ -221,7 +221,7 @@ def test_deep_observe():
 
     # verify that the subscription drops
     events = None
-    text.unobserve(sub)
+    text.unobserve_deep(sub)
     with d.begin_transaction() as txn:
         text.extend(txn, " should not trigger")
 

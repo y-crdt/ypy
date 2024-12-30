@@ -260,7 +260,7 @@ def test_deep_observe():
 
     events = None
 
-    container.unobserve(sub)
+    container.unobserve_deep(sub)
     with doc.begin_transaction() as txn:
         container["inner"].set(txn, "don't show up", 1)
 

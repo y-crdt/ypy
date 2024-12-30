@@ -255,15 +255,15 @@ def test_deep_observe():
     with ydoc.begin_transaction() as txn:
         container[0].append(txn, 3)
 
-    assert events != None
+    assert events is not None
 
     # Ensure that observer unsubscribes
     events = None
-    container.unobserve(sub)
+    container.unobserve_deep(sub)
     with ydoc.begin_transaction() as txn:
         container[0].append(txn, 4)
 
-    assert events == None
+    assert events is None
 
 def test_move_to():
     """
