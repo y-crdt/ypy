@@ -4,8 +4,8 @@ build-backend = "maturin"
 
 [project]
 name = "y-py"
-version = "0.7.0-alpha.1"
 description = "Python bindings for the Y-CRDT built from yrs (Rust)"
+dynamic = ["version"]
 license = { file = "LICENSE" }
 authors = [
     { name = "John Waidhofer", email = "waidhoferj@gmail.com" },
