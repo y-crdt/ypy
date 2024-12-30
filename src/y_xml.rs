@@ -1,4 +1,4 @@
-use crate::shared_types::TypeWithDoc;
+use crate::shared_types::{PyOrigin, TypeWithDoc};
 use crate::y_doc::{WithDoc, YDocInner};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
@@ -8,10 +8,10 @@ use std::ops::Deref;
 use std::rc::Rc;
 use yrs::types::xml::{TreeWalker, Xml, XmlEvent, XmlTextEvent};
 use yrs::types::{DeepObservable, EntryChange, Path, PathSegment};
-use yrs::XmlFragmentRef;
+use yrs::{uuid_v4, Origin, XmlFragmentRef};
 use yrs::XmlTextRef;
 use yrs::{GetString, XmlElementPrelim, XmlElementRef, XmlTextPrelim};
-use yrs::{Observable, Subscription, Text, TransactionMut, XmlFragment, XmlOut};
+use yrs::{Observable, Text, TransactionMut, XmlFragment, XmlOut};
 
 use crate::type_conversions::{events_into_py, ToPython, WithDocToPython};
 use crate::y_transaction::{YTransaction, YTransactionInner};
@@ -219,46 +219,52 @@ impl YXmlElement {
 
     /// Subscribes to all operations happening over this instance of `YXmlElement`. All changes are
     /// batched and eventually triggered during transaction commit phase.
-    /// Returns an `Subscription` which, can be used to unsubscribe the observer.
-    pub fn observe(&mut self, f: PyObject) -> Subscription {
+    /// Returns an `PyOrigin` which, can be used to unsubscribe the observer.
+    pub fn observe(&mut self, f: PyObject) -> PyOrigin {
         let doc = self.0.doc.clone();
-        let sub = self
-            .0
-            .observe(move |txn, e| {
+        let origin = Origin::from(uuid_v4().to_string());
+        self.0.observe_with(
+            origin.clone(),
+            move |txn, e| {
                 Python::with_gil(|py| {
                     let event = YXmlEvent::new(e, txn, doc.clone());
                     if let Err(err) = f.call1(py, (event,)) {
                         err.restore(py)
                     }
                 })
-            })
-            .into();
-        sub
+            }
+        );
+        PyOrigin(origin)
     }
 
     /// Subscribes to all operations happening over this instance of `YXmlElement` and all of its children.
     /// All changes are batched and eventually triggered during transaction commit phase.
-    /// Returns an `Subscription` which, can be used to unsubscribe the observer.
-    pub fn observe_deep(&mut self, f: PyObject) -> Subscription {
+    /// Returns an `PyOrigin` which, can be used to unsubscribe the observer.
+    pub fn observe_deep(&mut self, f: PyObject) -> PyOrigin {
         let doc = self.0.doc.clone();
-        let sub = self
-            .0
-            .inner
-            .observe_deep(move |txn, events| {
+        let origin = Origin::from(uuid_v4().to_string());
+        self.0.inner.observe_deep_with(
+            origin.clone(),
+            move |txn, events| {
                 Python::with_gil(|py| {
                     let events = events_into_py(txn, events, doc.clone());
                     if let Err(err) = f.call1(py, (events,)) {
                         err.restore(py)
                     }
                 })
-            })
-            .into();
-        sub
+            }
+        );
+        PyOrigin(origin)
     }
 
-    /// Cancels the observer callback associated with the `subscription_id`.
-    pub fn unobserve(&mut self, subscription: Subscription) -> bool {
-        self.0.unobserve(subscription)
+    /// Cancels the observer callback associated with the `origin` returned from the `observe` method.
+    pub fn unobserve(&mut self, origin: PyOrigin) -> bool {
+        self.0.unobserve(origin.0)
+    }
+
+    /// Cancels the observer callback associated with the `origin` returned from the `observe_deep` method.
+    pub fn unobserve_deep(&mut self, origin: PyOrigin) -> bool {
+        self.0.unobserve_deep(origin.0)
     }
 }
 
@@ -417,45 +423,52 @@ impl YXmlText {
 
     /// Subscribes to all operations happening over this instance of `YXmlText`. All changes are
     /// batched and eventually triggered during transaction commit phase.
-    /// Returns an `Subscription` which, which can be used to unsubscribe the callback function.
-    pub fn observe(&mut self, f: PyObject) -> Subscription {
+    /// Returns an `PyOrigin` which, which can be used to unsubscribe the callback function.
+    pub fn observe(&mut self, f: PyObject) -> PyOrigin {
         let doc = self.0.doc.clone();
-        let sub: Subscription = self
-            .0
-            .observe(move |txn, e| {
+        let origin = Origin::from(uuid_v4().to_string());
+        self.0.observe_with(
+            origin.clone(),
+            move |txn, e| {
                 Python::with_gil(|py| {
                     let e = YXmlTextEvent::new(e, txn, doc.clone());
                     if let Err(err) = f.call1(py, (e,)) {
                         err.restore(py)
                     }
                 })
-            })
-            .into();
-        sub
+            }
+        );
+        PyOrigin(origin)
     }
 
     /// Subscribes to all operations happening over this instance of `YXmlText` and its child elements. All changes are
     /// batched and eventually triggered during transaction commit phase.
-    /// Returns an `Subscription` which, which can be used to unsubscribe the callback function.
-    pub fn observe_deep(&mut self, f: PyObject) -> Subscription {
+    /// Returns an `Origin` which, which can be used to unsubscribe the callback function.
+    pub fn observe_deep(&mut self, f: PyObject) -> PyOrigin {
         let doc = self.0.doc.clone();
-        let sub: Subscription = self
-            .0
-            .observe_deep(move |txn, events| {
+        let origin = Origin::from(uuid_v4().to_string());
+        self.0.observe_deep_with(
+            origin.clone(),
+            move |txn, events| {
                 Python::with_gil(|py| {
                     let e = events_into_py(txn, events, doc.clone());
                     if let Err(err) = f.call1(py, (e,)) {
                         err.restore(py)
                     }
                 })
-            })
-            .into();
-        sub
+            }
+        );
+        PyOrigin(origin)
     }
 
-    /// Cancels the observer callback associated with the `subscription_id`.
-    pub fn unobserve(&mut self, subscription: Subscription) -> bool {
-        self.0.unobserve(subscription)
+    /// Cancels the observer callback associated with the `origin` returned from the `observe` method.
+    pub fn unobserve(&mut self, origin: PyOrigin) -> bool {
+        self.0.unobserve(origin.0)
+    }
+
+    /// Cancels the observer callback associated with the `origin` returned from the `observe_deep` method.
+    pub fn unobserve_deep(&mut self, origin: PyOrigin) -> bool {
+        self.0.unobserve_deep(origin.0)
     }
 }
 
@@ -577,46 +590,52 @@ impl YXmlFragment {
 
     /// Subscribes to all operations happening over this instance of `YXmlElement`. All changes are
     /// batched and eventually triggered during transaction commit phase.
-    /// Returns an `Subscription` which, can be used to unsubscribe the observer.
-    pub fn observe(&mut self, f: PyObject) -> Subscription {
+    /// Returns an `PyOrigin` which, can be used to unsubscribe the observer.
+    pub fn observe(&mut self, f: PyObject) -> PyOrigin {
         let doc = self.0.doc.clone();
-        let sub = self
-            .0
-            .observe(move |txn, e| {
+        let origin = Origin::from(uuid_v4().to_string());
+        self.0.observe_with(
+            origin.clone(),
+            move |txn, e| {
                 Python::with_gil(|py| {
                     let event = YXmlEvent::new(e, txn, doc.clone());
                     if let Err(err) = f.call1(py, (event,)) {
                         err.restore(py)
                     }
                 })
-            })
-            .into();
-        sub
+            }
+        );
+        PyOrigin(origin)
     }
 
     /// Subscribes to all operations happening over this instance of `YXmlElement` and all of its children.
     /// All changes are batched and eventually triggered during transaction commit phase.
-    /// Returns an `Subscription` which, can be used to unsubscribe the observer.
-    pub fn observe_deep(&mut self, f: PyObject) -> Subscription {
+    /// Returns an `PyOrigin` which, can be used to unsubscribe the observer.
+    pub fn observe_deep(&mut self, f: PyObject) -> PyOrigin {
         let doc = self.0.doc.clone();
-        let sub = self
-            .0
-            .inner
-            .observe_deep(move |txn, events| {
+        let origin = Origin::from(uuid_v4().to_string());
+        self.0.inner.observe_deep_with(
+            origin.clone(),
+            move |txn, events| {
                 Python::with_gil(|py| {
                     let events = events_into_py(txn, events, doc.clone());
                     if let Err(err) = f.call1(py, (events,)) {
                         err.restore(py)
                     }
                 })
-            })
-            .into();
-        sub
+            }
+        );
+        PyOrigin(origin)
     }
 
-    /// Cancels the observer callback associated with the `subscription_id`.
-    pub fn unobserve(&mut self, subscription: Subscription) -> bool {
-        self.0.unobserve(subscription)
+    /// Cancels the observer callback associated with the `origin` returned from the `observe` method.
+    pub fn unobserve(&mut self, origin: PyOrigin) -> bool {
+        self.0.unobserve(origin.0)
+    }
+
+    /// Cancels the observer callback associated with the `origin` returned from the `observe_deep` method.
+    pub fn unobserve_deep(&mut self, origin: PyOrigin) -> bool {
+        self.0.unobserve_deep(origin.0)
     }
 
     /// Retrieves a value stored at a given `index`. Returns `None` when provided index was out

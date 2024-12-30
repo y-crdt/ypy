@@ -12,13 +12,13 @@ use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 use pyo3::types::PyTuple;
 use yrs::updates::encoder::Encode;
-use yrs::Doc;
+use yrs::{uuid_v4, Doc, Origin};
 use yrs::OffsetKind;
 use yrs::Options;
-use yrs::Subscription;
 use yrs::Transact;
 use yrs::TransactionCleanupEvent;
 use yrs::TransactionMut;
+use crate::shared_types::PyOrigin;
 
 pub trait WithDoc<T> {
     fn with_doc(self, doc: Rc<RefCell<YDocInner>>) -> T;
@@ -282,20 +282,23 @@ impl YDoc {
     }
 
     /// Subscribes a callback to a `YDoc` lifecycle event.
-    pub fn observe_after_transaction(&mut self, callback: PyObject) -> Subscription {
+    pub fn observe_after_transaction(&mut self, callback: PyObject) -> PyOrigin {
+        let origin = Origin::from(uuid_v4().to_string());
         self.0
             .borrow()
             .doc
-            .observe_transaction_cleanup(move |txn, event| {
-                Python::with_gil(|py| {
-                    let event = AfterTransactionEvent::new(event, txn);
-                    if let Err(err) = callback.call1(py, (event,)) {
-                        err.restore(py)
-                    }
+            .observe_transaction_cleanup_with(
+                origin.clone(),
+                move |txn, event| {
+                    Python::with_gil(|py| {
+                        let event = AfterTransactionEvent::new(event, txn);
+                        if let Err(err) = callback.call1(py, (event,)) {
+                            err.restore(py)
+                        }
+                    })
                 })
-            })
-            .unwrap()
-            .into()
+            .unwrap();
+        PyOrigin(origin)
     }
 }
 

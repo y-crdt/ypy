@@ -264,8 +264,10 @@ impl YTransaction {
         let mut decoder = DecoderV1::from(diff.as_slice());
         let update =
             Update::decode(&mut decoder).map_err(|e| EncodingException::new_err(e.to_string()))?;
-        self.get_inner().borrow_mut().apply_update(update);
-        Ok(())
+        match self.get_inner().borrow_mut().apply_update(update) {
+            Ok(_) => Ok(()),
+            Err(e) => Err(PyException::new_err(format!("{:?}", e)))
+        }
     }
 
     /// Allows YTransaction to be used with a Python context block.

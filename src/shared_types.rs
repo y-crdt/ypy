@@ -15,6 +15,7 @@ use std::{
     ops::{Deref, DerefMut},
     rc::Rc,
 };
+use yrs::Origin;
 use yrs::types::TypeRef;
 
 // Common errors
@@ -42,6 +43,10 @@ impl DefaultPyErr for IntegratedOperationException {
         )
     }
 }
+
+#[pyclass]
+#[derive(Clone)]
+pub struct PyOrigin(pub Origin);
 
 #[derive(Clone)]
 pub enum CompatiblePyType<'a> {

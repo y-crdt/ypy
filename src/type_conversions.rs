@@ -338,7 +338,7 @@ impl<'a> TryFrom<CompatiblePyType<'a>> for Any {
                         Ok((key, value))
                     })
                     .collect();
-                result.map(|res| Any::Map(Box::new(res)))
+                result.map(|res| Any::Map(Box::new(res).into()))
             },
             CompatiblePyType::None => Ok(Any::Null),
             CompatiblePyType::YType(v) => Err(MultipleIntegrationError::new_err(format!(
