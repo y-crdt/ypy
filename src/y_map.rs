@@ -14,7 +14,7 @@ use yrs::{uuid_v4, Map, MapRef, Observable, Origin, TransactionMut};
 
 use crate::json_builder::JsonBuilder;
 use crate::shared_types::{
-    DefaultPyErr, PreliminaryObservationException, PyOrigin, SharedType, TypeWithDoc,
+    DefaultPyErr, ObservationId, PreliminaryObservationException, SharedType, TypeWithDoc,
 };
 use crate::type_conversions::{events_into_py, PyObjectWrapper, ToPython, WithDocToPython};
 use crate::y_doc::{WithDoc, YDocInner};
@@ -261,7 +261,7 @@ impl YMap {
         ValueView::new(self)
     }
 
-    pub fn observe(&mut self, f: PyObject) -> PyResult<PyOrigin> {
+    pub fn observe(&mut self, f: PyObject) -> PyResult<ObservationId> {
         match &mut self.0 {
             SharedType::Integrated(v) => {
                 let doc = v.doc.clone();
@@ -275,13 +275,13 @@ impl YMap {
                             }
                         })
                     });
-                Ok(PyOrigin(origin))
+                Ok(ObservationId(origin))
             }
             SharedType::Prelim(_) => Err(PreliminaryObservationException::default_message()),
         }
     }
 
-    pub fn observe_deep(&mut self, f: PyObject) -> PyResult<PyOrigin> {
+    pub fn observe_deep(&mut self, f: PyObject) -> PyResult<ObservationId> {
         match &mut self.0 {
             SharedType::Integrated(map) => {
                 let doc = map.doc.clone();
@@ -295,24 +295,24 @@ impl YMap {
                             }
                         })
                     });
-                Ok(PyOrigin(origin))
+                Ok(ObservationId(origin))
             }
             SharedType::Prelim(_) => Err(PreliminaryObservationException::default_message()),
         }
     }
 
-    /// Cancels the observer callback associated with the `sub_id` returned from the `observe` method.
-    pub fn unobserve(&mut self, origin: PyOrigin) -> PyResult<bool> {
+    /// Cancels the observer callback associated with the `observation_id` returned from the `observe` method.
+    pub fn unobserve(&mut self, observation_id: ObservationId) -> PyResult<bool> {
         match &mut self.0 {
-            SharedType::Integrated(map) => Ok(map.unobserve(Origin::from(origin.0))),
+            SharedType::Integrated(map) => Ok(map.unobserve(observation_id.0)),
             SharedType::Prelim(_) => Err(PreliminaryObservationException::default_message()),
         }
     }
 
-    /// Cancels the observer callback associated with the `sub_id` returned from the `observe_deep` method.
-    pub fn unobserve_deep(&mut self, origin: PyOrigin) -> PyResult<bool> {
+    /// Cancels the observer callback associated with the `observation_id` returned from the `observe_deep` method.
+    pub fn unobserve_deep(&mut self, observation_id: ObservationId) -> PyResult<bool> {
         match &mut self.0 {
-            SharedType::Integrated(map) => Ok(map.unobserve_deep(Origin::from(origin.0))),
+            SharedType::Integrated(map) => Ok(map.unobserve_deep(observation_id.0)),
             SharedType::Prelim(_) => Err(PreliminaryObservationException::default_message()),
         }
     }

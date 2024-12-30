@@ -100,7 +100,7 @@ def test_xml_text_observer():
         attributes = e.keys
         delta = e.delta
 
-    subscription_id = x.observe(callback)
+    observation_id = x.observe(callback)
 
     # set initial attributes
     with d1.begin_transaction() as txn:
@@ -162,7 +162,7 @@ def test_xml_text_observer():
     delta = None
 
     # free the observer and make sure that callback is no longer called
-    x.unobserve(subscription_id)
+    x.unobserve(observation_id)
     with d1.begin_transaction() as txn:
         x.insert(txn, 1, "fgh")
     assert target == None
@@ -188,7 +188,7 @@ def test_xml_element_observer():
         attributes = e.keys
         nodes = e.delta
 
-    subscription_id = x.observe(callback)
+    observation_id = x.observe(callback)
 
     # insert initial attributes
     with d1.begin_transaction() as txn:
@@ -256,7 +256,7 @@ def test_xml_element_observer():
     nodes = None
 
     # free the observer and make sure that callback is no longer called
-    x.unobserve(subscription_id)
+    x.unobserve(observation_id)
     with d1.begin_transaction() as txn:
         x.insert_xml_element(txn, 0, "head")
     assert target == None

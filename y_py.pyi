@@ -1,7 +1,7 @@
 from typing import (Any, Callable, Dict, Iterable, Iterator, List, Literal,
                     Optional, Tuple, TypedDict, Union)
 
-class Origin:
+class ObservationId:
     """
     Tracks an observer callback. Pass this to the `unobserve`|`unobserve_deep` method to cancel
     its associated callback created by corresponding `observe`|`observe_deep` method call.
@@ -108,7 +108,7 @@ class YDoc:
         """
     def observe_after_transaction(
         self, callback: Callable[[AfterTransactionEvent]]
-    ) -> Origin:
+    ) -> ObservationId:
         """
         Subscribe callback function to updates on the YDoc. The callback will receive encoded state updates and
         deletions when a document transaction is committed.
@@ -117,7 +117,7 @@ class YDoc:
             callback: A function that receives YDoc state information affected by the transaction.
 
         Returns:
-            A subscription identifier that can be used to cancel the callback.
+            A observation identifier that can be used to cancel the callback.
         """
 
 EncodedStateVector = bytes
@@ -447,16 +447,16 @@ class YText:
         Deletes a specified range of of characters, starting at a given `index`.
         Both `index` and `length` are counted in terms of a number of UTF-8 character bytes.
         """
-    def observe(self, f: Callable[[YTextEvent]]) -> Origin:
+    def observe(self, f: Callable[[YTextEvent]]) -> ObservationId:
         """
         Assigns a callback function to listen to YText updates.
 
         Args:
             f: Callback function that runs when the text object receives an update.
         Returns:
-            A reference to the callback subscription.
+            A reference to the callback observation.
         """
-    def observe_deep(self, f: Callable[[List[Event]]]) -> Origin:
+    def observe_deep(self, f: Callable[[List[Event]]]) -> ObservationId:
         """
         Assigns a callback function to listen to the updates of the YText instance and those of its nested attributes.
         Currently, this listens to the same events as YText.observe, but in the future this will also listen to
@@ -465,21 +465,21 @@ class YText:
         Args:
             f: Callback function that runs when the text object or its nested attributes receive an update.
         Returns:
-            A reference to the callback subscription.
+            A reference to the callback observation.
         """
-    def unobserve(self, origin: Origin):
+    def unobserve(self, observation_id: ObservationId):
         """
-        Cancels the observer callback associated with the `origin`.
+        Cancels the observer callback associated with the `observation_id`.
 
         Args:
-            origin: reference to a subscription provided by the `observe` method.
+            observation_id: reference to a observation provided by the `observe` method.
         """
-    def unobserve_deep(self, origin: Origin):
+    def unobserve_deep(self, observation_id: ObservationId):
         """
-        Cancels the observer callback associated with the `origin`.
+        Cancels the observer callback associated with the `observation_id`.
 
         Args:
-            origin: reference to a subscription provided by the `observe` method.
+            observation_id: reference to a observation provided by the `observe` method.
         """
 
 class YTextEvent:
@@ -628,37 +628,37 @@ class YArray:
             for item in array:
                 print(item)
         """
-    def observe(self, f: Callable[[YArrayEvent]]) -> Origin:
+    def observe(self, f: Callable[[YArrayEvent]]) -> ObservationId:
         """
         Assigns a callback function to listen to YArray updates.
 
         Args:
             f: Callback function that runs when the array object receives an update.
         Returns:
-            An identifier associated with the callback subscription.
+            An identifier associated with the callback observation.
         """
-    def observe_deep(self, f: Callable[[List[Event]]]) -> Origin:
+    def observe_deep(self, f: Callable[[List[Event]]]) -> ObservationId:
         """
         Assigns a callback function to listen to the aggregated updates of the YArray and its child elements.
 
         Args:
             f: Callback function that runs when the array object or components receive an update.
         Returns:
-            An identifier associated with the callback subscription.
+            An identifier associated with the callback observation.
         """
-    def unobserve(self, origin: Origin):
+    def unobserve(self, observation_id: ObservationId):
         """
-        Cancels the observer callback associated with the `origin`.
+        Cancels the observer callback associated with the `observation_id`.
 
         Args:
-            origin: reference to a subscription provided by the `observe` method.
+            observation_id: reference to a observation provided by the `observe` method.
         """
-    def unobserve_deep(self, origin: Origin):
+    def unobserve_deep(self, observation_id: ObservationId):
         """
-        Cancels the observer callback associated with the `origin`.
+        Cancels the observer callback associated with the `observation_id`.
 
         Args:
-            origin: reference to a subscription provided by the `observe` method.
+            observation_id: reference to a observation provided by the `observe` method.
         """
 
 YArrayObserver = Any
@@ -812,37 +812,37 @@ class YMap:
         Returns:
             A view of all values in the YMap. The order of values is not stable.
         """
-    def observe(self, f: Callable[[YMapEvent]]) -> Origin:
+    def observe(self, f: Callable[[YMapEvent]]) -> ObservationId:
         """
         Assigns a callback function to listen to YMap updates.
 
         Args:
             f: Callback function that runs when the map object receives an update.
         Returns:
-            A reference to the callback subscription. Delete this observer in order to erase the associated callback function.
+            A reference to the callback observation. Delete this observer in order to erase the associated callback function.
         """
-    def observe_deep(self, f: Callable[[List[Event]]]) -> Origin:
+    def observe_deep(self, f: Callable[[List[Event]]]) -> ObservationId:
         """
         Assigns a callback function to listen to YMap and child element updates.
 
         Args:
             f: Callback function that runs when the map object or any of its tracked elements receive an update.
         Returns:
-            A reference to the callback subscription. Delete this observer in order to erase the associated callback function.
+            A reference to the callback observation. Delete this observer in order to erase the associated callback function.
         """
-    def unobserve(self, origin: Origin):
+    def unobserve(self, observation_id: ObservationId):
         """
-        Cancels the observer callback associated with the `origin`.
+        Cancels the observer callback associated with the `observation_id`.
 
         Args:
-            origin: reference to a subscription provided by the `observe` method.
+            observation_id: reference to a observation provided by the `observe` method.
         """
-    def unobserve_deep(self, origin: Origin):
+    def unobserve_deep(self, observation_id: ObservationId):
         """
-        Cancels the observer callback associated with the `origin`.
+        Cancels the observer callback associated with the `observation_id`.
 
         Args:
-            origin: reference to a subscription provided by the `observe` method.
+            observation_id: reference to a observation provided by the `observe` method.
         """
 
 class YMapItemsView:
@@ -1002,7 +1002,7 @@ class YXmlElement:
         Returns an iterator that enables a deep traversal of this XML node - starting from first
         child over this XML node successors using depth-first strategy.
         """
-    def observe(self, f: Callable[[YXmlElementEvent]]) -> Origin:
+    def observe(self, f: Callable[[YXmlElementEvent]]) -> ObservationId:
         """
         Subscribes to all operations happening over this instance of `YXmlElement`. All changes are
         batched and eventually triggered during transaction commit phase.
@@ -1010,9 +1010,9 @@ class YXmlElement:
         Args:
             f: A callback function that receives update events.
         Returns:
-            A `Origin` that can be used to cancel the observer callback.
+            A `ObservationId` that can be used to cancel the observer callback.
         """
-    def observe_deep(self, f: Callable[[List[Event]]]) -> Origin:
+    def observe_deep(self, f: Callable[[List[Event]]]) -> ObservationId:
         """
         Subscribes to all operations happening over this instance of `YXmlElement` and its children. All changes are
         batched and eventually triggered during transaction commit phase.
@@ -1020,21 +1020,21 @@ class YXmlElement:
         Args:
             f: A callback function that receives update events from the Xml element and its children.
         Returns:
-            A `Origin` that can be used to cancel the observer callback.
+            A `ObservationId` that can be used to cancel the observer callback.
         """
-    def unobserve(self, origin: Origin):
+    def unobserve(self, observation_id: ObservationId):
         """
-        Cancels the observer callback associated with the `origin`.
+        Cancels the observer callback associated with the `observation_id`.
 
         Args:
-            origin: reference to a subscription provided by the `observe` method.
+            observation_id: reference to a observation provided by the `observe` method.
         """
-    def unobserve_deep(self, origin: Origin):
+    def unobserve_deep(self, observation_id: ObservationId):
         """
-        Cancels the observer callback associated with the `origin`.
+        Cancels the observer callback associated with the `observation_id`.
 
         Args:
-            origin: reference to a subscription provided by the `observe` method.
+            observation_id: reference to a observation provided by the `observe` method.
         """
 
 class YXmlFragment:
@@ -1094,7 +1094,7 @@ class YXmlFragment:
         Returns an iterator that enables a deep traversal of this XML fragment - starting from first
         child over this XML fragment successors using depth-first strategy.
         """
-    def observe(self, f: Callable[[YXmlElementEvent]]) -> Origin:
+    def observe(self, f: Callable[[YXmlElementEvent]]) -> ObservationId:
         """
         Subscribes to all operations happening over this instance of `YXmlFragment`. All changes are
         batched and eventually triggered during transaction commit phase.
@@ -1102,9 +1102,9 @@ class YXmlFragment:
         Args:
             f: A callback function that receives update events.
         Returns:
-            A `Origin` that can be used to cancel the observer callback.
+            A `ObservationId` that can be used to cancel the observer callback.
         """
-    def observe_deep(self, f: Callable[[List[Event]]]) -> Origin:
+    def observe_deep(self, f: Callable[[List[Event]]]) -> ObservationId:
         """
         Subscribes to all operations happening over this instance of `YXmlFragment` and its children. All changes are
         batched and eventually triggered during transaction commit phase.
@@ -1112,21 +1112,21 @@ class YXmlFragment:
         Args:
             f: A callback function that receives update events from the Xml fragment and its children.
         Returns:
-            A `Origin` that can be used to cancel the observer callback.
+            A `ObservationId` that can be used to cancel the observer callback.
         """
-    def unobserve(self, origin: Origin):
+    def unobserve(self, observation_id: ObservationId):
         """
-        Cancels the observer callback associated with the `origin`.
+        Cancels the observer callback associated with the `observation_id`.
 
         Args:
-            origin: reference to a subscription provided by the `observe` method.
+            observation_id: reference to a observation provided by the `observe` method.
         """
-    def unobserve_deep(self, origin: Origin):
+    def unobserve_deep(self, observation_id: ObservationId):
         """
-        Cancels the observer callback associated with the `origin`.
+        Cancels the observer callback associated with the `observation_id`.
 
         Args:
-            origin: reference to a subscription provided by the `observe` method.
+            observation_id: reference to a observation provided by the `observe` method.
         """
 
 class YXmlText:
@@ -1182,7 +1182,7 @@ class YXmlText:
             An iterator that enables to traverse over all attributes of this XML node in
         unspecified order.
         """
-    def observe(self, f: Callable[[YXmlTextEvent]]) -> Origin:
+    def observe(self, f: Callable[[YXmlTextEvent]]) -> ObservationId:
         """
         Subscribes to all operations happening over this instance of `YXmlText`. All changes are
         batched and eventually triggered during transaction commit phase.
@@ -1191,9 +1191,9 @@ class YXmlText:
             f: A callback function that receives update events.
             deep: Determines whether observer is triggered by changes to elements in the YXmlText.
         Returns:
-            A `Origin` that can be used to cancel the observer callback.
+            A `ObservationId` that can be used to cancel the observer callback.
         """
-    def observe_deep(self, f: Callable[[List[Event]]]) -> Origin:
+    def observe_deep(self, f: Callable[[List[Event]]]) -> ObservationId:
         """
         Subscribes to all operations happening over this instance of `YXmlText` and its children. All changes are
         batched and eventually triggered during transaction commit phase.
@@ -1202,21 +1202,21 @@ class YXmlText:
             f: A callback function that receives update events of this element and its descendants.
             deep: Determines whether observer is triggered by changes to elements in the YXmlText.
         Returns:
-            A `Origin` that can be used to cancel the observer callback.
+            A `ObservationId` that can be used to cancel the observer callback.
         """
-    def unobserve(self, origin: Origin):
+    def unobserve(self, observation_id: ObservationId):
         """
-        Cancels the observer callback associated with the `origin`.
+        Cancels the observer callback associated with the `observation_id`.
 
         Args:
-            origin: reference to a subscription provided by the `observe` method.
+            observation_id: reference to a observation provided by the `observe` method.
         """
-    def unobserve_deep(self, origin: Origin):
+    def unobserve_deep(self, observation_id: ObservationId):
         """
-        Cancels the observer callback associated with the `origin`.
+        Cancels the observer callback associated with the `observation_id`.
 
         Args:
-            origin: reference to a subscription provided by the `observe` method.
+            observation_id: reference to a observation provided by the `observe` method.
         """
 
 class YXmlTextEvent:

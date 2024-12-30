@@ -196,7 +196,7 @@ def test_observer():
         target = e.target
         delta = e.delta
 
-    subscription_id = x.observe(callback)
+    observation_id = x.observe(callback)
 
     # insert initial data to an empty YArray
     with d1.begin_transaction() as txn:
@@ -226,7 +226,7 @@ def test_observer():
     delta = None
 
     # Cancel the observer and make sure that callback is no longer called
-    x.unobserve(subscription_id)
+    x.unobserve(observation_id)
 
     with d1.begin_transaction() as txn:
         x.insert(txn, 1, 6)

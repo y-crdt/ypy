@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::rc::Weak;
 
-use crate::shared_types::PyOrigin;
+use crate::shared_types::ObservationId;
 use crate::y_array::YArray;
 use crate::y_map::YMap;
 use crate::y_text::YText;
@@ -282,7 +282,7 @@ impl YDoc {
     }
 
     /// Subscribes a callback to a `YDoc` lifecycle event.
-    pub fn observe_after_transaction(&mut self, callback: PyObject) -> PyOrigin {
+    pub fn observe_after_transaction(&mut self, callback: PyObject) -> ObservationId {
         let origin = Origin::from(uuid_v4().to_string());
         self.0
             .borrow()
@@ -296,7 +296,7 @@ impl YDoc {
                 })
             })
             .unwrap();
-        PyOrigin(origin)
+        ObservationId(origin)
     }
 }
 

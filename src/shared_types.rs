@@ -46,7 +46,7 @@ impl DefaultPyErr for IntegratedOperationException {
 
 #[pyclass]
 #[derive(Clone)]
-pub struct PyOrigin(pub Origin);
+pub struct ObservationId(pub Origin);
 
 #[derive(Clone)]
 pub enum CompatiblePyType<'a> {
