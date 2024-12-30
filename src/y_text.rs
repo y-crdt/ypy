@@ -1,11 +1,10 @@
 use crate::shared_types::{
-    CompatiblePyType, DeepSubscription, DefaultPyErr, IntegratedOperationException,
-    PreliminaryObservationException, ShallowSubscription, SharedType, SubId, TypeWithDoc,
+    CompatiblePyType, DefaultPyErr, IntegratedOperationException, PreliminaryObservationException,
+    SharedType, TypeWithDoc,
 };
 use crate::type_conversions::{events_into_py, ToPython, WithDocToPython};
 use crate::y_doc::{WithDoc, YDocInner};
 use crate::y_transaction::{YTransaction, YTransactionInner};
-use lib0::any::Any;
 use pyo3::prelude::*;
 use pyo3::types::PyList;
 use std::cell::RefCell;
@@ -16,7 +15,7 @@ use std::sync::Arc;
 use yrs::types::text::TextEvent;
 use yrs::types::Attrs;
 use yrs::types::DeepObservable;
-use yrs::{GetString, Observable, Text, TextRef, TransactionMut};
+use yrs::{Any, GetString, Observable, Subscription, Text, TextRef, TransactionMut};
 
 /// A shared data type used for collaborative text editing. It enables multiple users to add and
 /// remove chunks of text in efficient manner. This type is internally represented as a mutable
@@ -238,11 +237,11 @@ impl YText {
     }
 
     /// Observes updates from the `YText` instance.
-    pub fn observe(&mut self, f: PyObject) -> PyResult<ShallowSubscription> {
+    pub fn observe(&mut self, f: PyObject) -> PyResult<Subscription> {
         match &mut self.0 {
             SharedType::Integrated(text) => {
                 let doc = text.doc.clone();
-                let sub_id = text
+                let sub = text
                     .inner
                     .observe(move |txn, e| {
                         let e = YTextEvent::new(e, txn, doc.clone());
@@ -253,14 +252,14 @@ impl YText {
                         });
                     })
                     .into();
-                Ok(ShallowSubscription(sub_id))
+                Ok(sub)
             }
             SharedType::Prelim(_) => Err(PreliminaryObservationException::default_message()),
         }
     }
 
     /// Observes updates from the `YText` instance and all of its nested children.
-    pub fn observe_deep(&mut self, f: PyObject) -> PyResult<DeepSubscription> {
+    pub fn observe_deep(&mut self, f: PyObject) -> PyResult<Subscription> {
         match &mut self.0 {
             SharedType::Integrated(text) => {
                 let doc = text.doc.clone();
@@ -275,22 +274,15 @@ impl YText {
                         })
                     })
                     .into();
-                Ok(DeepSubscription(sub))
+                Ok(sub)
             }
             SharedType::Prelim(_) => Err(PreliminaryObservationException::default_message()),
         }
     }
     /// Cancels the observer callback associated with the `subscription_id`.
-    pub fn unobserve(&mut self, subscription_id: SubId) -> PyResult<bool> {
+    pub fn unobserve(&mut self, subscription: Subscription) -> PyResult<bool> {
         match &mut self.0 {
-            SharedType::Integrated(text) => {
-                Ok(
-                    match subscription_id {
-                        SubId::Shallow(ShallowSubscription(id)) => text.unobserve(id),
-                        SubId::Deep(DeepSubscription(id)) => text.unobserve_deep(id),
-                    }
-                )
-            }
+            SharedType::Integrated(text) => Ok(text.unobserve(subscription)),
             SharedType::Prelim(_) => Err(PreliminaryObservationException::default_message()),
         }
     }

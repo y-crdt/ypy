@@ -1,4 +1,3 @@
-use lib0::any::Any;
 use pyo3::create_exception;
 use pyo3::exceptions::PyException;
 use pyo3::exceptions::PyTypeError;
@@ -16,6 +15,7 @@ use yrs::block::{ItemContent, Prelim};
 use yrs::branch::{Branch, BranchPtr};
 use yrs::types::Events;
 use yrs::types::{Attrs, Change, Delta};
+use yrs::Any;
 use yrs::ArrayRef;
 use yrs::MapRef;
 use yrs::TextRef;
@@ -312,7 +312,7 @@ impl<'a> TryFrom<CompatiblePyType<'a>> for Any {
         const MAX_JS_NUMBER: i64 = 2_i64.pow(53) - 1;
         match py_type {
             CompatiblePyType::Bool(b) => Ok(Any::Bool(b.extract()?)),
-            CompatiblePyType::String(s) => Ok(Any::String(s.extract::<String>()?.into_boxed_str())),
+            CompatiblePyType::String(s) => Ok(Any::String(s.extract::<String>()?.into())),
             CompatiblePyType::Int(i) => {
                 let num: i64 = i.extract()?;
                 if num > MAX_JS_NUMBER {
@@ -327,7 +327,7 @@ impl<'a> TryFrom<CompatiblePyType<'a>> for Any {
                     .into_iter()
                     .map(|py_any|CompatiblePyType::try_from(py_any)?.try_into())
                     .collect();
-                result.map(|res| Any::Array(res.into_boxed_slice()))
+                result.map(|res| Any::Array(res.into()))
             },
             CompatiblePyType::Dict(d) => {
                 let result: PyResult<HashMap<String, Any>> = d

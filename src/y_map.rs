@@ -14,8 +14,7 @@ use yrs::{Map, MapRef, Observable, Subscription, TransactionMut};
 
 use crate::json_builder::JsonBuilder;
 use crate::shared_types::{
-    DeepSubscription, DefaultPyErr, PreliminaryObservationException, ShallowSubscription,
-    SharedType, SubId, TypeWithDoc,
+    DefaultPyErr, PreliminaryObservationException, SharedType, TypeWithDoc,
 };
 use crate::type_conversions::{events_into_py, PyObjectWrapper, ToPython, WithDocToPython};
 use crate::y_doc::{WithDoc, YDocInner};
@@ -262,7 +261,7 @@ impl YMap {
         ValueView::new(self)
     }
 
-    pub fn observe(&mut self, f: PyObject) -> PyResult<ShallowSubscription> {
+    pub fn observe(&mut self, f: PyObject) -> PyResult<Subscription> {
         match &mut self.0 {
             SharedType::Integrated(v) => {
                 let doc = v.doc.clone();
@@ -277,7 +276,7 @@ impl YMap {
                         })
                     })
                     .into();
-                Ok(ShallowSubscription(sub))
+                Ok(sub)
             }
             SharedType::Prelim(_) => Err(PreliminaryObservationException::default_message()),
         }
@@ -304,16 +303,9 @@ impl YMap {
         }
     }
     /// Cancels the observer callback associated with the `subscription_id`.
-    pub fn unobserve(&mut self, subscription_id: SubId) -> PyResult<bool> {
+    pub fn unobserve(&mut self, subscription: Subscription) -> PyResult<bool> {
         match &mut self.0 {
-            SharedType::Integrated(map) => {
-                Ok(
-                    match subscription_id {
-                        SubId::Shallow(ShallowSubscription(id)) => map.unobserve(id),
-                        SubId::Deep(DeepSubscription(id)) => map.unobserve_deep(id),
-                    }
-                )
-            }
+            SharedType::Integrated(map) => Ok(map.unobserve(subscription)),
             SharedType::Prelim(_) => Err(PreliminaryObservationException::default_message()),
         }
     }
