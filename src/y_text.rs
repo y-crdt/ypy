@@ -15,7 +15,7 @@ use std::sync::Arc;
 use yrs::types::text::TextEvent;
 use yrs::types::Attrs;
 use yrs::types::DeepObservable;
-use yrs::{uuid_v4, Any, GetString, Observable, Origin, Text, TextRef, TransactionMut};
+use yrs::{Any, GetString, Observable, Text, TextRef, TransactionMut};
 
 /// A shared data type used for collaborative text editing. It enables multiple users to add and
 /// remove chunks of text in efficient manner. This type is internally represented as a mutable
@@ -241,8 +241,7 @@ impl YText {
         match &mut self.0 {
             SharedType::Integrated(text) => {
                 let doc = text.doc.clone();
-                let origin = Origin::from(uuid_v4().to_string());
-                text.inner.observe_with(origin.clone(), move |txn, e| {
+                let subscription = text.inner.observe(move |txn, e| {
                     let e = YTextEvent::new(e, txn, doc.clone());
                     Python::with_gil(|py| {
                         if let Err(err) = f.call1(py, (e,)) {
@@ -250,7 +249,7 @@ impl YText {
                         }
                     });
                 });
-                Ok(ObservationId(origin))
+                Ok(ObservationId(subscription))
             }
             SharedType::Prelim(_) => Err(PreliminaryObservationException::default_message()),
         }
@@ -261,34 +260,32 @@ impl YText {
         match &mut self.0 {
             SharedType::Integrated(text) => {
                 let doc = text.doc.clone();
-                let origin = Origin::from(uuid_v4().to_string());
-                text.inner
-                    .observe_deep_with(origin.clone(), move |txn, events| {
-                        Python::with_gil(|py| {
-                            let events = events_into_py(txn, events, doc.clone());
-                            if let Err(err) = f.call1(py, (events,)) {
-                                err.restore(py)
-                            }
-                        })
-                    });
-                Ok(ObservationId(origin))
+                let subscription = text.inner.observe_deep(move |txn, events| {
+                    Python::with_gil(|py| {
+                        let events = events_into_py(txn, events, doc.clone());
+                        if let Err(err) = f.call1(py, (events,)) {
+                            err.restore(py)
+                        }
+                    })
+                });
+                Ok(ObservationId(subscription))
             }
             SharedType::Prelim(_) => Err(PreliminaryObservationException::default_message()),
         }
     }
 
     /// Cancels the observer callback associated with the `observation_id` returned from the `observe` method.
-    pub fn unobserve(&mut self, observation_id: ObservationId) -> PyResult<bool> {
+    pub fn unobserve(&mut self, observation_id: ObservationId) -> PyResult<()> {
         match &mut self.0 {
-            SharedType::Integrated(text) => Ok(text.unobserve(observation_id.0)),
+            SharedType::Integrated(_) => Ok(drop(observation_id.0)),
             SharedType::Prelim(_) => Err(PreliminaryObservationException::default_message()),
         }
     }
 
     /// Cancels the observer callback associated with the `observation_id` returned from the `observe_deep` method.
-    pub fn unobserve_deep(&mut self, observation_id: ObservationId) -> PyResult<bool> {
+    pub fn unobserve_deep(&mut self, observation_id: ObservationId) -> PyResult<()> {
         match &mut self.0 {
-            SharedType::Integrated(text) => Ok(text.unobserve_deep(observation_id.0)),
+            SharedType::Integrated(_) => Ok(drop(observation_id.0)),
             SharedType::Prelim(_) => Err(PreliminaryObservationException::default_message()),
         }
     }

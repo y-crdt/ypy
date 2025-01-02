@@ -10,7 +10,7 @@ use std::rc::Rc;
 
 use yrs::types::map::{MapEvent, MapIter};
 use yrs::types::{DeepObservable, ToJson};
-use yrs::{uuid_v4, Map, MapRef, Observable, Origin, TransactionMut};
+use yrs::{Map, MapRef, Observable, TransactionMut};
 
 use crate::json_builder::JsonBuilder;
 use crate::shared_types::{
@@ -265,17 +265,15 @@ impl YMap {
         match &mut self.0 {
             SharedType::Integrated(v) => {
                 let doc = v.doc.clone();
-                let origin = Origin::from(uuid_v4().to_string());
-                v.inner
-                    .observe_with(origin.clone(), move |txn: &TransactionMut, e| {
-                        Python::with_gil(|py| {
-                            let e = YMapEvent::new(e, txn, doc.clone());
-                            if let Err(err) = f.call1(py, (e,)) {
-                                err.restore(py)
-                            }
-                        })
-                    });
-                Ok(ObservationId(origin))
+                let subscription = v.inner.observe(move |txn: &TransactionMut, e| {
+                    Python::with_gil(|py| {
+                        let e = YMapEvent::new(e, txn, doc.clone());
+                        if let Err(err) = f.call1(py, (e,)) {
+                            err.restore(py)
+                        }
+                    })
+                });
+                Ok(ObservationId(subscription))
             }
             SharedType::Prelim(_) => Err(PreliminaryObservationException::default_message()),
         }
@@ -285,34 +283,32 @@ impl YMap {
         match &mut self.0 {
             SharedType::Integrated(map) => {
                 let doc = map.doc.clone();
-                let origin = Origin::from(uuid_v4().to_string());
-                map.inner
-                    .observe_deep_with(origin.clone(), move |txn, events| {
-                        Python::with_gil(|py| {
-                            let events = events_into_py(txn, events, doc.clone());
-                            if let Err(err) = f.call1(py, (events,)) {
-                                err.restore(py)
-                            }
-                        })
-                    });
-                Ok(ObservationId(origin))
+                let subscription = map.inner.observe_deep(move |txn, events| {
+                    Python::with_gil(|py| {
+                        let events = events_into_py(txn, events, doc.clone());
+                        if let Err(err) = f.call1(py, (events,)) {
+                            err.restore(py)
+                        }
+                    })
+                });
+                Ok(ObservationId(subscription))
             }
             SharedType::Prelim(_) => Err(PreliminaryObservationException::default_message()),
         }
     }
 
     /// Cancels the observer callback associated with the `observation_id` returned from the `observe` method.
-    pub fn unobserve(&mut self, observation_id: ObservationId) -> PyResult<bool> {
+    pub fn unobserve(&mut self, observation_id: ObservationId) -> PyResult<()> {
         match &mut self.0 {
-            SharedType::Integrated(map) => Ok(map.unobserve(observation_id.0)),
+            SharedType::Integrated(_) => Ok(drop(observation_id.0)),
             SharedType::Prelim(_) => Err(PreliminaryObservationException::default_message()),
         }
     }
 
     /// Cancels the observer callback associated with the `observation_id` returned from the `observe_deep` method.
-    pub fn unobserve_deep(&mut self, observation_id: ObservationId) -> PyResult<bool> {
+    pub fn unobserve_deep(&mut self, observation_id: ObservationId) -> PyResult<()> {
         match &mut self.0 {
-            SharedType::Integrated(map) => Ok(map.unobserve_deep(observation_id.0)),
+            SharedType::Integrated(_) => Ok(drop(observation_id.0)),
             SharedType::Prelim(_) => Err(PreliminaryObservationException::default_message()),
         }
     }

@@ -4,6 +4,9 @@ version = "0.7.0-alpha.1"
 rust-version = "1.72"
 edition = "2021"
 
+[features]
+sync = []
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [lib]

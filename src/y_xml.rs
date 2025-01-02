@@ -8,8 +8,8 @@ use std::ops::Deref;
 use std::rc::Rc;
 use yrs::types::xml::{TreeWalker, Xml, XmlEvent, XmlTextEvent};
 use yrs::types::{DeepObservable, EntryChange, Path, PathSegment};
+use yrs::XmlFragmentRef;
 use yrs::XmlTextRef;
-use yrs::{uuid_v4, Origin, XmlFragmentRef};
 use yrs::{GetString, XmlElementPrelim, XmlElementRef, XmlTextPrelim};
 use yrs::{Observable, Text, TransactionMut, XmlFragment, XmlOut};
 
@@ -222,8 +222,7 @@ impl YXmlElement {
     /// Returns an `ObservationId` which, can be used to unsubscribe the observer.
     pub fn observe(&mut self, f: PyObject) -> ObservationId {
         let doc = self.0.doc.clone();
-        let origin = Origin::from(uuid_v4().to_string());
-        self.0.observe_with(origin.clone(), move |txn, e| {
+        let subscription = self.0.observe(move |txn, e| {
             Python::with_gil(|py| {
                 let event = YXmlEvent::new(e, txn, doc.clone());
                 if let Err(err) = f.call1(py, (event,)) {
@@ -231,7 +230,7 @@ impl YXmlElement {
                 }
             })
         });
-        ObservationId(origin)
+        ObservationId(subscription)
     }
 
     /// Subscribes to all operations happening over this instance of `YXmlElement` and all of its children.
@@ -239,28 +238,25 @@ impl YXmlElement {
     /// Returns an `ObservationId` which, can be used to unsubscribe the observer.
     pub fn observe_deep(&mut self, f: PyObject) -> ObservationId {
         let doc = self.0.doc.clone();
-        let origin = Origin::from(uuid_v4().to_string());
-        self.0
-            .inner
-            .observe_deep_with(origin.clone(), move |txn, events| {
-                Python::with_gil(|py| {
-                    let events = events_into_py(txn, events, doc.clone());
-                    if let Err(err) = f.call1(py, (events,)) {
-                        err.restore(py)
-                    }
-                })
-            });
-        ObservationId(origin)
+        let subscription = self.0.inner.observe_deep(move |txn, events| {
+            Python::with_gil(|py| {
+                let events = events_into_py(txn, events, doc.clone());
+                if let Err(err) = f.call1(py, (events,)) {
+                    err.restore(py)
+                }
+            })
+        });
+        ObservationId(subscription)
     }
 
     /// Cancels the observer callback associated with the `observation_id` returned from the `observe` method.
-    pub fn unobserve(&mut self, observation_id: ObservationId) -> bool {
-        self.0.unobserve(observation_id.0)
+    pub fn unobserve(&mut self, observation_id: ObservationId) -> () {
+        drop(observation_id.0)
     }
 
     /// Cancels the observer callback associated with the `observation_id` returned from the `observe_deep` method.
-    pub fn unobserve_deep(&mut self, observation_id: ObservationId) -> bool {
-        self.0.unobserve_deep(observation_id.0)
+    pub fn unobserve_deep(&mut self, observation_id: ObservationId) -> () {
+        drop(observation_id.0)
     }
 }
 
@@ -422,8 +418,7 @@ impl YXmlText {
     /// Returns an `ObservationId` which, which can be used to unsubscribe the callback function.
     pub fn observe(&mut self, f: PyObject) -> ObservationId {
         let doc = self.0.doc.clone();
-        let origin = Origin::from(uuid_v4().to_string());
-        self.0.observe_with(origin.clone(), move |txn, e| {
+        let subscription = self.0.observe(move |txn, e| {
             Python::with_gil(|py| {
                 let e = YXmlTextEvent::new(e, txn, doc.clone());
                 if let Err(err) = f.call1(py, (e,)) {
@@ -431,7 +426,7 @@ impl YXmlText {
                 }
             })
         });
-        ObservationId(origin)
+        ObservationId(subscription)
     }
 
     /// Subscribes to all operations happening over this instance of `YXmlText` and its child elements. All changes are
@@ -439,27 +434,25 @@ impl YXmlText {
     /// Returns an `ObservationId` which, which can be used to unsubscribe the callback function.
     pub fn observe_deep(&mut self, f: PyObject) -> ObservationId {
         let doc = self.0.doc.clone();
-        let origin = Origin::from(uuid_v4().to_string());
-        self.0
-            .observe_deep_with(origin.clone(), move |txn, events| {
-                Python::with_gil(|py| {
-                    let e = events_into_py(txn, events, doc.clone());
-                    if let Err(err) = f.call1(py, (e,)) {
-                        err.restore(py)
-                    }
-                })
-            });
-        ObservationId(origin)
+        let subscription = self.0.observe_deep(move |txn, events| {
+            Python::with_gil(|py| {
+                let e = events_into_py(txn, events, doc.clone());
+                if let Err(err) = f.call1(py, (e,)) {
+                    err.restore(py)
+                }
+            })
+        });
+        ObservationId(subscription)
     }
 
     /// Cancels the observer callback associated with the `observation_id` returned from the `observe` method.
-    pub fn unobserve(&mut self, observation_id: ObservationId) -> bool {
-        self.0.unobserve(observation_id.0)
+    pub fn unobserve(&mut self, observation_id: ObservationId) -> () {
+        drop(observation_id.0)
     }
 
     /// Cancels the observer callback associated with the `observation_id` returned from the `observe_deep` method.
-    pub fn unobserve_deep(&mut self, observation_id: ObservationId) -> bool {
-        self.0.unobserve_deep(observation_id.0)
+    pub fn unobserve_deep(&mut self, observation_id: ObservationId) -> () {
+        drop(observation_id.0)
     }
 }
 
@@ -584,8 +577,7 @@ impl YXmlFragment {
     /// Returns an `ObservationId` which, can be used to unsubscribe the observer.
     pub fn observe(&mut self, f: PyObject) -> ObservationId {
         let doc = self.0.doc.clone();
-        let origin = Origin::from(uuid_v4().to_string());
-        self.0.observe_with(origin.clone(), move |txn, e| {
+        let subscription = self.0.observe(move |txn, e| {
             Python::with_gil(|py| {
                 let event = YXmlEvent::new(e, txn, doc.clone());
                 if let Err(err) = f.call1(py, (event,)) {
@@ -593,7 +585,7 @@ impl YXmlFragment {
                 }
             })
         });
-        ObservationId(origin)
+        ObservationId(subscription)
     }
 
     /// Subscribes to all operations happening over this instance of `YXmlElement` and all of its children.
@@ -601,28 +593,25 @@ impl YXmlFragment {
     /// Returns an `ObservationId` which, can be used to unsubscribe the observer.
     pub fn observe_deep(&mut self, f: PyObject) -> ObservationId {
         let doc = self.0.doc.clone();
-        let origin = Origin::from(uuid_v4().to_string());
-        self.0
-            .inner
-            .observe_deep_with(origin.clone(), move |txn, events| {
-                Python::with_gil(|py| {
-                    let events = events_into_py(txn, events, doc.clone());
-                    if let Err(err) = f.call1(py, (events,)) {
-                        err.restore(py)
-                    }
-                })
-            });
-        ObservationId(origin)
+        let subscription = self.0.inner.observe_deep(move |txn, events| {
+            Python::with_gil(|py| {
+                let events = events_into_py(txn, events, doc.clone());
+                if let Err(err) = f.call1(py, (events,)) {
+                    err.restore(py)
+                }
+            })
+        });
+        ObservationId(subscription)
     }
 
     /// Cancels the observer callback associated with the `observation_id` returned from the `observe` method.
-    pub fn unobserve(&mut self, observation_id: ObservationId) -> bool {
-        self.0.unobserve(observation_id.0)
+    pub fn unobserve(&mut self, observation_id: ObservationId) -> () {
+        drop(observation_id.0)
     }
 
     /// Cancels the observer callback associated with the `observation_id` returned from the `observe_deep` method.
-    pub fn unobserve_deep(&mut self, observation_id: ObservationId) -> bool {
-        self.0.unobserve_deep(observation_id.0)
+    pub fn unobserve_deep(&mut self, observation_id: ObservationId) -> () {
+        drop(observation_id.0)
     }
 
     /// Retrieves a value stored at a given `index`. Returns `None` when provided index was out

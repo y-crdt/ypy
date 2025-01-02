@@ -16,7 +16,7 @@ use std::{
     rc::Rc,
 };
 use yrs::types::TypeRef;
-use yrs::Origin;
+use yrs::Subscription;
 
 // Common errors
 create_exception!(y_py, PreliminaryObservationException, PyException, "Occurs when an observer is attached to a Y type that is not integrated into a YDoc. Y types can only be observed once they have been added to a YDoc.");
@@ -45,8 +45,14 @@ impl DefaultPyErr for IntegratedOperationException {
 }
 
 #[pyclass]
+#[cfg(feature = "sync")]
 #[derive(Clone)]
-pub struct ObservationId(pub Origin);
+pub struct ObservationId(pub Subscription);
+
+#[pyclass(unsendable)]
+#[cfg(not(feature = "sync"))]
+#[derive(Clone)]
+pub struct ObservationId(pub Subscription);
 
 #[derive(Clone)]
 pub enum CompatiblePyType<'a> {
