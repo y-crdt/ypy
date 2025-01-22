@@ -334,6 +334,12 @@ impl YDoc {
             .unwrap()
             .into()
     }
+
+    pub fn destroy(&mut self) {
+        let mut inner = self.0.borrow_mut();
+        let mut txn = inner.doc.transact_mut();
+        inner.doc.destroy(&mut txn);
+    }
 }
 
 /// Encodes a state vector of a given Ypy document into its binary representation using lib0 v1

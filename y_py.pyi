@@ -140,6 +140,26 @@ class YDoc:
             A subscription identifier that can be used to cancel the callback.
         """
 
+
+    def destroy(self):
+        """
+
+        Initiates document destruction
+        """
+
+
+    def __enter__(self):
+        return self
+
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.destroy()
+
+
+    def __del__(self):
+        self.destroy()
+
+
 EncodedStateVector = bytes
 EncodedDeleteSet = bytes
 YDocUpdate = bytes
