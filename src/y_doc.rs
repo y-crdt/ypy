@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::ops::Deref;
 use std::rc::Rc;
 use std::rc::Weak;
 
@@ -335,10 +336,14 @@ impl YDoc {
             .into()
     }
 
-    pub fn destroy(&mut self) {
-        let mut inner = self.0.borrow_mut();
-        let mut txn = inner.doc.transact_mut();
-        inner.doc.destroy(&mut txn);
+    pub fn destroy(&mut self) -> PyResult<()> {
+        self.guard_store()?;
+        let mut cloned_doc = self.0.borrow_mut().doc.clone();
+        Ok(cloned_doc.destroy(&mut self.0
+            .borrow_mut()
+            .doc
+            .transact_mut()
+        ))
     }
 }
 
