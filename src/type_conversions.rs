@@ -393,8 +393,8 @@ impl ToPython for Any {
             Any::BigInt(v) => v.into_py(py),
             Any::String(v) => v.into_py(py),
             Any::Buffer(v) => {
-                let byte_array = pytypes::PyByteArray::new(py, v.as_ref());
-                byte_array.into()
+                let py_bytes = pyo3::types::PyBytes::new(py, v.as_ref());
+                py_bytes.into()
             }
             Any::Array(v) => {
                 let mut a = Vec::new();
