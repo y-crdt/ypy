@@ -4,6 +4,9 @@ version = "0.7.0-alpha.1"
 rust-version = "1.72"
 edition = "2021"
 
+[features]
+sync = []
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [lib]
@@ -11,8 +14,7 @@ name = "y_py"
 crate-type = ["cdylib"]
 
 [dependencies]
-lib0 = "0.16.10"
-yrs = "0.16.10"
+yrs = "0.21.3"
 
 [dependencies.pyo3]
 version = "0.19.2"

@@ -10,12 +10,11 @@ use std::rc::Rc;
 
 use yrs::types::map::{MapEvent, MapIter};
 use yrs::types::{DeepObservable, ToJson};
-use yrs::{Map, MapRef, Observable, SubscriptionId, TransactionMut};
+use yrs::{Map, MapRef, Observable, TransactionMut};
 
 use crate::json_builder::JsonBuilder;
 use crate::shared_types::{
-    DeepSubscription, DefaultPyErr, PreliminaryObservationException, ShallowSubscription,
-    SharedType, SubId, TypeWithDoc,
+    DefaultPyErr, ObservationId, PreliminaryObservationException, SharedType, TypeWithDoc,
 };
 use crate::type_conversions::{events_into_py, PyObjectWrapper, ToPython, WithDocToPython};
 use crate::y_doc::{WithDoc, YDocInner};
@@ -262,57 +261,54 @@ impl YMap {
         ValueView::new(self)
     }
 
-    pub fn observe(&mut self, f: PyObject) -> PyResult<ShallowSubscription> {
+    pub fn observe(&mut self, f: PyObject) -> PyResult<ObservationId> {
         match &mut self.0 {
             SharedType::Integrated(v) => {
                 let doc = v.doc.clone();
-                let sub_id: SubscriptionId = v
-                    .inner
-                    .observe(move |txn: &TransactionMut, e| {
-                        Python::with_gil(|py| {
-                            let e = YMapEvent::new(e, txn, doc.clone());
-                            if let Err(err) = f.call1(py, (e,)) {
-                                err.restore(py)
-                            }
-                        })
+                let subscription = v.inner.observe(move |txn: &TransactionMut, e| {
+                    Python::with_gil(|py| {
+                        let e = YMapEvent::new(e, txn, doc.clone());
+                        if let Err(err) = f.call1(py, (e,)) {
+                            err.restore(py)
+                        }
                     })
-                    .into();
-                Ok(ShallowSubscription(sub_id))
+                });
+                Ok(ObservationId(subscription))
             }
             SharedType::Prelim(_) => Err(PreliminaryObservationException::default_message()),
         }
     }
 
-    pub fn observe_deep(&mut self, f: PyObject) -> PyResult<DeepSubscription> {
+    pub fn observe_deep(&mut self, f: PyObject) -> PyResult<ObservationId> {
         match &mut self.0 {
             SharedType::Integrated(map) => {
                 let doc = map.doc.clone();
-                let sub: SubscriptionId = map
-                    .inner
-                    .observe_deep(move |txn, events| {
-                        Python::with_gil(|py| {
-                            let events = events_into_py(txn, events, doc.clone());
-                            if let Err(err) = f.call1(py, (events,)) {
-                                err.restore(py)
-                            }
-                        })
+                let subscription = map.inner.observe_deep(move |txn, events| {
+                    Python::with_gil(|py| {
+                        let events = events_into_py(txn, events, doc.clone());
+                        if let Err(err) = f.call1(py, (events,)) {
+                            err.restore(py)
+                        }
                     })
-                    .into();
-                Ok(DeepSubscription(sub))
+                });
+                Ok(ObservationId(subscription))
             }
             SharedType::Prelim(_) => Err(PreliminaryObservationException::default_message()),
         }
     }
-    /// Cancels the observer callback associated with the `subscripton_id`.
-    pub fn unobserve(&mut self, subscription_id: SubId) -> PyResult<()> {
+
+    /// Cancels the observer callback associated with the `observation_id` returned from the `observe` method.
+    pub fn unobserve(&mut self, observation_id: ObservationId) -> PyResult<()> {
         match &mut self.0 {
-            SharedType::Integrated(map) => {
-                match subscription_id {
-                    SubId::Shallow(ShallowSubscription(id)) => map.unobserve(id),
-                    SubId::Deep(DeepSubscription(id)) => map.unobserve_deep(id),
-                }
-                Ok(())
-            }
+            SharedType::Integrated(_) => Ok(drop(observation_id.0)),
+            SharedType::Prelim(_) => Err(PreliminaryObservationException::default_message()),
+        }
+    }
+
+    /// Cancels the observer callback associated with the `observation_id` returned from the `observe_deep` method.
+    pub fn unobserve_deep(&mut self, observation_id: ObservationId) -> PyResult<()> {
+        match &mut self.0 {
+            SharedType::Integrated(_) => Ok(drop(observation_id.0)),
             SharedType::Prelim(_) => Err(PreliminaryObservationException::default_message()),
         }
     }

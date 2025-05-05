@@ -1,4 +1,3 @@
-use lib0::any::Any;
 use pyo3::create_exception;
 use pyo3::exceptions::PyException;
 use pyo3::exceptions::PyTypeError;
@@ -13,13 +12,15 @@ use std::ops::Deref;
 use std::rc::Rc;
 use yrs::block::Unused;
 use yrs::block::{ItemContent, Prelim};
+use yrs::branch::{Branch, BranchPtr};
 use yrs::types::Events;
-use yrs::types::{Attrs, Branch, BranchPtr, Change, Delta, Value};
+use yrs::types::{Attrs, Change, Delta};
+use yrs::Any;
 use yrs::ArrayRef;
 use yrs::MapRef;
 use yrs::TextRef;
 use yrs::TransactionMut;
-use yrs::{Array, Map, Text};
+use yrs::{Array, Map, Out, Text};
 
 use crate::shared_types::CompatiblePyType;
 use crate::shared_types::TypeWithDoc;
@@ -131,7 +132,7 @@ impl WithDocToPython for &Attrs {
         let o = pytypes::PyDict::new(py);
         for (key, value) in self.iter() {
             let key = key.as_ref();
-            let value = Value::Any(value.clone()).with_doc_into_py(doc.clone(), py);
+            let value = Out::Any(value.clone()).with_doc_into_py(doc.clone(), py);
             o.set_item(key, value).unwrap();
         }
         o.into()
@@ -311,7 +312,7 @@ impl<'a> TryFrom<CompatiblePyType<'a>> for Any {
         const MAX_JS_NUMBER: i64 = 2_i64.pow(53) - 1;
         match py_type {
             CompatiblePyType::Bool(b) => Ok(Any::Bool(b.extract()?)),
-            CompatiblePyType::String(s) => Ok(Any::String(s.extract::<String>()?.into_boxed_str())),
+            CompatiblePyType::String(s) => Ok(Any::String(s.extract::<String>()?.into())),
             CompatiblePyType::Int(i) => {
                 let num: i64 = i.extract()?;
                 if num > MAX_JS_NUMBER {
@@ -326,7 +327,7 @@ impl<'a> TryFrom<CompatiblePyType<'a>> for Any {
                     .into_iter()
                     .map(|py_any|CompatiblePyType::try_from(py_any)?.try_into())
                     .collect();
-                result.map(|res| Any::Array(res.into_boxed_slice()))
+                result.map(|res| Any::Array(res.into()))
             },
             CompatiblePyType::Dict(d) => {
                 let result: PyResult<HashMap<String, Any>> = d
@@ -337,7 +338,7 @@ impl<'a> TryFrom<CompatiblePyType<'a>> for Any {
                         Ok((key, value))
                     })
                     .collect();
-                result.map(|res| Any::Map(Box::new(res)))
+                result.map(|res| Any::Map(Box::new(res).into()))
             },
             CompatiblePyType::None => Ok(Any::Null),
             CompatiblePyType::YType(v) => Err(MultipleIntegrationError::new_err(format!(
@@ -416,17 +417,17 @@ impl ToPython for Any {
     }
 }
 
-impl WithDocToPython for Value {
+impl WithDocToPython for Out {
     fn with_doc_into_py(self, doc: Rc<RefCell<YDocInner>>, py: Python) -> PyObject {
         match self {
-            Value::Any(v) => v.into_py(py),
-            Value::YText(v) => v.with_doc(doc).into_py(py),
-            Value::YArray(v) => v.with_doc(doc).into_py(py),
-            Value::YMap(v) => v.with_doc(doc).into_py(py),
-            Value::YXmlElement(v) => v.with_doc(doc).into_py(py),
-            Value::YXmlText(v) => v.with_doc(doc).into_py(py),
-            Value::YXmlFragment(v) => v.with_doc(doc).into_py(py),
-            Value::YDoc(_) => py.None(),
+            Out::Any(v) => v.into_py(py),
+            Out::YText(v) => v.with_doc(doc).into_py(py),
+            Out::YArray(v) => v.with_doc(doc).into_py(py),
+            Out::YMap(v) => v.with_doc(doc).into_py(py),
+            Out::YXmlElement(v) => v.with_doc(doc).into_py(py),
+            Out::YXmlText(v) => v.with_doc(doc).into_py(py),
+            Out::YXmlFragment(v) => v.with_doc(doc).into_py(py),
+            _ => py.None(),
         }
     }
 }

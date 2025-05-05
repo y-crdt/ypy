@@ -17,8 +17,12 @@ def test_constructor_options():
     # Handle encoding string variation
     YDoc(offset_kind="utf8")
     YDoc(offset_kind="utf-8")
+    YDoc(offset_kind="UTF8")
     YDoc(offset_kind="UTF-8")
-    YDoc(offset_kind="UTF32")
+    YDoc(offset_kind="utf16")
+    YDoc(offset_kind="utf-16")
+    YDoc(offset_kind="UTF16")
+    YDoc(offset_kind="UTF-16")
 
     # Ensure that incorrect encodings throw error
     with pytest.raises(ValueError):

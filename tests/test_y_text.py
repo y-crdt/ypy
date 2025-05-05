@@ -77,7 +77,7 @@ def test_observer():
 
     x = d1.get_text("test")
 
-    subscription_id = x.observe(callback)
+    observation_id = x.observe(callback)
 
     # insert initial data to an empty YText
     with d1.begin_transaction() as txn:
@@ -107,14 +107,14 @@ def test_observer():
     delta = None
 
     # free the observer and make sure that callback is no longer called
-    x.unobserve(subscription_id)
+    x.unobserve(observation_id)
     with d1.begin_transaction() as txn:
         x.insert(txn, 1, "fgh")
     assert target == None
     assert delta == None
 
 
-def test_drop_sub_id():
+def test_drop_observation_id():
     d = Y.YDoc()
     target = None
     delta = None
@@ -128,7 +128,7 @@ def test_drop_sub_id():
     x = d.get_text("test")
 
     def register_callback(x, callback):
-        # The subscription_id `i` is dropped here
+        # The observation_id `i` is dropped here
         i = x.observe(callback)
 
     register_callback(x, callback)
@@ -219,9 +219,9 @@ def test_deep_observe():
 
     assert events is not None and len(events) == 1
 
-    # verify that the subscription drops
+    # verify that the observation drops
     events = None
-    text.unobserve(sub)
+    text.unobserve_deep(sub)
     with d.begin_transaction() as txn:
         text.extend(txn, " should not trigger")
 

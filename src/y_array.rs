@@ -1,19 +1,18 @@
-use std::cell::RefCell;
-use std::convert::{TryFrom, TryInto};
-use std::rc::Rc;
-
 use crate::json_builder::JsonBuilder;
 use crate::shared_types::{
-    CompatiblePyType, DeepSubscription, DefaultPyErr, PreliminaryObservationException,
-    ShallowSubscription, SubId, TypeWithDoc,
+    CompatiblePyType, DefaultPyErr, ObservationId, PreliminaryObservationException, TypeWithDoc,
 };
 use crate::type_conversions::{events_into_py, WithDocToPython};
 use crate::y_doc::{WithDoc, YDocInner};
 use crate::y_transaction::{YTransaction, YTransactionInner};
+use std::cell::RefCell;
+use std::clone::Clone;
+use std::convert::{TryFrom, TryInto};
+use std::rc::Rc;
+use std::string::ToString;
 
 use super::shared_types::SharedType;
 use crate::type_conversions::ToPython;
-use lib0::any::Any;
 use pyo3::exceptions::PyIndexError;
 
 use crate::type_conversions::PyObjectWrapper;
@@ -21,7 +20,7 @@ use pyo3::prelude::*;
 use pyo3::types::{PyList, PySlice, PySliceIndices};
 use yrs::types::array::ArrayEvent;
 use yrs::types::{DeepObservable, ToJson};
-use yrs::{Array, ArrayRef, Assoc, Observable, SubscriptionId, TransactionMut};
+use yrs::{Any, Array, ArrayRef, Assoc, Observable, TransactionMut};
 
 /// A collection used to store data in an indexed sequence structure. This type is internally
 /// implemented as a double linked list, which may squash values inserted directly one after another
@@ -365,59 +364,55 @@ impl YArray {
 
     /// Subscribes to all operations happening over this instance of `YArray`. All changes are
     /// batched and eventually triggered during transaction commit phase.
-    /// Returns a `SubscriptionId` which can be used to cancel the callback with `unobserve`.
-    pub fn observe(&mut self, f: PyObject) -> PyResult<ShallowSubscription> {
+    /// Returns a `ObservationId` which can be used to cancel the callback with `unobserve`.
+    pub fn observe(&mut self, f: PyObject) -> PyResult<ObservationId> {
         match &mut self.0 {
             SharedType::Integrated(array) => {
                 let doc = array.doc.clone();
-                let sub: SubscriptionId = array
-                    .inner
-                    .observe(move |txn, e| {
-                        Python::with_gil(|py| {
-                            let event = YArrayEvent::new(e, txn, doc.clone());
-                            if let Err(err) = f.call1(py, (event,)) {
-                                err.restore(py)
-                            }
-                        })
+                let subscription = array.inner.observe(move |txn, e| {
+                    Python::with_gil(|py| {
+                        let event = YArrayEvent::new(e, txn, doc.clone());
+                        if let Err(err) = f.call1(py, (event,)) {
+                            err.restore(py)
+                        }
                     })
-                    .into();
-                Ok(ShallowSubscription(sub))
+                });
+                Ok(ObservationId(subscription))
             }
             SharedType::Prelim(_) => Err(PreliminaryObservationException::default_message()),
         }
     }
     /// Observes YArray events and events of all child elements.
-    pub fn observe_deep(&mut self, f: PyObject) -> PyResult<DeepSubscription> {
+    pub fn observe_deep(&mut self, f: PyObject) -> PyResult<ObservationId> {
         match &mut self.0 {
             SharedType::Integrated(array) => {
                 let doc = array.doc.clone();
-                let sub: SubscriptionId = array
-                    .inner
-                    .observe_deep(move |txn, events| {
-                        Python::with_gil(|py| {
-                            let events = events_into_py(txn, events, doc.clone());
-                            if let Err(err) = f.call1(py, (events,)) {
-                                err.restore(py)
-                            }
-                        })
+                let subscription = array.inner.observe_deep(move |txn, events| {
+                    Python::with_gil(|py| {
+                        let events = events_into_py(txn, events, doc.clone());
+                        if let Err(err) = f.call1(py, (events,)) {
+                            err.restore(py)
+                        }
                     })
-                    .into();
-                Ok(DeepSubscription(sub))
+                });
+                Ok(ObservationId(subscription))
             }
             SharedType::Prelim(_) => Err(PreliminaryObservationException::default_message()),
         }
     }
 
-    /// Cancels the callback of an observer using the Subscription ID returned from the `observe` method.
-    pub fn unobserve(&mut self, subscription_id: SubId) -> PyResult<()> {
+    /// Cancels the callback of an observer using the `observation_d` returned from the `observe` method.
+    pub fn unobserve(&mut self, observation_d: ObservationId) -> PyResult<()> {
         match &mut self.0 {
-            SharedType::Integrated(arr) => {
-                match subscription_id {
-                    SubId::Shallow(ShallowSubscription(id)) => arr.unobserve(id),
-                    SubId::Deep(DeepSubscription(id)) => arr.unobserve_deep(id),
-                }
-                Ok(())
-            }
+            SharedType::Integrated(_) => Ok(drop(observation_d.0)),
+            SharedType::Prelim(_) => Err(PreliminaryObservationException::default_message()),
+        }
+    }
+
+    /// Cancels the callback of an observer using the `observation_d` returned from the `observe_deep` method.
+    pub fn unobserve_deep(&mut self, observation_d: ObservationId) -> PyResult<()> {
+        match &mut self.0 {
+            SharedType::Integrated(_) => Ok(drop(observation_d.0)),
             SharedType::Prelim(_) => Err(PreliminaryObservationException::default_message()),
         }
     }

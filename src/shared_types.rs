@@ -16,7 +16,7 @@ use std::{
     rc::Rc,
 };
 use yrs::types::TypeRef;
-use yrs::SubscriptionId;
+use yrs::Subscription;
 
 // Common errors
 create_exception!(y_py, PreliminaryObservationException, PyException, "Occurs when an observer is attached to a Y type that is not integrated into a YDoc. Y types can only be observed once they have been added to a YDoc.");
@@ -45,17 +45,14 @@ impl DefaultPyErr for IntegratedOperationException {
 }
 
 #[pyclass]
-#[derive(Clone, Copy)]
-pub struct ShallowSubscription(pub SubscriptionId);
-#[pyclass]
-#[derive(Clone, Copy)]
-pub struct DeepSubscription(pub SubscriptionId);
+#[cfg(feature = "sync")]
+#[derive(Clone)]
+pub struct ObservationId(pub Subscription);
 
-#[derive(FromPyObject)]
-pub enum SubId {
-    Shallow(ShallowSubscription),
-    Deep(DeepSubscription),
-}
+#[pyclass(unsendable)]
+#[cfg(not(feature = "sync"))]
+#[derive(Clone)]
+pub struct ObservationId(pub Subscription);
 
 #[derive(Clone)]
 pub enum CompatiblePyType<'a> {

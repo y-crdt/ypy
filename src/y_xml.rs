@@ -1,4 +1,4 @@
-use crate::shared_types::{SubId, TypeWithDoc};
+use crate::shared_types::{ObservationId, TypeWithDoc};
 use crate::y_doc::{WithDoc, YDocInner};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
@@ -11,9 +11,8 @@ use yrs::types::{DeepObservable, EntryChange, Path, PathSegment};
 use yrs::XmlFragmentRef;
 use yrs::XmlTextRef;
 use yrs::{GetString, XmlElementPrelim, XmlElementRef, XmlTextPrelim};
-use yrs::{Observable, SubscriptionId, Text, TransactionMut, XmlFragment, XmlNode};
+use yrs::{Observable, Text, TransactionMut, XmlFragment, XmlOut};
 
-use crate::shared_types::{DeepSubscription, ShallowSubscription};
 use crate::type_conversions::{events_into_py, ToPython, WithDocToPython};
 use crate::y_transaction::{YTransaction, YTransactionInner};
 
@@ -220,50 +219,44 @@ impl YXmlElement {
 
     /// Subscribes to all operations happening over this instance of `YXmlElement`. All changes are
     /// batched and eventually triggered during transaction commit phase.
-    /// Returns an `SubscriptionId` which, can be used to unsubscribe the observer.
-    pub fn observe(&mut self, f: PyObject) -> ShallowSubscription {
+    /// Returns an `ObservationId` which, can be used to unsubscribe the observer.
+    pub fn observe(&mut self, f: PyObject) -> ObservationId {
         let doc = self.0.doc.clone();
-        let sub_id = self
-            .0
-            .observe(move |txn, e| {
-                Python::with_gil(|py| {
-                    let event = YXmlEvent::new(e, txn, doc.clone());
-                    if let Err(err) = f.call1(py, (event,)) {
-                        err.restore(py)
-                    }
-                })
+        let subscription = self.0.observe(move |txn, e| {
+            Python::with_gil(|py| {
+                let event = YXmlEvent::new(e, txn, doc.clone());
+                if let Err(err) = f.call1(py, (event,)) {
+                    err.restore(py)
+                }
             })
-            .into();
-
-        ShallowSubscription(sub_id)
+        });
+        ObservationId(subscription)
     }
 
     /// Subscribes to all operations happening over this instance of `YXmlElement` and all of its children.
     /// All changes are batched and eventually triggered during transaction commit phase.
-    /// Returns an `SubscriptionId` which, can be used to unsubscribe the observer.
-    pub fn observe_deep(&mut self, f: PyObject) -> DeepSubscription {
+    /// Returns an `ObservationId` which, can be used to unsubscribe the observer.
+    pub fn observe_deep(&mut self, f: PyObject) -> ObservationId {
         let doc = self.0.doc.clone();
-        let sub_id = self
-            .0
-            .inner
-            .observe_deep(move |txn, events| {
-                Python::with_gil(|py| {
-                    let events = events_into_py(txn, events, doc.clone());
-                    if let Err(err) = f.call1(py, (events,)) {
-                        err.restore(py)
-                    }
-                })
+        let subscription = self.0.inner.observe_deep(move |txn, events| {
+            Python::with_gil(|py| {
+                let events = events_into_py(txn, events, doc.clone());
+                if let Err(err) = f.call1(py, (events,)) {
+                    err.restore(py)
+                }
             })
-            .into();
-        DeepSubscription(sub_id)
+        });
+        ObservationId(subscription)
     }
 
-    /// Cancels the observer callback associated with the `subscripton_id`.
-    pub fn unobserve(&mut self, subscription_id: SubId) {
-        match subscription_id {
-            SubId::Shallow(ShallowSubscription(id)) => self.0.unobserve(id),
-            SubId::Deep(DeepSubscription(id)) => self.0.unobserve_deep(id),
-        }
+    /// Cancels the observer callback associated with the `observation_id` returned from the `observe` method.
+    pub fn unobserve(&mut self, observation_id: ObservationId) -> () {
+        drop(observation_id.0)
+    }
+
+    /// Cancels the observer callback associated with the `observation_id` returned from the `observe_deep` method.
+    pub fn unobserve_deep(&mut self, observation_id: ObservationId) -> () {
+        drop(observation_id.0)
     }
 }
 
@@ -422,48 +415,44 @@ impl YXmlText {
 
     /// Subscribes to all operations happening over this instance of `YXmlText`. All changes are
     /// batched and eventually triggered during transaction commit phase.
-    /// Returns an `SubscriptionId` which, which can be used to unsubscribe the callback function.
-    pub fn observe(&mut self, f: PyObject) -> ShallowSubscription {
+    /// Returns an `ObservationId` which, which can be used to unsubscribe the callback function.
+    pub fn observe(&mut self, f: PyObject) -> ObservationId {
         let doc = self.0.doc.clone();
-        let sub_id: SubscriptionId = self
-            .0
-            .observe(move |txn, e| {
-                Python::with_gil(|py| {
-                    let e = YXmlTextEvent::new(e, txn, doc.clone());
-                    if let Err(err) = f.call1(py, (e,)) {
-                        err.restore(py)
-                    }
-                })
+        let subscription = self.0.observe(move |txn, e| {
+            Python::with_gil(|py| {
+                let e = YXmlTextEvent::new(e, txn, doc.clone());
+                if let Err(err) = f.call1(py, (e,)) {
+                    err.restore(py)
+                }
             })
-            .into();
-        ShallowSubscription(sub_id)
+        });
+        ObservationId(subscription)
     }
 
     /// Subscribes to all operations happening over this instance of `YXmlText` and its child elements. All changes are
     /// batched and eventually triggered during transaction commit phase.
-    /// Returns an `SubscriptionId` which, which can be used to unsubscribe the callback function.
-    pub fn observe_deep(&mut self, f: PyObject) -> DeepSubscription {
+    /// Returns an `ObservationId` which, which can be used to unsubscribe the callback function.
+    pub fn observe_deep(&mut self, f: PyObject) -> ObservationId {
         let doc = self.0.doc.clone();
-        let sub_id: SubscriptionId = self
-            .0
-            .observe_deep(move |txn, events| {
-                Python::with_gil(|py| {
-                    let e = events_into_py(txn, events, doc.clone());
-                    if let Err(err) = f.call1(py, (e,)) {
-                        err.restore(py)
-                    }
-                })
+        let subscription = self.0.observe_deep(move |txn, events| {
+            Python::with_gil(|py| {
+                let e = events_into_py(txn, events, doc.clone());
+                if let Err(err) = f.call1(py, (e,)) {
+                    err.restore(py)
+                }
             })
-            .into();
-        DeepSubscription(sub_id)
+        });
+        ObservationId(subscription)
     }
 
-    /// Cancels the observer callback associated with the `subscripton_id`.
-    pub fn unobserve(&mut self, subscription_id: SubId) {
-        match subscription_id {
-            SubId::Shallow(ShallowSubscription(id)) => self.0.unobserve(id),
-            SubId::Deep(DeepSubscription(id)) => self.0.unobserve_deep(id),
-        }
+    /// Cancels the observer callback associated with the `observation_id` returned from the `observe` method.
+    pub fn unobserve(&mut self, observation_id: ObservationId) -> () {
+        drop(observation_id.0)
+    }
+
+    /// Cancels the observer callback associated with the `observation_id` returned from the `observe_deep` method.
+    pub fn unobserve_deep(&mut self, observation_id: ObservationId) -> () {
+        drop(observation_id.0)
     }
 }
 
@@ -585,50 +574,44 @@ impl YXmlFragment {
 
     /// Subscribes to all operations happening over this instance of `YXmlElement`. All changes are
     /// batched and eventually triggered during transaction commit phase.
-    /// Returns an `SubscriptionId` which, can be used to unsubscribe the observer.
-    pub fn observe(&mut self, f: PyObject) -> ShallowSubscription {
+    /// Returns an `ObservationId` which, can be used to unsubscribe the observer.
+    pub fn observe(&mut self, f: PyObject) -> ObservationId {
         let doc = self.0.doc.clone();
-        let sub_id = self
-            .0
-            .observe(move |txn, e| {
-                Python::with_gil(|py| {
-                    let event = YXmlEvent::new(e, txn, doc.clone());
-                    if let Err(err) = f.call1(py, (event,)) {
-                        err.restore(py)
-                    }
-                })
+        let subscription = self.0.observe(move |txn, e| {
+            Python::with_gil(|py| {
+                let event = YXmlEvent::new(e, txn, doc.clone());
+                if let Err(err) = f.call1(py, (event,)) {
+                    err.restore(py)
+                }
             })
-            .into();
-
-        ShallowSubscription(sub_id)
+        });
+        ObservationId(subscription)
     }
 
     /// Subscribes to all operations happening over this instance of `YXmlElement` and all of its children.
     /// All changes are batched and eventually triggered during transaction commit phase.
-    /// Returns an `SubscriptionId` which, can be used to unsubscribe the observer.
-    pub fn observe_deep(&mut self, f: PyObject) -> DeepSubscription {
+    /// Returns an `ObservationId` which, can be used to unsubscribe the observer.
+    pub fn observe_deep(&mut self, f: PyObject) -> ObservationId {
         let doc = self.0.doc.clone();
-        let sub_id = self
-            .0
-            .inner
-            .observe_deep(move |txn, events| {
-                Python::with_gil(|py| {
-                    let events = events_into_py(txn, events, doc.clone());
-                    if let Err(err) = f.call1(py, (events,)) {
-                        err.restore(py)
-                    }
-                })
+        let subscription = self.0.inner.observe_deep(move |txn, events| {
+            Python::with_gil(|py| {
+                let events = events_into_py(txn, events, doc.clone());
+                if let Err(err) = f.call1(py, (events,)) {
+                    err.restore(py)
+                }
             })
-            .into();
-        DeepSubscription(sub_id)
+        });
+        ObservationId(subscription)
     }
 
-    /// Cancels the observer callback associated with the `subscripton_id`.
-    pub fn unobserve(&mut self, subscription_id: SubId) {
-        match subscription_id {
-            SubId::Shallow(ShallowSubscription(id)) => self.0.unobserve(id),
-            SubId::Deep(DeepSubscription(id)) => self.0.unobserve_deep(id),
-        }
+    /// Cancels the observer callback associated with the `observation_id` returned from the `observe` method.
+    pub fn unobserve(&mut self, observation_id: ObservationId) -> () {
+        drop(observation_id.0)
+    }
+
+    /// Cancels the observer callback associated with the `observation_id` returned from the `observe_deep` method.
+    pub fn unobserve_deep(&mut self, observation_id: ObservationId) -> () {
+        drop(observation_id.0)
     }
 
     /// Retrieves a value stored at a given `index`. Returns `None` when provided index was out
@@ -751,9 +734,9 @@ impl YXmlEvent {
             let target: PyObject = Python::with_gil(|py| {
                 let target = self.inner().target().clone();
                 match target {
-                    XmlNode::Element(v) => YXmlElement::new(v, self.doc.clone()).into_py(py),
-                    XmlNode::Text(v) => YXmlText::new(v, self.doc.clone()).into_py(py),
-                    XmlNode::Fragment(v) => YXmlFragment::new(v, self.doc.clone()).into_py(py),
+                    XmlOut::Element(v) => YXmlElement::new(v, self.doc.clone()).into_py(py),
+                    XmlOut::Text(v) => YXmlText::new(v, self.doc.clone()).into_py(py),
+                    XmlOut::Fragment(v) => YXmlFragment::new(v, self.doc.clone()).into_py(py),
                 }
             });
             self.target = Some(target.clone());
@@ -940,12 +923,12 @@ impl YXmlTextEvent {
 }
 
 // XML Type Conversions
-impl WithDocToPython for XmlNode {
+impl WithDocToPython for XmlOut {
     fn with_doc_into_py(self, doc: Rc<RefCell<YDocInner>>, py: Python) -> PyObject {
         match self {
-            XmlNode::Element(v) => v.with_doc(doc).into_py(py),
-            XmlNode::Text(v) => v.with_doc(doc).into_py(py),
-            XmlNode::Fragment(v) => v.with_doc(doc).into_py(py),
+            XmlOut::Element(v) => v.with_doc(doc).into_py(py),
+            XmlOut::Text(v) => v.with_doc(doc).into_py(py),
+            XmlOut::Fragment(v) => v.with_doc(doc).into_py(py),
         }
     }
 }

@@ -6,7 +6,7 @@ from test_helper import exchange_updates
 
 def test_insert():
     d1 = Y.YDoc()
-    root = d1.get_xml_element("test")
+    root = d1.get_xml_fragment("root")
     with d1.begin_transaction() as txn:
         b = root.push_xml_text(txn)
         a = root.insert_xml_element(txn, 0, "p")
@@ -16,26 +16,29 @@ def test_insert():
         b.push(txn, "world")
 
     s = str(root)
-    assert s == "<test><p>hello</p>world</test>"
+    assert s == "<p>hello</p>world"
 
 
 def test_attributes():
     d1 = Y.YDoc()
-    root = d1.get_xml_element("test")
+    root = d1.get_xml_fragment("root")
     with d1.begin_transaction() as txn:
-        root.set_attribute(txn, "key1", "value1")
-        root.set_attribute(txn, "key2", "value2")
+        x = root.push_xml_element(txn, "test")
+
+    with d1.begin_transaction() as txn:
+        x.set_attribute(txn, "key1", "value1")
+        x.set_attribute(txn, "key2", "value2")
 
         actual = {}
-        for key, value in root.attributes():
+        for key, value in x.attributes():
             actual[key] = value
     assert actual == {"key1": "value1", "key2": "value2"}
 
     with d1.begin_transaction() as txn:
-        root.remove_attribute(txn, "key1")
+        x.remove_attribute(txn, "key1")
         actual = {
-            "key1": root.get_attribute("key1"),
-            "key2": root.get_attribute("key2"),
+            "key1": x.get_attribute("key1"),
+            "key2": x.get_attribute("key2"),
         }
 
     assert actual == {"key1": None, "key2": "value2"}
@@ -43,7 +46,7 @@ def test_attributes():
 
 def test_siblings():
     d1 = Y.YDoc()
-    root = d1.get_xml_element("test")
+    root = d1.get_xml_fragment("test")
     with d1.begin_transaction() as txn:
         b = root.push_xml_text(txn)
         a = root.insert_xml_element(txn, 0, "p")
@@ -66,7 +69,7 @@ def test_siblings():
 
 def test_tree_walker():
     d1 = Y.YDoc()
-    root = d1.get_xml_element("test")
+    root = d1.get_xml_fragment("test")
     with d1.begin_transaction() as txn:
         b = root.push_xml_text(txn)
         a = root.insert_xml_element(txn, 0, "p")
@@ -82,7 +85,9 @@ def test_tree_walker():
 def test_xml_text_observer():
     d1 = Y.YDoc()
 
-    x = d1.get_xml_text("test")
+    root = d1.get_xml_fragment("root")
+    with d1.begin_transaction() as txn:
+        x = root.push_xml_text(txn)
     target = None
     attributes = None
     delta = None
@@ -95,7 +100,7 @@ def test_xml_text_observer():
         attributes = e.keys
         delta = e.delta
 
-    subscription_id = x.observe(callback)
+    observation_id = x.observe(callback)
 
     # set initial attributes
     with d1.begin_transaction() as txn:
@@ -157,7 +162,7 @@ def test_xml_text_observer():
     delta = None
 
     # free the observer and make sure that callback is no longer called
-    x.unobserve(subscription_id)
+    x.unobserve(observation_id)
     with d1.begin_transaction() as txn:
         x.insert(txn, 1, "fgh")
     assert target == None
@@ -168,7 +173,9 @@ def test_xml_text_observer():
 def test_xml_element_observer():
     d1 = Y.YDoc()
 
-    x = d1.get_xml_element("test")
+    root = d1.get_xml_fragment("root")
+    with d1.begin_transaction() as txn:
+        x = root.push_xml_element(txn, "test")
     target = None
     attributes = None
     nodes = None
@@ -181,7 +188,7 @@ def test_xml_element_observer():
         attributes = e.keys
         nodes = e.delta
 
-    subscription_id = x.observe(callback)
+    observation_id = x.observe(callback)
 
     # insert initial attributes
     with d1.begin_transaction() as txn:
@@ -249,7 +256,7 @@ def test_xml_element_observer():
     nodes = None
 
     # free the observer and make sure that callback is no longer called
-    x.unobserve(subscription_id)
+    x.unobserve(observation_id)
     with d1.begin_transaction() as txn:
         x.insert_xml_element(txn, 0, "head")
     assert target == None
@@ -259,7 +266,7 @@ def test_xml_element_observer():
 
 def test_deep_observe():
     ydoc = Y.YDoc()
-    container = ydoc.get_xml_element("container")
+    container = ydoc.get_xml_fragment("container")
     with ydoc.begin_transaction() as txn:
         text = container.insert_xml_text(txn, 0)
 
