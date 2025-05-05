@@ -13,7 +13,7 @@ use crate::y_transaction::{YTransaction, YTransactionInner};
 
 use super::shared_types::SharedType;
 use crate::type_conversions::ToPython;
-use lib0::any::Any;
+use yrs::Any;
 use pyo3::exceptions::PyIndexError;
 
 use crate::type_conversions::PyObjectWrapper;
@@ -348,7 +348,7 @@ impl YArray {
     /// array = doc.get_array('name')
     /// for item in array:
     ///     print(item)
-    ///     
+    ///
     /// ```
     pub fn __iter__(&self) -> PyObject {
         Python::with_gil(|py| {

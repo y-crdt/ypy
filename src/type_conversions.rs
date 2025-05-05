@@ -1,4 +1,4 @@
-use lib0::any::Any;
+use yrs::Any;
 use pyo3::create_exception;
 use pyo3::exceptions::PyException;
 use pyo3::exceptions::PyTypeError;
@@ -11,6 +11,7 @@ use std::convert::TryFrom;
 use std::convert::TryInto;
 use std::ops::Deref;
 use std::rc::Rc;
+use std::sync::Arc;
 use yrs::block::Unused;
 use yrs::block::{ItemContent, Prelim};
 use yrs::types::Events;
@@ -311,7 +312,11 @@ impl<'a> TryFrom<CompatiblePyType<'a>> for Any {
         const MAX_JS_NUMBER: i64 = 2_i64.pow(53) - 1;
         match py_type {
             CompatiblePyType::Bool(b) => Ok(Any::Bool(b.extract()?)),
-            CompatiblePyType::String(s) => Ok(Any::String(s.extract::<String>()?.into_boxed_str())),
+            CompatiblePyType::String(s) => {
+                let string = s.extract::<String>()?;
+                let arc_str = Arc::from(string.as_str());
+                Ok(Any::String(arc_str))
+            },
             CompatiblePyType::Int(i) => {
                 let num: i64 = i.extract()?;
                 if num > MAX_JS_NUMBER {
@@ -324,9 +329,9 @@ impl<'a> TryFrom<CompatiblePyType<'a>> for Any {
             CompatiblePyType::List(l) => {
                 let result: PyResult<Vec<Any>> = l
                     .into_iter()
-                    .map(|py_any|CompatiblePyType::try_from(py_any)?.try_into())
+                    .map(|py_any| CompatiblePyType::try_from(py_any)?.try_into())
                     .collect();
-                result.map(|res| Any::Array(res.into_boxed_slice()))
+                result.map(|res| Any::Array(Arc::from(res.into_boxed_slice())))
             },
             CompatiblePyType::Dict(d) => {
                 let result: PyResult<HashMap<String, Any>> = d
@@ -337,7 +342,7 @@ impl<'a> TryFrom<CompatiblePyType<'a>> for Any {
                         Ok((key, value))
                     })
                     .collect();
-                result.map(|res| Any::Map(Box::new(res)))
+                result.map(|res| Any::Map(Arc::new(res)))
             },
             CompatiblePyType::None => Ok(Any::Null),
             CompatiblePyType::YType(v) => Err(MultipleIntegrationError::new_err(format!(
@@ -427,6 +432,7 @@ impl WithDocToPython for Value {
             Value::YXmlText(v) => v.with_doc(doc).into_py(py),
             Value::YXmlFragment(v) => v.with_doc(doc).into_py(py),
             Value::YDoc(_) => py.None(),
+            Value::UndefinedRef(_) => py.None(),
         }
     }
 }

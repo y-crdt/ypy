@@ -1,6 +1,6 @@
 use std::{collections::HashMap, convert::TryFrom};
 
-use lib0::any::Any;
+use yrs::Any;
 use pyo3::{exceptions::PyTypeError, PyErr, PyObject, PyResult, Python};
 
 use crate::shared_types::{CompatiblePyType, YPyType};
